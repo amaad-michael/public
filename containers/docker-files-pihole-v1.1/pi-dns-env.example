@@ -1,0 +1,8 @@
+# cp .env.example .env && chmod 600 .env && fill values. NEVER commit .env.
+# Verify current stable tags before pinning (no :latest on the DNS plane):
+#   pihole/pihole tags:    https://hub.docker.com/r/pihole/pihole/tags
+#   madnuttah/unbound tags: https://hub.docker.com/r/madnuttah/unbound/tags
+PIHOLE_TAG=
+UNBOUND_TAG=
+# ROTATED password (previous value is burned — it was pasted in plaintext):
+PIHOLE_API_PASSWORD=

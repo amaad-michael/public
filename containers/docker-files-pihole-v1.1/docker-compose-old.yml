@@ -1,0 +1,87 @@
+## version: '3.9'
+
+networks:
+  pihole-backup:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  pihole_etc:
+  pihole_dnsmasq:
+  unbound_etc:
+
+services:
+  pihole:
+    image: pihole/pihole:latest
+    container_name: pihole-backup
+    networks:
+      pihole-backup:
+        ipv4_address: 172.20.0.2
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "80:80"
+      - "443:443"
+    environment:
+      - TZ=UTC
+      - FTLCONF_webserver_api_password=Provoke-Bleach-Expire-Overlaid2-Probably
+      - PIHOLE_UID=0
+      - PIHOLE_GID=0
+      - FTLCONF_dns_upstreams=172.20.0.3#5335
+      - FTLCONF_dns_listeningMode=ALL
+      - FTLCONF_dns_dnssec=true
+    volumes:
+      - pihole_etc:/etc/pihole
+      - pihole_dnsmasq:/etc/dnsmasq.d
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETUID
+      - SETGID
+      - SETFCAP
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "dig", "@localhost", "pi.hole"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      - unbound
+
+  unbound:
+    image: madnuttah/unbound:latest
+    container_name: unbound-backup
+    networks:
+      pihole-backup:
+        ipv4_address: 172.20.0.3
+    ports:
+      - "5053:5335/tcp"
+      - "5053:5335/udp"
+    volumes:
+      - unbound_etc:/etc/unbound/custom.conf.d
+      - ./unbound.conf:/etc/unbound/unbound.conf:ro
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - SETUID
+      - SETGID
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M

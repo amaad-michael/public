@@ -1,0 +1,92 @@
+---
+- name: Monthly patching for all servers RHEL + Debian
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    reboot_msg: "Reboot initiated by Ansible after monthly patching"
+    reboot_pre_delay: 10
+    reboot_post_delay: 45
+    reboot_timeout: 900
+
+  tasks:
+    # ---------------------------------------------------------
+    # RedHat Family Tasks
+    # ---------------------------------------------------------
+    - name: Ensure dnf-utils is installed (RedHat)
+      ansible.builtin.dnf:
+        name: dnf-utils
+        state: present
+      when: ansible_facts['os_family'] == "RedHat"
+
+    - name: Update all packages on RedHat family
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+      register: rhel_updates_result
+      when: ansible_facts['os_family'] == "RedHat"
+
+    - name: Determine if RedHat needs reboot (uses needs-restarting)
+      block:
+        - name: Run needs-restarting to detect processes using old libs or kernels
+          ansible.builtin.command: /usr/bin/needs-restarting -r
+          register: needs_restarting_result
+          failed_when: false
+          changed_when: false
+
+        - name: Set rhel_reboot_required fact
+          set_fact:
+            rhel_reboot_required: "{{ needs_restarting_result.rc == 1 }}"
+      when: ansible_facts['os_family'] == "RedHat"
+
+    # ---------------------------------------------------------
+    # Debian Family Tasks
+    # ---------------------------------------------------------
+    - name: Update apt cache and perform full upgrade (Debian-based)
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 3600
+        upgrade: dist
+        autoremove: yes
+      register: debian_updates_result
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Check if a reboot is required (Debian-based)
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: debian_reboot_required_file
+      when: ansible_facts['os_family'] == "Debian"
+
+    # ---------------------------------------------------------
+    # Summary & Reboot Logic
+    # ---------------------------------------------------------
+    - name: Set consolidated reboot_required fact
+      set_fact:
+        reboot_required: >-
+          {{
+            (ansible_facts['os_family'] == 'Debian' and 
+              (debian_updates_result.changed or (debian_reboot_required_file.stat.exists | default(false))))
+            or
+            (ansible_facts['os_family'] == 'RedHat' and 
+              (rhel_updates_result.changed or (rhel_reboot_required | default(false))))
+          }}
+
+    - name: Show patching summary
+      ansible.builtin.debug:
+        msg:
+          - "OS family: {{ ansible_facts['os_family'] }}"
+          - "Debian updates changed: {{ debian_updates_result.changed if debian_updates_result is defined else 'n/a' }}"
+          - "RedHat updates changed: {{ rhel_updates_result.changed if rhel_updates_result is defined else 'n/a' }}"
+          # Fixed crash: checks if .stat is defined before accessing .stat.exists
+          - "Debian reboot file: {{ debian_reboot_required_file.stat.exists if (debian_reboot_required_file.stat is defined) else 'n/a' }}"
+          - "RedHat needs-restarting: {{ rhel_reboot_required | default('n/a') }}"
+          - "Will reboot: {{ reboot_required }}"
+
+    # - name: Reboot system if updates were applied or reboot is required
+    #   ansible.builtin.reboot:
+    #     msg: "{{ reboot_msg }}"
+    #     pre_reboot_delay: "{{ reboot_pre_delay }}"
+    #     post_reboot_delay: "{{ reboot_post_delay }}"
+    #     reboot_timeout: "{{ reboot_timeout }}"
+    #   when: reboot_required | bool

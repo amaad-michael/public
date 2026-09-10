@@ -1,0 +1,18 @@
+---
+- name: Remove default rocky user from Rocky Linux
+  hosts: all
+  become: true
+  tasks:
+    - name: Ensure the rocky user is absent
+      user:
+        name: rocky
+        state: absent
+      notify:
+        - Remove rocky user's home directory
+
+  handlers:
+    - name: Remove rocky user's home directory
+      file:
+        path: "/home/rocky"
+        state: absent
+

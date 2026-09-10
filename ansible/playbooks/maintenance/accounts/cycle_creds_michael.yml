@@ -1,0 +1,35 @@
+---
+- name: Cycle Michael's Passwords on Ubuntu Servers
+  hosts: all # Changed to 'all' or your specific Ubuntu host group
+  become: yes
+  gather_facts: no # Not needed for this playbook, improves efficiency
+
+  vars:
+    # IMPORTANT: These passwords are hardcoded in the YAML for demonstration.
+    # For production environments, it is HIGHLY recommended to use Ansible Vault
+    # to encrypt this sensitive data.
+    # Replace 'server_name_X' with actual hostnames from your inventory.
+    michael_passwords:
+      server_name_01: "your_very_strong_password_for_server_01"
+      server_name_02: "your_very_strong_password_for_server_02"
+      server_name_03: "your_very_strong_password_for_server_03"
+      # Add more servers/placeholders as needed here.
+      # Ensure these placeholder names match the actual hostnames in your inventory.
+
+  tasks:
+    - name: Set michael's password from defined variables
+      ansible.builtin.user:
+        name: michael
+        password: "{{ michael_passwords[inventory_hostname] | password_hash('sha512') }}"
+        update_password: always # Forces an update every time the playbook runs
+      tags: password_update
+      # Note: Restarting SSH daemon is typically not needed for a user password change
+      # as it primarily affects authentication, not the SSH service itself.
+      # You might still want to notify if your security policy requires it.
+      # notify: Restart SSH Daemon
+
+  handlers:
+    - name: Restart SSH Daemon
+      ansible.builtin.service:
+        name: sshd
+        state: restarted

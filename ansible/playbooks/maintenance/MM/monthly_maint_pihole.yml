@@ -1,0 +1,124 @@
+---
+- name: Monthly patching for Debian-based servers and Pi-hole
+  hosts: all
+  become: true
+  gather_facts: true
+  vars:
+    apt_cache_valid_time: 3600
+    apt_update_retries: 3
+    apt_update_delay: 10
+
+  tasks:
+    - name: Record timestamp for patch run
+      ansible.builtin.set_fact:
+        patch_run_timestamp: "{{ ansible_date_time.iso8601 }}"
+
+    - name: Ensure apt cache refreshed
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: "{{ apt_cache_valid_time }}"
+      when: ansible_facts['os_family'] == "Debian"
+      register: apt_update
+      retries: "{{ apt_update_retries }}"
+      delay: "{{ apt_update_delay }}"
+      until: apt_update is succeeded
+
+    - name: Show whether apt cache was up-to-date
+      ansible.builtin.debug:
+        msg: "Apt cache updated: {{ apt_update.changed }}"
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Dist-upgrade packages (safe monthly patch)
+      ansible.builtin.apt:
+        upgrade: dist
+        dpkg_options: 'force-confdef,force-confold'
+        autoremove: no
+      register: debian_updates_status
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Autoremove unused packages
+      ansible.builtin.apt:
+        autoremove: yes
+      when:
+        - ansible_facts['os_family'] == "Debian"
+        - debian_updates_status.changed
+
+    - name: Autoclean apt cache
+      ansible.builtin.apt:
+        autoclean: yes
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Check if Pi-hole is installed
+      ansible.builtin.command: pihole status
+      register: pihole_check
+      ignore_errors: true
+      changed_when: false
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Set fact if Pi-hole is present
+      ansible.builtin.set_fact:
+        is_pihole: "{{ pihole_check.rc == 0 }}"
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Archive Pi-hole logs before update
+      ansible.builtin.copy:
+        src: /var/log/pihole/pihole.log
+        dest: "/var/log/pihole/pihole.log.{{ patch_run_timestamp }}"
+        remote_src: yes
+      when: is_pihole | default(false)
+
+    - name: Update Pi-hole core, web, and FTL
+      ansible.builtin.shell: pihole -up
+      args:
+        chdir: /etc/pihole
+      register: pihole_update_result
+      changed_when: "'No updates available' not in pihole_update_result.stdout"
+      when: is_pihole | default(false)
+      notify: Restart pihole services
+
+    - name: Update Pi-hole gravity database
+      ansible.builtin.shell: pihole -g
+      args:
+        chdir: /etc/pihole
+      register: pihole_gravity_result
+      changed_when: >
+        "'Update complete!' in pihole_gravity_result.stdout
+         or 'Domain list was updated' in pihole_gravity_result.stdout
+         or pihole_gravity_result.rc == 0 and
+            ('No change' not in pihole_gravity_result.stdout)"
+      when: is_pihole | default(false)
+      notify: Restart pihole services
+
+    - name: Check if system requests reboot
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_required_file
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Reboot system when required (graceful)
+      ansible.builtin.reboot:
+        msg: "Reboot initiated by Ansible after monthly patching"
+        pre_reboot_delay: 10
+        post_reboot_delay: 60
+        reboot_timeout: 900
+      when:
+        - ansible_facts['os_family'] == "Debian"
+        - reboot_required_file.stat.exists
+
+    - name: Log patch summary
+      ansible.builtin.debug:
+        msg: >
+          Patch summary:
+          Timestamp: {{ patch_run_timestamp }},
+          Apt updated: {{ apt_update.changed }},
+          Packages upgraded: {{ debian_updates_status.changed }},
+          Pi-hole updated: {{ pihole_update_result.changed | default('n/a') }},
+          Gravity updated: {{ pihole_gravity_result.changed | default('n/a') }},
+          Reboot required: {{ reboot_required_file.stat.exists }}
+
+  handlers:
+    - name: Restart pihole services
+      ansible.builtin.service:
+        name: pihole-FTL
+        state: restarted
+      when: ansible_facts['os_family'] == "Debian"

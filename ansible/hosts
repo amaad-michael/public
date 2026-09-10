@@ -1,0 +1,56 @@
+# =============================================================================
+# ANSIBLE HOSTS INVENTORY
+# =============================================================================
+
+# --- LOCAL PI CLUSTER ---
+[pi_all]
+pi0 ansible_host=192.168.0.100
+pi1 ansible_host=192.168.0.101
+pi2 ansible_host=192.168.0.102
+pi3 ansible_host=192.168.0.103
+pi4 ansible_host=192.168.0.104
+neo1 ansible_host=192.168.0.105
+
+# --- LOGICAL GROUPINGS ---
+
+# OS Groups (Local)
+[pi_debian]
+pi0
+pi2
+pi4
+neo1
+
+[pi_rhel]
+pi1
+pi3
+
+# Service Groups (Local)
+[pi_dns]
+pi0
+pi4
+
+[pi_monitoring]
+pi1
+neo1
+
+[pi_lamp]
+pi2
+pi3
+
+# --- GROUP HIERARCHY ---
+[pi_all:children]
+pi_debian
+pi_rhel
+pi_dns
+pi_monitoring
+pi_lamp
+
+# --- VARIABLES ---
+[pi_all:vars]
+ansible_user=michael
+
+[pi_debian:vars]
+ansible_python_interpreter=/usr/bin/python3
+
+[pi_rhel:vars]
+ansible_python_interpreter=/usr/bin/python3

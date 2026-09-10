@@ -1,0 +1,212 @@
+---
+- name: Safely and completely uninstall Jenkins
+  hosts: all
+  become: yes
+  gather_facts: yes
+  vars:
+    # --- Configuration ---
+    jenkins_data_dir: "/var/lib/jenkins"
+    jenkins_log_dir: "/var/log/jenkins"
+    jenkins_etc_dir: "/etc/jenkins"
+    jenkins_cache_dir: "/var/cache/jenkins"
+    jenkins_user: "jenkins"
+    jenkins_group: "jenkins"
+
+    # --- New Forensic & Logging Vars ---
+    archive_base_dir: "/var/backups/jenkins"
+    archive_filename: "jenkins_backup_{{ ansible_date_time.iso8601_basic_short }}.tar.gz"
+    log_file: "/var/log/ansible/jenkins_removal.log"
+    log_dir: "/var/log/ansible"
+
+    # --- New Safety Var ---
+    # Set 'is_production: true' in your host_vars or inventory to block execution
+    is_production: false
+
+  pre_tasks:
+    - name: 0. Check for any Jenkins artifacts
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: stat_results
+      loop:
+        - "{{ jenkins_data_dir }}"
+        - "{{ jenkins_etc_dir }}"
+        - /etc/default/jenkins
+        - /etc/sysconfig/jenkins
+        - /etc/apt/sources.list.d/jenkins.list
+        - /etc/yum.repos.d/jenkins.repo
+
+    - name: Set fact if Jenkins artifacts are found
+      ansible.builtin.set_fact:
+        jenkins_artifacts_found: "{{ stat_results.results | selectattr('stat.exists', 'equalto', true) | list | length > 0 }}"
+        
+    - name: Create log directory
+      ansible.builtin.file:
+        path: "{{ log_dir }}"
+        state: directory
+        mode: '0750'
+      when: jenkins_artifacts_found | bool
+
+  tasks:
+    - name: Notify if Jenkins was not found
+      ansible.builtin.debug:
+        msg: "No Jenkins artifacts found on {{ inventory_hostname }}. Skipping."
+      when: not (jenkins_artifacts_found | bool)
+
+    - name: Run safe Jenkins removal
+      block:
+        - name: 1. Fail fast on production hosts
+          ansible.builtin.fail:
+            msg: "Host {{ inventory_hostname }} is marked as production. Aborting."
+          when: "'production' in group_names or is_production | bool"
+
+        - name: 2. Log start of removal
+          ansible.builtin.lineinfile:
+            path: "{{ log_file }}"
+            line: "[{{ ansible_date_time.iso8601 }}] Starting Jenkins removal for {{ inventory_hostname }}."
+            create: yes
+            owner: root
+            group: root
+            mode: '0640'
+
+        - name: 3. Perform forensic archive before deletion
+          block:
+            - name: Create backup directory
+              ansible.builtin.file:
+                path: "{{ archive_base_dir }}"
+                state: directory
+                mode: '0750'
+
+            - name: Archive all Jenkins directories
+              ansible.builtin.archive:
+                path:
+                  - "{{ jenkins_data_dir }}"
+                  - "{{ jenkins_log_dir }}"
+                  - "{{ jenkins_etc_dir }}"
+                  - "{{ jenkins_cache_dir }}"
+                  - /etc/default/jenkins
+                  - /etc/sysconfig/jenkins
+                dest: "{{ archive_base_dir }}/{{ archive_filename }}"
+                format: gz
+              ignore_errors: yes # Some paths may not exist
+
+            - name: 4. Generate SHA256 checksum for archive integrity
+              ansible.builtin.command:
+                cmd: "sha256sum {{ archive_base_dir }}/{{ archive_filename }}"
+              register: checksum_result
+              changed_when: false
+
+            - name: Save checksum to log and backup file
+              ansible.builtin.lineinfile:
+                path: "{{ item }}"
+                line: "[{{ ansible_date_time.iso8601 }}] Archive: {{ archive_base_dir }}/{{ archive_filename }} | {{ checksum_result.stdout }}"
+                create: yes
+                owner: root
+                group: root
+                mode: '0640'
+              loop:
+                - "{{ log_file }}"
+                - "{{ archive_base_dir }}/{{ archive_filename }}.sha256"
+          when: jenkins_artifacts_found | bool # Only run if artifacts exist
+
+        - name: 5. Stop and disable Jenkins service
+          ansible.builtin.service:
+            name: jenkins
+            state: stopped
+            enabled: no
+          ignore_errors: yes
+
+        - name: 6. Log package removal
+          ansible.builtin.lineinfile:
+            path: "{{ log_file }}"
+            line: "[{{ ansible_date_time.iso8601 }}] Purging Jenkins packages."
+            create: yes
+            owner: root
+            group: root
+            mode: '0640'
+
+        # --- Block for Debian/Ubuntu ---
+        - name: 7. Remove Jenkins (Debian/Ubuntu)
+          block:
+            - name: Purge Jenkins package and dependencies
+              ansible.builtin.apt:
+                name: jenkins
+                state: absent
+                purge: yes
+                autoremove: yes
+            - name: Remove Jenkins apt repository files
+              ansible.builtin.file:
+                path: "{{ item }}"
+                state: absent
+              loop:
+                - /etc/apt/sources.list.d/jenkins.list
+                - /usr/share/keyrings/jenkins-keyring.gpg
+                - /etc/apt/trusted.gpg.d/jenkins.gpg
+                - /etc/apt/trusted.gpg.d/jenkins-keyring.gpg
+              notify: Update apt cache
+          when: ansible_os_family == "Debian"
+
+        # --- Block for RHEL/CentOS/Fedora ---
+        - name: 7. Remove Jenkins (RHEL/Fedora)
+          block:
+            - name: Remove Jenkins package and dependencies
+              ansible.builtin.package:
+                name: jenkins
+                state: absent
+                autoremove: yes
+            - name: Remove Jenkins yum repository file
+              ansible.builtin.file:
+                path: /etc/yum.repos.d/jenkins.repo
+                state: absent
+          when: ansible_os_family == "RedHat"
+
+        - name: 8. Log user and directory removal
+          ansible.builtin.lineinfile:
+            path: "{{ log_file }}"
+            line: "[{{ ansible_date_time.iso8601 }}] Removing Jenkins user and all data directories."
+            create: yes
+            owner: root
+            group: root
+            mode: '0640'
+
+        - name: 9. Remove Jenkins user and group
+          block:
+            - name: Remove Jenkins group
+              ansible.builtin.group:
+                name: "{{ jenkins_group }}"
+                state: absent
+            - name: Remove Jenkins user
+              ansible.builtin.user:
+                name: "{{ jenkins_user }}"
+                state: absent
+                remove: yes
+          ignore_errors: yes
+
+        - name: 10. Remove all remaining Jenkins directories
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - "{{ jenkins_data_dir }}"
+            - "{{ jenkins_log_dir }}"
+            - "{{ jenkins_etc_dir }}"
+            - "{{ jenkins_cache_dir }}"
+            - /etc/default/jenkins
+            - /etc/sysconfig/jenkins
+          ignore_errors: yes
+
+        - name: 11. Log completion
+          ansible.builtin.lineinfile:
+            path: "{{ log_file }}"
+            line: "[{{ ansible_date_time.iso8601 }}] Jenkins removal complete on {{ inventory_hostname }}."
+            create: yes
+            owner: root
+            group: root
+            mode: '0640'
+
+      when: jenkins_artifacts_found | bool
+
+  handlers:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: yes
+      when: ansible_os_family == "Debian"

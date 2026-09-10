@@ -1,0 +1,62 @@
+# --- OS & System Metadata ---
+# Prevents common junk files from being tracked across environments
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+*.swp
+*.swo
+
+# --- Secrets & Sensitive Data (Security Priority) ---
+# Prevents accidental commits of environment secrets or private keys
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+.ssh/
+id_rsa
+id_ed25519
+*.secret
+
+# --- IDE & Editor Artifacts ---
+# Clean up project-specific configuration folders
+.vscode/
+.idea/
+.project
+.settings/
+.cache/
+*.sublime-project
+*.sublime-workspace
+
+# --- Common Build & Output Artifacts ---
+# Generic enough to catch most static and compiled project outputs
+node_modules/
+dist/
+build/
+out/
+.output/
+.nuxt/
+.next/
+site/
+public/
+_site/
+.jekyll-metadata
+.sass-cache/
+
+# --- Python & Infrastructure ---
+# Relevant for your scripts and automation stack
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.ansible/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- Project-Specific Backups/Temp ---
+*.tmp
+*.bak
+*.old

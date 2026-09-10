@@ -1,0 +1,124 @@
+---
+- name: Fully interactive Pi-hole + Unbound setup
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    - name: Ensure system is updated
+      apt:
+        update_cache: yes
+        upgrade: dist
+        force_apt_get: yes
+      tags: update
+
+    - name: Install dependencies
+      apt:
+        name:
+          - curl
+          - sudo
+          - unbound
+          - unbound-anchor
+        state: present
+      tags: dependencies
+
+    - name: Download Pi-hole installer script if not already present
+      get_url:
+        url: https://install.pi-hole.net
+        dest: /tmp/install_pihole.sh
+        mode: '0755'
+      register: pihole_installer
+      tags: pihole
+
+    - name: Notify user to SSH in and run Pi-hole installer manually
+      debug:
+        msg: "Pi-hole is ready to install.\nSSH into the server and run:\n    sudo bash /tmp/install_pihole.sh\nThen come back and re-run this playbook to finish Unbound setup."
+      tags: pihole
+
+    - name: Pause to allow manual Pi-hole installation
+      pause:
+        prompt: "Press Enter when you've finished installing Pi-hole manually..."
+      tags: pihole
+
+    - name: Verify Pi-hole installation exists
+      stat:
+        path: /etc/pihole/setupVars.conf
+      register: pihole_installed
+      tags: pihole
+
+    - name: Debug Pi-hole installation status
+      debug:
+        msg: "Pi-hole is installed: {{ pihole_installed.stat.exists }}"
+      tags: pihole
+
+    - name: Set Pi-hole to use Unbound as upstream DNS
+      lineinfile:
+        path: /etc/pihole/setupVars.conf
+        regexp: '^PIHOLE_DNS_1='
+        line: 'PIHOLE_DNS_1=127.0.0.1#5335'
+        create: yes
+      tags: pihole
+
+    - name: Restart Pi-hole DNS to apply Unbound settings
+      command: pihole restartdns
+      tags: pihole
+
+    - name: Add OISD blocklist to Pi-hole using official command
+      command: pihole -a -i "https://big.oisd.nl"
+      tags: pihole
+
+    - name: Force Pi-hole to update Gravity
+      command: pihole -g
+      tags: pihole
+
+    - name: Check if Pi-hole DNS is active
+      command: pihole status
+      register: pihole_status
+      changed_when: false
+      ignore_errors: yes
+      tags: pihole
+
+    - name: Restart Pi-hole DNS if inactive
+      command: pihole restartdns
+      when: pihole_status.rc != 0
+      tags: pihole
+
+    - name: Remove duplicate trust anchors for Unbound if present
+      lineinfile:
+        path: /etc/unbound/unbound.conf.d/root-auto-trust-anchor-file.conf
+        regexp: 'auto-trust-anchor-file'
+        state: absent
+      tags: unbound
+
+    - name: Ensure Unbound is installed
+      apt:
+        name: 
+          - unbound
+          - unbound-anchor
+        state: present
+      tags: unbound
+
+    - name: Deploy local Unbound configuration file
+      copy:
+        src: unbound.conf
+        dest: /etc/unbound/unbound.conf
+        mode: '0644'
+      tags: unbound
+
+    - name: Verify unbound-anchor command is available
+      shell: "which unbound-anchor"
+      register: unbound_anchor_check
+      changed_when: false
+      ignore_errors: yes
+      tags: unbound
+
+    - name: Download root hints for Unbound
+      command: unbound-anchor -a /var/lib/unbound/root.key
+      tags: unbound
+
+    - name: Restart Unbound service
+      systemd:
+        name: unbound
+        state: restarted
+        enabled: yes
+      tags: unbound

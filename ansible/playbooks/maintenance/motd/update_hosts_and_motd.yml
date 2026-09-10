@@ -1,0 +1,66 @@
+---
+- name: Safely update /etc/hosts and /etc/motd for Pi Cluster
+  hosts: pi_all
+  ## gather_facts: false
+  become: true
+  tasks:
+    - name: Backup existing /etc/hosts and /etc/motd
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "{{ item }}.backup"
+        mode: preserve
+        backup: yes
+      loop:
+        - /etc/hosts
+        - /etc/motd
+    
+    - name: Generate new content for /etc/hosts
+      ansible.builtin.copy:
+        content: |
+          127.0.0.1   localhost
+          127.0.1.1   {{ ansible_hostname }}
+          # The following lines are desirable for IPv6 capable hosts
+          ::1     ip6-localhost ip6-loopback
+          fe00::0 ip6-localnet
+          ff02::1 ip6-allnodes
+          ff02::2 ip6-allrouters
+          
+          ## Pi Cluster
+          192.168.0.100   pi0
+          192.168.0.101   pi1
+          192.168.0.102   pi2
+          192.168.0.103   pi3
+          192.168.0.104   pi4
+          192.168.0.105   neo1
+        dest: /etc/hosts
+        mode: '0644'
+      register: hosts_update_result
+    
+    - name: Generate new content for /etc/motd with Pi cluster info
+      ansible.builtin.copy:
+        content: |
+
+          ▄▀▄     █▄ ▄█ █ ▄▀▀ █▄█ ▄▀▄ ██▀ █      ▀█▀ ▄▀▄ ▀█▀ █ █ █▄ ▄█
+          █▀█ ▄   █ ▀ █ █ ▀▄▄ █ █ █▀█ █▄▄ █▄▄     █  █▀█  █  ▀▄█ █ ▀ █
+
+          ## local subnet
+          192.168.0.100   pi0
+          192.168.0.101   pi1
+          192.168.0.102   pi2
+          192.168.0.103   pi3
+          192.168.0.104   pi4
+          192.168.0.105   neo1
+
+        dest: /etc/motd
+        mode: '0644'
+      register: motd_update_result
+    
+    - name: Validate updates - /etc/hosts
+      ansible.builtin.command: "cat /etc/hosts"
+      changed_when: false
+      when: hosts_update_result.changed
+    
+    - name: Validate updates - /etc/motd
+      ansible.builtin.command: "cat /etc/motd"
+      changed_when: false
+      when: motd_update_result.changed

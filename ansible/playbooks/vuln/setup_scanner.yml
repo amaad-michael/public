@@ -1,0 +1,61 @@
+---
+- name: Configure Vulnerability Scanner Node (Multi-OS)
+  hosts: scanners
+  become: true
+  vars:
+    script_dir: "/opt/tatum_audit"
+    pip_packages:
+      - requests
+      - dnspython
+
+  tasks:
+    # --- 1. OS-SPECIFIC UPDATES ---
+    - name: Update apt cache (Debian/Ubuntu)
+      apt:
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Update dnf cache (RHEL/CentOS/Fedora)
+      dnf:
+        update_cache: yes
+      when: ansible_os_family == "RedHat"
+
+    # --- 2. INSTALL CORE TOOLS ---
+    # The 'package' module automatically picks apt or dnf/yum
+    - name: Install Nmap and base tools
+      package:
+        name:
+          - nmap
+          - python3
+          - git
+        state: present
+
+    # --- 3. HANDLE OS-SPECIFIC PACKAGE NAMES ---
+    # pip is named differently on some RHEL versions vs Debian
+    - name: Install Python pip (Debian)
+      apt:
+        name: python3-pip
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Install Python pip (RHEL)
+      dnf:
+        name: python3-pip
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    # --- 4. WORKSPACE SETUP (Agnostic) ---
+    - name: Create Audit Directory
+      file:
+        path: "{{ script_dir }}"
+        state: directory
+        mode: '0750'
+        owner: root
+        group: root
+
+    # --- 5. DEPENDENCIES (Agnostic) ---
+    - name: Install Python libraries
+      pip:
+        name: "{{ item }}"
+        state: present
+      loop: "{{ pip_packages }}"

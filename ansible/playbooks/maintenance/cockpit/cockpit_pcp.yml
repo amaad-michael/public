@@ -1,0 +1,50 @@
+---
+- name: Setup PCP for performance data collection
+  hosts: all  # Target all hosts defined in your Ansible inventory
+  become: yes # Run tasks with root privileges (sudo)
+
+  # Define variables for packages
+  vars:
+    # Packages required for RedHat-like distributions (e.g., Fedora, CentOS, RHEL)
+    redhat_pcp_packages:
+      - pcp
+      - cockpit-pcp # cockpit-pcp pulls in necessary PCP components for Cockpit integration
+    # Packages required for Debian-like distributions (e.g., Debian, Ubuntu)
+    debian_pcp_packages:
+      - pcp
+      - cockpit-pcp # cockpit-pcp pulls in necessary PCP components for Cockpit integration
+
+  tasks:
+    - name: Update apt cache (for Debian-like systems)
+      ansible.builtin.apt:
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+      # This task ensures that the package list is up-to-date before installation
+      # It runs only on systems identified as belonging to the Debian OS family.
+
+    - name: Install PCP and Cockpit-PCP packages
+      ansible.builtin.package:
+        # Selects the appropriate PCP package list based on the detected OS family
+        name: "{{ redhat_pcp_packages if ansible_os_family == 'RedHat' else debian_pcp_packages }}"
+        state: present
+      # This task installs the core PCP package and the Cockpit integration package.
+      # The 'cockpit-pcp' package ensures that the necessary components for Cockpit
+      # to read PCP data are present, and often pulls 'pcp' as a dependency.
+
+    - name: Ensure pmlogger (PCP logging service) is enabled and running
+      ansible.builtin.service:
+        name: pmlogger
+        enabled: true
+        state: started
+      # pmlogger is the Performance Co-Pilot (PCP) archiver, responsible for
+      # collecting and logging system performance metrics to disk. This is
+      # crucial for historical graphing in Cockpit.
+      # 'enabled: true' ensures it starts automatically on boot, and 'state: started'
+      # ensures it's running immediately.
+
+    - name: Inform that PCP setup is complete
+      ansible.builtin.debug:
+        msg: "PCP (Performance Co-Pilot) data collection is now configured on this server. Your central Cockpit instance should be able to gather performance data from this host."
+      # This final task provides confirmation that the PCP setup is complete,
+      # indicating that the server is ready to provide performance metrics to Cockpit.
+

@@ -1,0 +1,259 @@
+- name: Enterprise Pi-hole & Unbound Health Check (All-in-One)
+  hosts: all
+  become: yes
+  gather_facts: true
+
+  vars:
+    report_base_dir: "/var/log/health_checks"
+    report_filename: "pihole_unbound_health_check_{{ ansible_hostname }}_{{ ansible_date_time.iso8601 }}.md"
+    full_report_path: "{{ report_base_dir }}/{{ report_filename }}"
+    local_fetch_dir: "./reports"
+    pihole_admin_port: 80 # <--- ADDED BACK
+    unbound_port: 5335
+    test_domain: "google.com"
+    blocked_test_domain: "doubleclick.net"
+    disk_inode_warning_percent: 90
+    cpu_load_1min_warning_threshold: 5.0
+    log_scan_period: "1 hour ago"
+    log_lines: 50
+
+  tasks:
+    - name: Ensure remote report dir exists
+      ansible.builtin.file:
+        path: "{{ report_base_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Ensure essential packages are installed
+      ansible.builtin.package:
+        name:
+          - dnsutils
+          - sqlite3
+          - netcat-traditional
+        state: present
+      register: pkg_install_status
+
+    - name: Gather disk & inode usage
+      shell: "df -h -x tmpfs -x devtmpfs && echo '---' && df -i -x tmpfs -x devtmpfs"
+      register: disk_inode_output
+      changed_when: false
+      ignore_errors: true
+
+    - name: Gather memory usage
+      command: free -h
+      register: memory_usage_output
+      changed_when: false
+      ignore_errors: true
+
+    - name: Gather uptime/load
+      command: uptime
+      register: uptime_output
+      changed_when: false
+      ignore_errors: true
+
+    - name: Gather top processes
+      shell: "ps aux --sort=-%cpu | head -n 11 && echo '---' && ps aux --sort=-%mem | head -n 11"
+      register: top_processes_output
+      changed_when: false
+      ignore_errors: true
+
+    - name: Collect service facts
+      service_facts:
+
+    - name: Check listening ports
+      community.general.listen_ports_facts:
+      register: port_facts
+      changed_when: false
+      ignore_errors: true
+
+    - name: DNS tests
+      block:
+        - name: Test Pi-hole DNS
+          command: "dig +short +time=2 {{ test_domain }} @127.0.0.1"
+          register: pihole_resolution_test
+          changed_when: false
+
+        - name: Test Unbound DNS
+          command: "dig +short +time=2 {{ test_domain }} @127.0.0.1 -p {{ unbound_port }}"
+          register: unbound_resolution_test
+          changed_when: false
+
+        - name: Test Pi-hole blocklist
+          command: "dig +short +time=2 {{ blocked_test_domain }} @127.0.0.1"
+          register: pihole_blocklist_test
+          changed_when: false
+      ignore_errors: true
+
+    # --- TASK ADDED BACK ---
+    - name: Check Pi-hole Web UI (from localhost)
+      uri:
+        url: "http://127.0.0.1:{{ pihole_admin_port }}/admin/"
+        method: GET
+        status_code: [200, 301, 302, 403] # These are all "healthy" responses
+      register: pihole_web_check
+      ignore_errors: true
+    # --- END ---
+
+    - name: Check FTL DB integrity
+      command: "/usr/bin/sqlite3 /etc/pihole/pihole-FTL.db 'PRAGMA integrity_check;'"
+      register: ftl_db_integrity
+      changed_when: false
+      when: pkg_install_status is not failed
+      ignore_errors: true
+
+    - name: Get Pi-hole summary stats via FTL API
+      shell: "echo '>stats >quit' | nc localhost 4711"
+      register: pihole_stats
+      changed_when: false
+      ignore_errors: true
+
+    - name: Get Pi-hole top clients via FTL API
+      shell: "echo '>top-clients (10) >quit' | nc localhost 4711"
+      register: pihole_top_clients
+      changed_when: false
+      ignore_errors: true
+
+    - name: Get Pi-hole top blocked domains via FTL API
+      shell: "echo '>top-ads (10) >quit' | nc localhost 4711"
+      register: pihole_top_ads
+      changed_when: false
+      ignore_errors: true
+
+    - name: Scan Pi-hole FTL logs
+      shell: 'journalctl -u pihole-FTL --since "{{ log_scan_period }}" | grep -i -E "error|warn|fail|fatal" | tail -n {{ log_lines }} || true'
+      register: pihole_ftl_log_errors
+      changed_when: false
+
+    - name: Scan Unbound logs
+      shell: 'journalctl -u unbound --since "{{ log_scan_period }}" | grep -i -E "error|warn|fail|fatal|servfail" | tail -n {{ log_lines }} || true'
+      register: unbound_log_errors
+      changed_when: false
+
+    - name: Scan auth.log for failed logins
+      shell: 'grep -i "Failed password" /var/log/auth.log | tail -n {{ log_lines }} || true'
+      register: auth_log_errors
+      changed_when: false
+      ignore_errors: true
+
+    - name: Scan UFW log for blocks
+      shell: 'grep -i "\[UFW BLOCK\]" /var/log/ufw.log | tail -n {{ log_lines }} || true'
+      register: ufw_log_blocks
+      changed_when: false
+      ignore_errors: true
+
+    - name: Check for system updates
+      shell: apt-get -s upgrade | grep -E '^[0-9]+ upgraded'
+      register: pending_updates_check
+      changed_when: false
+      ignore_errors: true
+
+    - name: Write Pi-hole & Unbound report inline
+      copy:
+        dest: "{{ full_report_path }}"
+        mode: '0644'
+        content: |
+          # Pi-hole & Unbound Health Check: {{ ansible_hostname }}
+
+          - **Date:** {{ ansible_date_time.iso8601 }}
+          - **IP:** {{ ansible_default_ipv4.address }}
+          - **OS:** {{ ansible_distribution }} {{ ansible_distribution_version }}
+          - **Kernel:** {{ ansible_kernel }}
+
+          ## 🧮 System Vitals
+
+          ### Disk & Inode
+          ```
+          {{ disk_inode_output.stdout | default('N/A') }}
+          ```
+
+          ### Memory
+          ```
+          {{ memory_usage_output.stdout | default('N/A') }}
+          ```
+
+          ### Load
+          ```
+          {{ uptime_output.stdout | default('N/A') }}
+          ```
+
+          ### Top CPU / Memory
+          ```
+          {{ top_processes_output.stdout | default('N/A') }}
+          ```
+
+          ## 🔌 Services
+          - Pi-hole FTL: `{{ 'RUNNING' if 'pihole-FTL.service' in ansible_facts.services and ansible_facts.services['pihole-FTL.service'].state == 'running' else 'INACTIVE' }}`
+          - Unbound: `{{ 'RUNNING' if 'unbound.service' in ansible_facts.services and ansible_facts.services['unbound.service'].state == 'running' else 'INACTIVE' }}`
+          - Pi-hole Web UI: `{{ 'OK' if pihole_web_check.status in [200, 301, 302, 403] else 'FAIL/UNREACHABLE' }}` # <--- REPORT LINE ADDED
+
+          ## 📡 Ports
+          - Port 53: `{{ 'OK' if 53 in (port_facts.ansible_facts.tcp_listen | map(attribute='port') | list) else 'MISSING' }}`
+          - Port {{ pihole_admin_port }} (Web): `{{ 'OK' if pihole_admin_port in (port_facts.ansible_facts.tcp_listen | map(attribute='port') | list) else 'MISSING' }}` # <--- REPORT LINE ADDED
+          - Port {{ unbound_port }} (Unbound): `{{ 'OK' if unbound_port in (port_facts.ansible_facts.tcp_listen | map(attribute='port') | list) else 'MISSING' }}`
+
+          ## 🌐 DNS Tests
+          - Pi-hole: `{{ 'PASS' if pihole_resolution_test.rc == 0 else 'FAIL' }}`
+          - Unbound: `{{ 'PASS' if unbound_resolution_test.rc == 0 else 'FAIL' }}`
+          - Blocklist ({{ blocked_test_domain }}): `{{ 'BLOCKED' if '0.0.0.0' in pihole_blocklist_test.stdout else 'NOT BLOCKED' }}`
+          - FTL DB Integrity: `{{ 'OK' if 'ok' in ftl_db_integrity.stdout else 'CHECK FAILED' }}`
+
+          ## 📈 Pi-hole Stats (from FTL API)
+          ### Summary
+          ```
+          {{ pihole_stats.stdout | default('Could not connect to FTL API (port 4711)') }}
+          ```
+          ### Top Clients
+          ```
+          {{ pihole_top_clients.stdout | default('N/A') }}
+          ```
+          ### Top Blocked Domains
+          ```
+          {{ pihole_top_ads.stdout | default('N/A') }}
+          ```
+
+          ## 🧰 Logs (Searched since {{ log_scan_period }})
+          ### Security (auth.log) - Failed Logins
+          ```
+          {{ auth_log_errors.stdout | default('none') }}
+          ```
+
+          ### Firewall (ufw.log) - Recent Blocks
+          ```
+          {{ ufw_log_blocks.stdout | default('none or log not found') }}
+          ```
+
+          ### Pi-hole FTL (journalctl) - Errors/Warns
+          ```
+          {{ pihole_ftl_log_errors.stdout | default('none') }}
+          ```
+
+          ### Unbound (journalctl) - Errors/Warns/Servfail
+          ```
+          {{ unbound_log_errors.stdout | default('none') }}
+          ```
+
+          ## ⚙️ Updates
+          ```
+          {{ pending_updates_check.stdout | default('Could not check') }}
+          ```
+
+    - name: Ensure local report dir exists
+      file:
+        path: "{{ local_fetch_dir }}"
+        state: directory
+        mode: '0755'
+      delegate_to: localhost
+      run_once: true
+
+    - name: Slurp report
+      slurp:
+        src: "{{ full_report_path }}"
+      register: slurped_report
+
+    - name: Save report to control node
+      copy:
+        content: "{{ slurped_report.content | b64decode }}"
+        dest: "{{ local_fetch_dir }}/{{ report_filename }}"
+        mode: '0644'
+      delegate_to: localhost
+      when: slurped_report.content is defined

@@ -1,0 +1,135 @@
+---
+- name: Golden Image Log Sanitization Playbook
+  hosts: all
+  become: true
+  tasks:
+    - name: Ensure we are running as root
+      ansible.builtin.fail:
+        msg: "This playbook must be run with root privileges (use --become)"
+      when: ansible_user_id != 0
+
+    - name: Display warning and pause
+      ansible.builtin.pause:
+        prompt: |
+          WARNING: This playbook will permanently erase all log history
+          (systemd journal, syslog, auth logs, pi-hole logs, bash history)
+          to prepare this system as a 'golden image'.
+          
+          This action is irreversible.
+          
+          Press ENTER to continue, or Ctrl+C then 'A' to abort...
+        seconds: 10
+
+    - name: Check for Pi-hole log directory
+      ansible.builtin.stat:
+        path: /var/log/pihole
+      register: pihole_dir
+
+    - name: Clear Pi-hole Logs (if dir exists)
+      when: pihole_dir.stat.exists and pihole_dir.stat.isdir
+      block:
+        - name: Truncate pihole.log
+          ansible.builtin.copy:
+            content: ""
+            dest: /var/log/pihole/pihole.log
+            force: true
+            owner: pihole
+            group: pihole
+            mode: '0644'
+
+        - name: Truncate FTL.log
+          ansible.builtin.copy:
+            content: ""
+            dest: /var/log/pihole/FTL.log
+            force: true
+            owner: pihole
+            group: pihole
+            mode: '0644'
+
+        - name: Remove archived Pi-hole logs
+          ansible.builtin.command:
+            cmd: find /var/log/pihole -name "pihole.log.*" -o -name "FTL.log.*" -exec rm -f {} \;
+          changed_when: true
+
+    - name: Check for custom unbound.log
+      ansible.builtin.stat:
+        path: /var/log/unbound.log
+      register: unbound_log
+
+    - name: Clear Unbound Custom Log (if it exists)
+      when: unbound_log.stat.exists and unbound_log.stat.isreg
+      block:
+        - name: Truncate unbound.log
+          ansible.builtin.copy:
+            content: ""
+            dest: /var/log/unbound.log
+            force: true
+            mode: '0640'
+            # Note: You may need to set owner/group if not root
+            # owner: unbound
+            # group: unbound
+
+        - name: Remove archived unbound logs
+          ansible.builtin.command:
+            cmd: find /var/log -name "unbound.log.*" -exec rm -f {} \;
+          changed_when: true
+
+    - name: Clear Traditional System Logs
+      block:
+        - name: Truncate auth.log
+          ansible.builtin.copy:
+            content: ""
+            dest: /var/log/auth.log
+            force: true
+            mode: '0640'
+
+        - name: Truncate syslog
+          ansible.builtin.copy:
+            content: ""
+            dest: /var/log/syslog
+            force: true
+            mode: '0640'
+
+        - name: Truncate ufw.log
+          ansible.builtin.copy:
+            content: ""
+            dest: /var/log/ufw.log
+            force: true
+            mode: '0640'
+
+        - name: Remove archived system logs
+          ansible.builtin.command:
+            cmd: find /var/log -name "auth.log.*" -o -name "syslog.*" -o -name "ufw.log.*" -exec rm -f {} \;
+          changed_when: true
+
+    - name: Clear Bash History for Golden Image
+      block:
+        - name: Truncate root user's bash_history
+          ansible.builtin.copy:
+            content: ""
+            dest: /root/.bash_history
+            force: true
+            owner: root
+            group: root
+            mode: '0600'
+
+        - name: Truncate default user skeleton bash_history
+          ansible.builtin.copy:
+            content: ""
+            dest: /etc/skel/.bash_history
+            force: true
+            owner: root
+            group: root
+            mode: '0600'
+
+    - name: Clean Systemd Journal (retain last 1 second)
+      ansible.builtin.command:
+        cmd: journalctl --vacuum-time=1s
+      changed_when: true
+      notify: Restart journald
+
+  handlers:
+    - name: Restart journald
+      ansible.builtin.systemd:
+        name: systemd-journald
+        state: restarted

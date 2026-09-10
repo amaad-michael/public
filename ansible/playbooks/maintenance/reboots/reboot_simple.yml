@@ -1,0 +1,20 @@
+---
+- name: Reboot Linux servers
+  hosts: all
+  become: true
+  gather_facts: true # Ensure facts are gathered to use ansible_os_family
+
+  tasks:
+    - name: Perform system reboot
+      ansible.builtin.reboot:
+        reboot_timeout: 600 # Adjust timeout as needed (in seconds)
+      when: ansible_os_family in ["Debian", "RedHat"]
+      notify:
+        - Host rebooted notification
+      tags:
+        - reboot
+
+  handlers:
+    - name: Host rebooted notification
+      debug:
+        msg: "{{ inventory_hostname }} has been rebooted."

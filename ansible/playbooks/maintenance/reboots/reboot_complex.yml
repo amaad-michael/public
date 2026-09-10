@@ -1,0 +1,32 @@
+---
+- name: Safely reboot Linux servers
+  hosts: all
+  become: true
+  gather_facts: true # Ensure facts are gathered for ansible_os_family
+
+  pre_tasks:
+    - name: Perform a system health check (uptime)
+      ansible.builtin.command: uptime
+      register: system_uptime_check
+      changed_when: false
+      failed_when: system_uptime_check.rc != 0 # Ensure task fails if uptime command fails
+
+    - name: Display system uptime before reboot
+      ansible.builtin.debug:
+        msg: "System uptime for {{ inventory_hostname }}: {{ system_uptime_check.stdout }}"
+
+  tasks:
+    - name: Perform system reboot
+      ansible.builtin.reboot:
+        reboot_timeout: 600 # Increased timeout for robustness (e.g., 10 minutes)
+        test_command: "whoami" # Test command to run after reboot to confirm connectivity
+      when: ansible_os_family in ["Debian", "RedHat"]
+      notify:
+        - Log successful reboot
+      tags:
+        - reboot
+
+  handlers:
+    - name: Log successful reboot
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} has successfully rebooted and is accessible."

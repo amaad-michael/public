@@ -1,0 +1,136 @@
+---
+- name: Uninstall Pi-hole and Unbound for a Clean Slate
+  hosts: all
+  become: yes
+
+  vars:
+    related_services:
+      - pihole-FTL
+      - lighttpd
+      - nginx
+      - unbound
+      - dnsmasq
+
+    related_packages:
+      - unbound
+      - pihole-FTL
+      - lighttpd
+      - nginx-common
+      - php-common
+      - php-cgi
+      - php-sqlite3
+      - dnsmasq-base
+
+    related_dirs:
+      - /etc/pihole
+      - /etc/unbound
+      - /var/www/html/admin
+      - /opt/pihole
+      - /etc/.pihole
+
+    related_files:
+      - /etc/cron.d/pihole
+      - /var/log/pihole/pihole.log
+      - /var/log/pihole/FTL.log
+      - /var/log/lighttpd/error.log
+      - /etc/dnsmasq.d/01-pihole.conf
+
+  tasks:
+
+    - name: Log hostname and timestamp before uninstall
+      ansible.builtin.shell: echo "Uninstall run on $(hostname) at $(date)" >> /var/log/uninstall_dns.log
+      tags: log
+
+    - name: Stop all related services
+      ansible.builtin.service:
+        name: "{{ item }}"
+        state: stopped
+      loop: "{{ related_services }}"
+      ignore_errors: yes
+      tags: uninstall
+
+    - name: Check if Pi-hole uninstall script exists
+      ansible.builtin.stat:
+        path: /usr/local/bin/pihole
+      register: pihole_binary
+      tags: uninstall
+
+    - name: Run official Pi-hole uninstaller (if present)
+      ansible.builtin.command:
+        cmd: pihole uninstall --unattended
+      when: pihole_binary.stat.exists
+      ignore_errors: yes
+      tags: uninstall
+
+    - name: Forcefully purge all related packages
+      ansible.builtin.apt:
+        name: "{{ related_packages }}"
+        state: absent
+        purge: yes
+        autoremove: yes
+      ignore_errors: yes
+      tags: uninstall
+
+    - name: Backup Pi-hole configs before deletion (optional)
+      ansible.builtin.archive:
+        path: "{{ item }}"
+        dest: "/root/pihole_backup_{{ item | basename }}.tar.gz"
+      loop: "{{ related_dirs }}"
+      when: backup_enabled | default(false)
+      tags: backup
+
+    - name: Remove Pi-hole and Unbound configuration directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop: "{{ related_dirs }}"
+      ignore_errors: yes
+      tags: uninstall
+
+    - name: Remove Pi-hole cron jobs, logs, and config files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop: "{{ related_files }}"
+      ignore_errors: yes
+      tags: uninstall
+
+    - name: Remove 'pihole' group
+      ansible.builtin.group:
+        name: pihole
+        state: absent
+      ignore_errors: yes
+      tags: uninstall
+
+    - name: Remove 'pihole' user
+      ansible.builtin.user:
+        name: pihole
+        state: absent
+        remove: yes
+      ignore_errors: yes
+      tags: uninstall
+
+    - name: Restore a functional /etc/resolv.conf
+      ansible.builtin.copy:
+        content: |
+          # Restored by Ansible
+          nameserver 1.1.1.1
+          nameserver 1.0.0.1
+          options edns0
+        dest: /etc/resolv.conf
+        mode: '0644'
+        force: yes
+      tags: dns-reset
+
+    - name: Verify DNS resolution post-uninstall
+      ansible.builtin.command: dig +short example.com
+      register: dns_test
+      failed_when: dns_test.stdout == ""
+      tags: verify
+
+    - name: Final apt cleanup
+      ansible.builtin.apt:
+        autoremove: yes
+        autoclean: yes
+      tags: cleanup
+

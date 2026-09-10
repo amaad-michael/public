@@ -1,0 +1,50 @@
+---
+- name: Install and enable Cockpit on Debian and RHEL systems
+  hosts: all
+  become: yes
+  tasks:
+    - name: Ensure EPEL repository is present (RHEL family < 9, if needed for Cockpit or other tools)
+      ansible.builtin.package:
+        name: epel-release
+        state: present
+      when:
+        - ansible_os_family == "RedHat"
+        - ansible_distribution_major_version | int < 9 # Targets older RHEL/CentOS versions
+      tags: prerequisites, rhel
+
+    - name: Install Cockpit package
+      ansible.builtin.package:
+        name: cockpit # Metapackage that should pull in necessary components like cockpit-ws
+        state: present
+        update_cache: "{{ true if ansible_os_family == 'Debian' else omit }}" # Update cache for apt-based systems
+      register: cockpit_install_result
+      tags: install
+
+    - name: Validate Cockpit installation by checking cockpit-ws command
+      ansible.builtin.command: >-
+        {{ '/usr/lib/cockpit/cockpit-ws' if ansible_os_family == 'Debian' else '/usr/libexec/cockpit-ws' }} --version
+      register: cockpit_ws_check
+      changed_when: false
+      failed_when: cockpit_ws_check.rc != 0
+      when: cockpit_install_result is succeeded # Only run if package install task reported success
+      tags: validation
+
+    - name: Ensure cockpit.socket is enabled and started
+      ansible.builtin.systemd:
+        name: cockpit.socket
+        enabled: yes
+        state: started
+        daemon_reload: yes # Ensures systemd reloads unit files if changed by package install
+      tags: service, enable
+
+    - name: Verify Cockpit socket is active
+      ansible.builtin.command: systemctl is-active cockpit.socket
+      register: cockpit_socket_active_status
+      changed_when: false
+      failed_when: "cockpit_socket_active_status.stdout != 'active'" # Fail if socket is not active
+      tags: validation, status
+
+    - name: Display Cockpit socket status
+      ansible.builtin.debug:
+        msg: "Cockpit socket status: {{ cockpit_socket_active_status.stdout }}"
+      tags: status

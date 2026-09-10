@@ -1,0 +1,117 @@
+---
+- name: Configure Firewall for Debian (UFW) and RedHat Family (firewalld)
+  hosts: all
+  become: yes
+
+  vars:
+    allowed_tcp_ports:
+      - 22    # SSH
+      - 53    # DNS TCP
+      - 80    # HTTP
+      - 443   # HTTPS
+      - 9090  # Custom App Port
+
+    allowed_udp_ports:
+      - 53    # DNS UDP
+
+    firewalld_zone: public
+
+  tasks:
+    # =============== Debian-based Systems (UFW) ===============
+    - name: Configure UFW on Debian-based systems
+      block:
+        - name: Install UFW if not present
+          ansible.builtin.apt:
+            name: ufw
+            state: present
+            update_cache: yes
+
+        - name: Set default UFW policies
+          community.general.ufw:
+            direction: "{{ item.direction }}"
+            policy: "{{ item.policy }}"
+          loop:
+            - { direction: incoming, policy: deny }
+            - { direction: outgoing, policy: allow }
+
+        - name: Allow allowed TCP ports in UFW
+          community.general.ufw:
+            rule: allow
+            port: "{{ item }}"
+            proto: tcp
+          loop: "{{ allowed_tcp_ports }}"
+
+        - name: Allow allowed UDP ports in UFW
+          community.general.ufw:
+            rule: allow
+            port: "{{ item }}"
+            proto: udp
+          loop: "{{ allowed_udp_ports }}"
+
+        - name: Ensure UFW is enabled
+          community.general.ufw:
+            state: enabled
+
+      when: ansible_facts['os_family'] == "Debian"
+
+    # =============== RHEL-based Systems (firewalld) ===============
+    - name: Configure firewalld on RedHat-based systems
+      block:
+        - name: Install firewalld if not present
+          ansible.builtin.package:
+            name: firewalld
+            state: present
+
+        - name: Start and enable firewalld
+          ansible.builtin.systemd:
+            name: firewalld
+            state: started
+            enabled: yes
+
+        - name: Open allowed TCP ports in firewalld
+          ansible.posix.firewalld:
+            port: "{{ item }}/tcp"
+            permanent: yes
+            state: enabled
+            immediate: yes
+            zone: "{{ firewalld_zone }}"
+          loop: "{{ allowed_tcp_ports }}"
+
+        - name: Open allowed UDP ports in firewalld
+          ansible.posix.firewalld:
+            port: "{{ item }}/udp"
+            permanent: yes
+            state: enabled
+            immediate: yes
+            zone: "{{ firewalld_zone }}"
+          loop: "{{ allowed_udp_ports }}"
+
+        - name: Reload firewalld to apply changes
+          ansible.builtin.command: firewall-cmd --reload
+          changed_when: false
+
+      when: ansible_facts['os_family'] == "RedHat"
+
+    # =============== Display Final Firewall Status ===============
+    - name: Show UFW status (Debian/Ubuntu)
+      ansible.builtin.command: ufw status verbose
+      register: ufw_status_output
+      changed_when: false
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Display UFW status output
+      ansible.builtin.debug:
+        msg: "{{ ufw_status_output.stdout_lines }}"
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Show firewalld active rules (RHEL/Rocky/CentOS)
+      ansible.builtin.command: firewall-cmd --list-all --zone={{ firewalld_zone }}
+      register: firewalld_status_output
+      changed_when: false
+      when: ansible_facts['os_family'] == "RedHat"
+
+    - name: Display firewalld zone rules
+      ansible.builtin.debug:
+        msg: "{{ firewalld_status_output.stdout_lines }}"
+      when: ansible_facts['os_family'] == "RedHat"
+

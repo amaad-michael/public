@@ -1,0 +1,176 @@
+---
+- name: Uninstall Pi-hole and Unbound for a Clean Slate
+  hosts: all
+  become: yes
+  vars:
+    # Set to true to create a backup tarball in /tmp before deleting
+    backup_configs: false
+
+    # List of services to stop
+    related_services:
+      - pihole-FTL
+      - lighttpd
+      - nginx
+      - unbound
+      - dnsmasq
+
+    # List of packages to purge
+    related_packages:
+      - unbound
+      - pihole-FTL
+      - lighttpd
+      - nginx-common
+      - php-common
+      - php-cgi
+      - php-sqlite3
+      - dnsmasq-base
+
+    # List of directories to delete
+    related_dirs:
+      - /etc/pihole
+      - /etc/unbound
+      - /var/www/html/admin
+      - /opt/pihole
+      - /etc/.pihole
+      - /var/log/pihole
+
+    # List of specific files to delete
+    related_files:
+      - /etc/cron.d/pihole
+      - /var/log/lighttpd/error.log
+      - /etc/dnsmasq.d/01-pihole.conf
+
+  tasks:
+    - name: 0. Backup configuration files (optional)
+      block:
+        - name: Create backup directory
+          ansible.builtin.tempfile:
+            state: directory
+            prefix: "dns_backup_"
+          register: backup_dir
+
+        - name: Create timestamped backup archive
+          ansible.builtin.archive:
+            path:
+              - /etc/pihole
+              - /etc/unbound
+            dest: "{{ backup_dir.path }}/dns_config_backup-{{ ansible_date_time.iso8601 }}.tgz"
+            format: gztar
+          when: backup_configs
+          ignore_errors: yes
+
+        - name: Report backup location
+          ansible.builtin.debug:
+            msg: "Backup created at {{ backup_dir.path }}/dns_config_backup-{{ ansible_date_time.iso8601 }}.tgz"
+          when: backup_configs
+      tags:
+        - backup
+
+    - name: 1. Stop all related services
+      block:
+        - name: Stop services
+          ansible.builtin.service:
+            name: "{{ item }}"
+            state: stopped
+          loop: "{{ related_services }}"
+          ignore_errors: yes
+      tags:
+        - stop
+        - cleanup
+
+    - name: 2. Run official Pi-hole uninstaller (if present)
+      block:
+        - name: Check if Pi-hole binary exists
+          ansible.builtin.stat:
+            path: /usr/local/bin/pihole
+          register: pihole_binary
+
+        - name: Run Pi-hole uninstall command
+          ansible.builtin.command:
+            cmd: pihole uninstall --unattended
+          when: pihole_binary.stat.exists
+          ignore_errors: yes
+      tags:
+        - purge
+        - cleanup
+
+    - name: 3. Forcefully purge all related packages
+      block:
+        - name: Purge packages
+          ansible.builtin.apt:
+            name: "{{ related_packages }}"
+            state: absent
+            purge: yes
+            autoremove: yes
+          ignore_errors: yes
+      tags:
+        - purge
+        - cleanup
+
+    - name: 4. Remove all configuration files and directories
+      block:
+        - name: Remove directories
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop: "{{ related_dirs }}"
+          ignore_errors: yes
+
+        - name: Remove specific files
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop: "{{ related_files }}"
+          ignore_errors: yes
+      tags:
+        - files
+        - cleanup
+
+    - name: 5. Remove 'pihole' user and group
+      block:
+        - name: Remove 'pihole' group
+          ansible.builtin.group:
+            name: pihole
+            state: absent
+          ignore_errors: yes
+
+        - name: Remove 'pihole' user
+          ansible.builtin.user:
+            name: pihole
+            state: absent
+            remove: yes # Also removes home directory
+          ignore_errors: yes
+      tags:
+        - users
+        - cleanup
+
+    - name: 6. Restore a functional /etc/resolv.conf
+      block:
+        - name: Write new resolv.conf
+          ansible.builtin.copy:
+            content: |
+              # Restored by Ansible
+              nameserver 1.1.1.1
+              nameserver 1.0.0.1
+              options edns0
+            dest: /etc/resolv.conf
+            mode: '0644'
+            force: yes
+      tags:
+        - network
+
+    - name: 7. Final verification
+      block:
+        - name: Verify external DNS resolution
+          ansible.builtin.command:
+            cmd: getent hosts google.com
+          register: dns_check
+          changed_when: false
+          failed_when: dns_check.rc != 0
+
+        - name: Report DNS resolution success
+          ansible.builtin.debug:
+            msg: "DNS resolution confirmed. Server is ready for re-installation."
+          when: dns_check.rc == 0
+      tags:
+        - verify

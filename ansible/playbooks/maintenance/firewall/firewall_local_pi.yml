@@ -1,0 +1,190 @@
+---
+- name: Configure host firewalls (UFW / firewalld) with safety checks
+  hosts: all
+  become: yes
+  gather_facts: true                     # needed for os_family checks
+  collections:
+    - community.general
+    - ansible.posix
+
+  vars:
+    # ------------------------------------------------------------------
+    # Ports to allow – edit per environment
+    # ------------------------------------------------------------------
+    allowed_tcp_ports:
+      # 22 is handled explicitly to prevent accidental lockout
+      - 53    # DNS TCP
+      - 80    # HTTP
+      - 443   # HTTPS
+      - 9090  # Custom App Port
+    allowed_udp_ports:
+      - 53    # DNS UDP
+
+    # Firewalld zone (can be overridden at runtime)
+    firewalld_zone: "{{ desired_zone | default('public') }}"
+
+    # ------------------------------------------------------------------
+    # Behaviour toggles
+    # ------------------------------------------------------------------
+    debug_firewall_status: false          # set true for verbose status output
+    ssh_probe_timeout: 10                 # seconds to wait for SSH probe
+    probe_host: "{{ hostvars[inventory_hostname].ansible_host | default(inventory_hostname) }}"
+    fail_on_probe_failure: false          # set true for critical hosts
+
+  pre_tasks:
+    - name: Show chosen configuration (debug)
+      debug:
+        msg:
+          - "TCP ports: {{ allowed_tcp_ports }}"
+          - "UDP ports: {{ allowed_udp_ports }}"
+          - "Firewalld zone: {{ firewalld_zone }}"
+      when: debug_firewall_status
+
+  tasks:
+    # ------------------------------------------------------------------
+    # Debian family – UFW
+    # ------------------------------------------------------------------
+    - name: Configure UFW (Debian/Ubuntu)
+      block:
+        - name: Install UFW
+          ansible.builtin.apt:
+            name: ufw
+            state: present
+            update_cache: yes
+
+        - name: Allow SSH first (prevent lock‑out)
+          community.general.ufw:
+            rule: allow
+            port: 22
+            proto: tcp
+
+        - name: Set default policies
+          community.general.ufw:
+            direction: "{{ item.direction }}"
+            policy: "{{ item.policy }}"
+          loop:
+            - { direction: incoming, policy: deny }
+            - { direction: outgoing, policy: allow }
+
+        - name: Open TCP ports via UFW
+          community.general.ufw:
+            rule: allow
+            port: "{{ item }}"
+            proto: tcp
+          loop: "{{ allowed_tcp_ports }}"
+
+        - name: Open UDP ports via UFW
+          community.general.ufw:
+            rule: allow
+            port: "{{ item }}"
+            proto: udp
+          loop: "{{ allowed_udp_ports }}"
+
+        - name: Ensure UFW is enabled (force) after rules are in place
+          ansible.builtin.command: ufw --force enable
+          register: ufw_enable_res
+          changed_when: "'enabled' in (ufw_enable_res.stdout | default('')) or ufw_enable_res.rc == 0"
+          failed_when: false
+      when: ansible_os_family == "Debian"
+      tags: firewall
+
+    # ------------------------------------------------------------------
+    # RedHat family – firewalld
+    # ------------------------------------------------------------------
+    - name: Configure firewalld (RHEL/Rocky/CentOS)
+      block:
+        - name: Install firewalld
+          ansible.builtin.package:
+            name: firewalld
+            state: present
+
+        - name: Ensure firewalld is running and enabled
+          ansible.builtin.service:
+            name: firewalld
+            state: started
+            enabled: yes
+
+        - name: Open TCP ports in firewalld
+          ansible.posix.firewalld:
+            port: "{{ item }}/tcp"
+            zone: "{{ firewalld_zone }}"
+            permanent: yes
+            state: enabled
+            immediate: yes
+          loop: "{{ allowed_tcp_ports }}"
+          notify: reload_firewalld
+
+        - name: Open UDP ports in firewalld
+          ansible.posix.firewalld:
+            port: "{{ item }}/udp"
+            zone: "{{ firewalld_zone }}"
+            permanent: yes
+            state: enabled
+            immediate: yes
+          loop: "{{ allowed_udp_ports }}"
+          notify: reload_firewalld
+      when: ansible_os_family == "RedHat"
+      tags: firewall
+
+    # ------------------------------------------------------------------
+    # Safety probe – verify we didn’t lock ourselves out
+    # ------------------------------------------------------------------
+    - name: Probe SSH connectivity from control host after firewall changes
+      delegate_to: localhost
+      ansible.builtin.wait_for:
+        host: "{{ probe_host }}"
+        port: 22
+        timeout: "{{ ssh_probe_timeout }}"
+      register: ssh_probe
+      changed_when: false
+      failed_when: false
+      tags: firewall
+
+    - name: Abort if probe fails and we require strict safety
+      ansible.builtin.fail:
+        msg: >
+          SSH probe to {{ probe_host }}:22 failed after {{ ssh_probe_timeout }} s.
+          Firewall changes may have locked us out – aborting run.
+      when:
+        - fail_on_probe_failure
+        - ssh_probe is failed or (ssh_probe.elapsed is defined and ssh_probe.elapsed >= ssh_probe_timeout)
+
+    - name: Warn if SSH probe failed (non‑fatal)
+      ansible.builtin.debug:
+        msg: |
+          SSH probe to {{ probe_host }}:22 failed or timed out after {{ ssh_probe_timeout }} s.
+          Verify out‑of‑band access before proceeding.
+      when: ssh_probe is failed or (ssh_probe.elapsed is defined and ssh_probe.elapsed >= ssh_probe_timeout)
+
+    # ------------------------------------------------------------------
+    # Optional debug/status output
+    # ------------------------------------------------------------------
+    - block:
+        - name: Show UFW status (verbose)
+          ansible.builtin.command: ufw status verbose
+          register: ufw_status
+          changed_when: false
+
+        - name: Dump UFW status
+          ansible.builtin.debug:
+            var: ufw_status.stdout_lines
+      when: ansible_os_family == "Debian" and debug_firewall_status
+      tags: firewall
+
+    - block:
+        - name: Show firewalld zone status
+          ansible.builtin.command: firewall-cmd --list-all --zone={{ firewalld_zone }}
+          register: fw_status
+          changed_when: false
+
+        - name: Dump firewalld status
+          ansible.builtin.debug:
+            var: fw_status.stdout_lines
+      when: ansible_os_family == "RedHat" and debug_firewall_status
+      tags: firewall
+
+  handlers:
+    - name: reload_firewalld
+      ansible.builtin.service:
+        name: firewalld
+        state: reloaded

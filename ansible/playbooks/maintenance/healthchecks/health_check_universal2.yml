@@ -1,0 +1,302 @@
+---
+- name: Monthly Production Server Health Check
+  hosts: all
+  become: yes
+  gather_facts: false
+
+  vars:
+    report_dir: "/tmp"
+    report_filename: "monthly_health_check_{{ ansible_hostname }}_{{ ansible_date_time.iso8601_basic }}.md"
+    full_report_path: "{{ report_dir }}/{{ report_filename }}"
+    local_report_dir: "./reports"
+    log_lines: 50
+    log_scan_period: "7 days ago"
+    external_ping_target: "8.8.8.8"
+    output_format: "markdown"
+
+  pre_tasks:
+    - name: Gather minimal facts
+      ansible.builtin.setup:
+        gather_subset:
+          - '!all'
+          - 'min'
+          - 'date_time'
+
+    - name: Set package manager fact
+      ansible.builtin.set_fact:
+        package_manager: "{{ ansible_pkg_mgr }}"
+      when: ansible_pkg_mgr is defined
+
+    - name: Set OS-specific variables
+      ansible.builtin.set_fact:
+        # RHEL uses 'crond', Debian uses 'cron'
+        cron_service: "{{ 'crond' if ansible_os_family == 'RedHat' else 'cron' }}"
+        syslog_path: "{{ '/var/log/messages' if ansible_os_family == 'RedHat' else '/var/log/syslog' }}"
+        authlog_path: "{{ '/var/log/secure' if ansible_os_family == 'RedHat' else '/var/log/auth.log' }}"
+
+    - name: Define Critical Services
+      ansible.builtin.set_fact:
+        critical_services:
+          - sshd
+          - "{{ cron_service }}"
+
+  tasks:
+    - name: Get system uptime
+      ansible.builtin.command: uptime
+      register: uptime_output
+      changed_when: false
+
+    - name: Get disk and inode space usage
+      ansible.builtin.shell: "df -h -x tmpfs -x devtmpfs && echo '---' && df -i -x tmpfs -x devtmpfs"
+      register: disk_inode_output
+      changed_when: false
+
+    - name: Get memory usage
+      ansible.builtin.command: free -h
+      register: memory_usage_output
+      changed_when: false
+
+    - name: Get CPU load average
+      ansible.builtin.command: cat /proc/loadavg
+      register: cpu_load_output
+      changed_when: false
+
+    - name: Get top 10 processes by CPU
+      ansible.builtin.shell: ps aux --sort=-%cpu | head -n 11
+      register: top_cpu_processes
+      changed_when: false
+
+    - name: Get top 10 processes by Memory
+      ansible.builtin.shell: ps aux --sort=-%mem | head -n 11
+      register: top_mem_processes
+      changed_when: false
+
+    - name: Check network interfaces
+      ansible.builtin.command: ip -brief address show
+      register: network_interfaces_output
+      changed_when: false
+
+    - name: Ping gateway and external DNS
+      ansible.builtin.command: "ping -c 3 {{ item }}"
+      with_items:
+        - "{{ ansible_default_ipv4.gateway | default('127.0.0.1') }}"
+        - "{{ external_ping_target }}"
+      register: ping_results
+      ignore_errors: true
+      changed_when: false
+
+    - name: Check status of critical services
+      ansible.builtin.command: "systemctl is-active {{ item }}"
+      with_items: "{{ critical_services }}"
+      register: service_status_check
+      ignore_errors: true
+      changed_when: false
+
+    - name: Get detailed status for failed services
+      ansible.builtin.shell: "systemctl status {{ item.item }}"
+      with_items: "{{ service_status_check.results }}"
+      when: item.stdout != 'active'
+      register: failed_service_details
+      ignore_errors: true
+      changed_when: false
+
+    - name: Get listening TCP ports
+      ansible.builtin.command: "ss -lntp"
+      register: listening_ports_tcp
+      ignore_errors: true
+      changed_when: false
+
+    - name: Check for pending security updates (RHEL)
+      ansible.builtin.command: "{{ package_manager }} check-update --security"
+      register: rhel_updates
+      when: ansible_os_family == "RedHat"
+      ignore_errors: true
+      changed_when: false
+
+    # CHANGED: Uses apt-get simulate instead of missing apt-check tool
+    - name: Check for Debian security updates
+      ansible.builtin.shell: "apt-get -s upgrade | grep -i 'upgraded' || echo '0 upgraded'"
+      register: debian_updates
+      when: ansible_os_family == "Debian"
+      ignore_errors: true
+      changed_when: false
+
+    - name: Check for reboot-required (Debian)
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: debian_reboot_required
+      when: ansible_os_family == "Debian"
+
+    - name: Get firewall status (RHEL)
+      ansible.builtin.command: firewall-cmd --state
+      register: firewall_status_rhel
+      when: ansible_os_family == "RedHat"
+      ignore_errors: true
+      changed_when: false
+
+    - name: Get firewall status (Debian)
+      ansible.builtin.command: ufw status
+      register: firewall_status_debian
+      when: ansible_os_family == "Debian"
+      ignore_errors: true
+      changed_when: false
+
+    - name: Scan journalctl for errors
+      ansible.builtin.shell: 'journalctl --since "{{ log_scan_period }}" | grep -i -E "error|warn|fail|fatal" | tail -n {{ log_lines }} || true'
+      register: journal_errors
+      changed_when: false
+      ignore_errors: true
+
+    - name: Scan auth log for failed logins
+      ansible.builtin.shell: "grep -i 'Failed password' {{ authlog_path }} | tail -n {{ log_lines }} || true"
+      register: auth_log_errors
+      changed_when: false
+      ignore_errors: true
+
+    - name: Write health check report as markdown
+      ansible.builtin.copy:
+        dest: "{{ full_report_path }}"
+        mode: '0644'
+        content: |
+          # Monthly Server Health Check: {{ ansible_hostname }}
+
+          - **Date:** {{ ansible_date_time.iso8601 }}
+          - **OS:** {{ ansible_distribution }} {{ ansible_distribution_version }}
+          - **Kernel:** {{ ansible_kernel }}
+
+          ---
+
+          ## 🖥 System Vitals
+
+          ### ⏱ Uptime
+          ```
+          {{ uptime_output.stdout | trim }}
+          ```
+
+          ### 💽 Disk Space & Inode Usage
+          ```
+          {{ disk_inode_output.stdout | trim }}
+          ```
+
+          ### 🧠 Memory Usage
+          ```
+          {{ memory_usage_output.stdout | trim }}
+          ```
+
+          ### 🔁 CPU Load Average
+          ```
+          {{ cpu_load_output.stdout | trim }}
+          ```
+
+          ---
+
+          ## 🔌 Critical Service Status
+          {% for item in service_status_check.results %}
+          - **{{ item.item }}**: `{{ 'ACTIVE' if item.stdout == 'active' else 'INACTIVE/FAILED' }}`
+          {% endfor %}
+
+          {% if failed_service_details is defined and failed_service_details.results | select('defined') | list | length > 0 %}
+          ### ⚠️ Service Debug Details
+          Below are status logs for services that failed the check:
+
+          {% for fail in failed_service_details.results %}
+          {% if fail.skipped is not defined %}
+          #### {{ fail.item.item }} Status
+          ```
+          {{ fail.stdout | default('No output available') | trim }}
+          ```
+          {% endif %}
+          {% endfor %}
+          {% endif %}
+
+          ---
+
+          ## 🧮 Top Processes
+
+          ### 🔥 Top 10 by CPU
+          ```
+          {{ top_cpu_processes.stdout | trim }}
+          ```
+
+          ### 🧵 Top 10 by Memory
+          ```
+          {{ top_mem_processes.stdout | trim }}
+          ```
+
+          ---
+
+          ## 🌐 Network Status
+
+          ### Interfaces
+          ```
+          {{ network_interfaces_output.stdout | trim }}
+          ```
+
+          ### Connectivity
+          - **Gateway Ping:** `{{ 'SUCCESS' if ping_results.results[0].rc == 0 else 'FAILURE' }}`
+          - **External Ping ({{ external_ping_target }}):** `{{ 'SUCCESS' if ping_results.results[1].rc == 0 else 'FAILURE' }}`
+
+          ### 👂 Listening TCP Ports
+          ```
+          {{ listening_ports_tcp.stdout | default('N/A or ss not found') }}
+          ```
+
+          ---
+
+          ## 🔒 Security & Updates
+
+          ### Security Updates
+          {% if ansible_os_family == "RedHat" %}
+          - **Updates Available:** `{{ 'YES' if rhel_updates.rc == 100 else 'NO' }}`
+          ```
+          {{ rhel_updates.stdout | default('No updates found.') | trim }}
+          ```
+          {% elif ansible_os_family == "Debian" %}
+          - **Update Status:**
+          ```
+          {{ debian_updates.stdout | trim }}
+          ```
+          - **Reboot Required:** `{{ 'YES' if debian_reboot_required.stat.exists else 'NO' }}`
+          {% endif %}
+
+          ### 🔥 Firewall Status
+          {% if ansible_os_family == "RedHat" %}
+          - **Firewall:** `{{ 'ACTIVE' if firewall_status_rhel.stdout is search('running') else 'INACTIVE/UNKNOWN' }}`
+          {% elif ansible_os_family == "Debian" %}
+          - **Firewall:** `{{ 'ACTIVE' if firewall_status_debian.stdout is search('Status: active') else 'INACTIVE/UNKNOWN' }}`
+          {% endif %}
+
+          ---
+
+          ## 📜 Log Summary (Searched since {{ log_scan_period }})
+
+          ### System Errors (journalctl)
+          ```
+          {{ journal_errors.stdout | default('none or journalctl not available') }}
+          ```
+
+          ### Failed Logins ({{ authlog_path }})
+          ```
+          {{ auth_log_errors.stdout | default('none') }}
+          ```
+
+    - name: Ensure local report directory exists
+      ansible.builtin.file:
+        path: "{{ local_report_dir }}"
+        state: directory
+        mode: '0755'
+      delegate_to: localhost
+      run_once: true
+
+    - name: Slurp the remote report file
+      ansible.builtin.slurp:
+        src: "{{ full_report_path }}"
+      register: slurped_report
+
+    - name: Save report to local ./reports folder
+      ansible.builtin.copy:
+        content: "{{ slurped_report.content | b64decode }}"
+        dest: "{{ local_report_dir }}/{{ report_filename }}"
+        mode: '0644'
+      delegate_to: localhost
+      when: slurped_report.content is defined

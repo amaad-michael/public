@@ -1,0 +1,26 @@
+---
+- name: Configure fastfetch to run on login
+  hosts: pi_all
+  become: yes
+
+  tasks:
+    - name: Ensure fastfetch package is installed
+      ansible.builtin.package:
+        name: fastfetch
+        state: present
+
+    - name: Create /etc/profile.d/fastfetch.sh script
+      ansible.builtin.copy:
+        content: |
+          #!/bin/bash
+          # Run fastfetch for interactive login shells.
+          fastfetch
+        dest: /etc/profile.d/fastfetch.sh
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Remove old neofetch script if it exists
+      ansible.builtin.file:
+        path: /etc/profile.d/nfetch.sh
+        state: absent

@@ -1,0 +1,206 @@
+---
+- name: Golden Image Log Sanitization Playbook (v2)
+  hosts: all
+  become: true
+  
+  vars:
+    # --- SAFETY ---
+    # Playbook is DESTRUCTIVE. Must be set to true to run.
+    # Run with: ansible-playbook ... -e "sanitize_confirm=true"
+    sanitize_confirm: false
+
+    # --- Paths ---
+    pihole_log_dir: /var/log/pihole
+    unbound_log_path: /var/log/unbound.log
+    auth_log_path: /var/log/auth.log
+    syslog_path: /var/log/syslog
+    ufw_log_path: /var/log/ufw.log
+    journal_log_dir: /var/log/journal
+    root_bash_history: /root/.bash_history
+    skel_bash_history: /etc/skel/.bash_history
+
+    # --- Service Names ---
+    # (These may vary by distro, e.g., 'syslog' vs 'rsyslog')
+    syslog_service: rsyslog
+    journal_service: systemd-journald
+    pihole_service: pihole-FTL
+    unbound_service: unbound
+    
+    # --- Pi-hole File Ownership ---
+    pihole_user: pihole
+    pihole_group: pihole
+
+  tasks:
+    - name: Ensure we are running as root
+      ansible.builtin.fail:
+        msg: "This playbook must be run with root privileges (use --become)"
+      when: ansible_user_id != 0
+
+    - name: Check for explicit confirmation
+      ansible.builtin.fail:
+        msg: |
+          Playbook is non-destructive by default.
+          To run this destructive playbook, you MUST explicitly set the
+          confirmation variable: -e "sanitize_confirm=true"
+      when: not sanitize_confirm
+
+    # ------------------------------------------------------------------
+    # Stop services to prevent race conditions
+    # ------------------------------------------------------------------
+    - name: Stop logging services
+      ansible.builtin.service:
+        name: "{{ item }}"
+        state: stopped
+      loop:
+        - "{{ syslog_service }}"
+        - "{{ journal_service }}"
+        - "{{ pihole_service }}"
+        - "{{ unbound_service }}"
+      # Ignore errors in case a service isn't installed
+      ignore_errors: true
+
+    # ------------------------------------------------------------------
+    # Pi-hole Log Sanitization
+    # ------------------------------------------------------------------
+    - name: Find archived Pi-hole logs
+      ansible.builtin.find:
+        paths: "{{ pihole_log_dir }}"
+        patterns: ["pihole.log.*", "FTL.log.*"]
+      register: archived_pihole_logs
+      when: pihole_dir.stat.exists and pihole_dir.stat.isdir
+
+    - name: Remove archived Pi-hole logs
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ archived_pihole_logs.files | default([]) }}"
+      when: pihole_dir.stat.exists and pihole_dir.stat.isdir
+
+    - name: Remove and recreate active Pi-hole logs
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: "{{ item.state }}"
+        owner: "{{ pihole_user }}"
+        group: "{{ pihole_group }}"
+        mode: '0644'
+      loop:
+        - { path: '{{ pihole_log_dir }}/pihole.log', state: 'absent' }
+        - { path: '{{ pihole_log_dir }}/FTL.log', state: 'absent' }
+        - { path: '{{ pihole_log_dir }}/pihole.log', state: 'touch' }
+        - { path: '{{ pihole_log_dir }}/FTL.log', state: 'touch' }
+      when: pihole_dir.stat.exists and pihole_dir.stat.isdir
+
+    # ------------------------------------------------------------------
+    # Unbound Log Sanitization
+    # ------------------------------------------------------------------
+    - name: Find archived Unbound logs
+      ansible.builtin.find:
+        paths: /var/log
+        patterns: ["unbound.log.*"]
+      register: archived_unbound_logs
+
+    - name: Remove archived Unbound logs
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ archived_unbound_logs.files | default([]) }}"
+
+    - name: Remove and recreate active Unbound log
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: "{{ item.state }}"
+        mode: '0640'
+        # owner: unbound
+        # group: unbound
+      loop:
+        - { path: '{{ unbound_log_path }}', state: 'absent' }
+        - { path: '{{ unbound_log_path }}', state: 'touch' }
+      # Only run if the original file existed
+      when: unbound_log.stat.exists and unbound_log.stat.isreg
+
+    # ------------------------------------------------------------------
+    # Traditional System Log Sanitization
+    # ------------------------------------------------------------------
+    - name: Find archived system logs
+      ansible.builtin.find:
+        paths: /var/log
+        patterns: ["auth.log.*", "syslog.*", "ufw.log.*"]
+      register: archived_sys_logs
+
+    - name: Remove archived system logs
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ archived_sys_logs.files | default([]) }}"
+
+    - name: Remove and recreate active system logs
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: "{{ item.state }}"
+        mode: '0640'
+      loop:
+        - { path: '{{ auth_log_path }}', state: 'absent' }
+        - { path: '{{ syslog_path }}', state: 'absent' }
+        - { path: '{{ ufw_log_path }}', state: 'absent' }
+        - { path: '{{ auth_log_path }}', state: 'touch' }
+        - { path: '{{ syslog_path }}', state: 'touch' }
+        - { path: '{{ ufw_log_path }}', state: 'touch' }
+
+    # ------------------------------------------------------------------
+    # Bash History Sanitization
+    # ------------------------------------------------------------------
+    - name: Remove and recreate bash history files
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: "{{ item.state }}"
+        owner: root
+        group: root
+        mode: '0600'
+      loop:
+        - { path: '{{ root_bash_history }}', state: 'absent' }
+        - { path: '{{ skel_bash_history }}', state: 'absent' }
+        - { path: '{{ root_bash_history }}', state: 'touch' }
+        - { path: '{{ skel_bash_history }}', state: 'touch' }
+
+    # ------------------------------------------------------------------
+    # Systemd Journal Sanitization
+    # ------------------------------------------------------------------
+    - name: Remove journal log directory contents
+      ansible.builtin.file:
+        path: "{{ journal_log_dir }}/"
+        state: absent
+      # Add / to remove contents, not the dir itself
+
+    - name: Recreate journal log directory
+      ansible.builtin.file:
+        path: "{{ journal_log_dir }}"
+        state: directory
+        mode: '0755'
+
+    # ------------------------------------------------------------------
+    # Restart services
+    # ------------------------------------------------------------------
+    - name: Restart logging services
+      ansible.builtin.service:
+        name: "{{ item }}"
+        state: started
+      loop:
+        - "{{ syslog_service }}"
+        - "{{ journal_service }}"
+        - "{{ pihole_service }}"
+        - "{{ unbound_service }}"
+      ignore_errors: true
+
+  # ------------------------------------------------------------------
+  # Initial stat checks (run before main tasks)
+  # ------------------------------------------------------------------
+  pre_tasks:
+    - name: Check for Pi-hole log directory
+      ansible.builtin.stat:
+        path: "{{ pihole_log_dir }}"
+      register: pihole_dir
+
+    - name: Check for custom unbound.log
+      ansible.builtin.stat:
+        path: "{{ unbound_log_path }}"
+      register: unbound_log

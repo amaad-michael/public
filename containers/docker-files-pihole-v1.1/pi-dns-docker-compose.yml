@@ -1,0 +1,117 @@
+# pi4 / pi0 — Pi-hole + Unbound resolver pair
+# v2 (2026-07): closes LAN exposure of unbound; fixes conf mount path;
+# removes root override; single-validator DNSSEC; pins enforced via .env.
+#
+# Deploy order: pi0 (secondary) first, verify, then pi4 (primary).
+
+networks:
+  pihole-backup:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  pihole_etc:
+  pihole_dnsmasq:
+  unbound_custom:
+
+services:
+  pihole:
+    # Pin in .env — compose refuses to start until set (no :latest on the DNS plane).
+    image: pihole/pihole:${PIHOLE_TAG:?pin PIHOLE_TAG in .env}
+    container_name: pihole-backup
+    networks:
+      pihole-backup:
+        ipv4_address: 172.20.0.2
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "80:80"
+      - "443:443"
+    environment:
+      - TZ=UTC
+      # Secret externalized — plaintext value in chmod-600 .env, never in this file.
+      # (Previous inline password is burned: rotate it.)
+      - FTLCONF_webserver_api_password=${PIHOLE_API_PASSWORD:?set in .env}
+      # PIHOLE_UID/GID=0 REMOVED — root override cancelled the cap_drop hardening.
+      # If volume permission errors appear on first start, fix volume ownership,
+      # do not restore root.
+      - FTLCONF_dns_upstreams=172.20.0.3#5335
+      - FTLCONF_dns_listeningMode=ALL
+      # DNSSEC validation happens ONCE, in unbound (the recursive layer).
+      # Double validation at the dnsmasq layer causes spurious SERVFAILs.
+      # End-to-end enforcement is independently verified by neo1's
+      # dnssec-failed.org probe.
+      - FTLCONF_dns_dnssec=false
+    volumes:
+      - pihole_etc:/etc/pihole
+      - pihole_dnsmasq:/etc/dnsmasq.d
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETUID
+      - SETGID
+      - SETFCAP
+      # FTL commonly needs raw sockets; add NET_RAW if healthcheck flaps
+      # or logs show capability errors (first suspect with cap_drop:ALL):
+      # - NET_RAW
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "dig", "@127.0.0.1", "pi.hole"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      unbound:
+        condition: service_healthy
+
+  unbound:
+    image: madnuttah/unbound:${UNBOUND_TAG:?pin UNBOUND_TAG in .env}
+    container_name: unbound-backup
+    networks:
+      pihole-backup:
+        ipv4_address: 172.20.0.3
+    # NO ports block — this is the exposure fix. Unbound is reachable ONLY
+    # from the pihole-backup docker network (172.20.0.0/16). neo1 tripwire
+    # (UnboundExposedToLAN) alerts if a host publish ever reappears.
+    volumes:
+      # Compiled-in conf path per `unbound -V`:
+      #   --with-conf-file=/usr/local/unbound/unbound.conf
+      # The old /etc/unbound/* mounts were NEVER READ by this image.
+      - ./unbound.conf:/usr/local/unbound/unbound.conf:ro
+      # Custom include dir — ONLY read if unbound.conf contains:
+      #   include: "/usr/local/unbound/custom.conf.d/*.conf"
+      - unbound_custom:/usr/local/unbound/custom.conf.d
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - SETUID
+      - SETGID
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      # VERIFY binary presence first:
+      #   sudo docker exec unbound-backup sh -c 'command -v unbound-host'
+      # Fallback if absent: ["CMD", "unbound-checkconf", "/usr/local/unbound/unbound.conf"]
+      # (checkconf validates config only, not resolution)
+      test: ["CMD", "unbound-host", "-C", "/usr/local/unbound/unbound.conf", "example.com"]
+      interval: 30s
+      timeout: 8s
+      retries: 3

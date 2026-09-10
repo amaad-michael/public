@@ -1,0 +1,248 @@
+---
+# nobara_patch.yml
+# Full patching playbook for Nobara Linux desktops.
+# Uses native Nobara tooling (nobara-sync) as primary update mechanism.
+#
+# Usage:
+#   ansible-playbook -i inventory.ini nobara_patch.yml
+#   ansible-playbook -i inventory.ini nobara_patch.yml --tags flatpak   # flatpak only
+#
+# Reboot:  NOT automatic. A notification is printed if a reboot is required.
+# Firmware: NOT updated automatically. A notification is printed if updates are available.
+
+- name: Patch Nobara Linux Desktops
+  hosts: nobara
+  become: true
+  gather_facts: true
+
+  vars:
+    patch_log_dir: /var/log/ansible-patch
+    patch_log_file: "{{ patch_log_dir }}/nobara_patch_{{ ansible_date_time.date }}.log"
+
+  pre_tasks:
+    - name: Ensure patch log directory exists
+      ansible.builtin.file:
+        path: "{{ patch_log_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Record patch start time
+      ansible.builtin.shell: |
+        echo "=== Nobara Patch Run: $(date) ===" >> {{ patch_log_file }}
+      changed_when: false
+
+  # ────────────────────────────────────────────────
+  # 1. NOBARA NATIVE SYNC (system + kernel + drivers)
+  # ────────────────────────────────────────────────
+  tasks:
+    - name: Check nobara-sync is available
+      ansible.builtin.command: which nobara-sync
+      register: nobara_sync_check
+      changed_when: false
+      failed_when: false
+
+    - name: Run nobara-sync (native Nobara updater)
+      ansible.builtin.command: nobara-sync
+      register: nobara_sync_result
+      changed_when: nobara_sync_result.rc == 0
+      when: nobara_sync_check.rc == 0
+      tags: [nobara_sync]
+
+    - name: Log nobara-sync output
+      ansible.builtin.shell: |
+        echo "--- nobara-sync ---" >> {{ patch_log_file }}
+        echo "{{ nobara_sync_result.stdout | default('skipped') }}" >> {{ patch_log_file }}
+      changed_when: false
+      when: nobara_sync_check.rc == 0
+
+    - name: Warn if nobara-sync is not present
+      ansible.builtin.debug:
+        msg: "WARNING: nobara-sync not found. This host may not be a Nobara system. Falling back to dnf only."
+      when: nobara_sync_check.rc != 0
+
+    # ────────────────────────────────────────────────
+    # 2. DNF FULL UPGRADE (catches anything nobara-sync missed)
+    # ────────────────────────────────────────────────
+    - name: DNF full system upgrade
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+        update_cache: true
+      register: dnf_upgrade_result
+      tags: [dnf]
+
+    - name: DNF autoremove orphaned packages
+      ansible.builtin.dnf:
+        autoremove: true
+      tags: [dnf]
+
+    - name: Log dnf upgrade result
+      ansible.builtin.shell: |
+        echo "--- dnf upgrade ---" >> {{ patch_log_file }}
+        echo "Changed: {{ dnf_upgrade_result.changed }}" >> {{ patch_log_file }}
+      changed_when: false
+
+    # ────────────────────────────────────────────────
+    # 3. FLATPAK UPDATES
+    # ────────────────────────────────────────────────
+    - name: Check flatpak is installed
+      ansible.builtin.command: which flatpak
+      register: flatpak_check
+      changed_when: false
+      failed_when: false
+      tags: [flatpak]
+
+    - name: Update all system Flatpaks
+      ansible.builtin.command: flatpak update --system --noninteractive --assumeyes
+      register: flatpak_system_result
+      changed_when: "'Nothing to do' not in flatpak_system_result.stdout"
+      when: flatpak_check.rc == 0
+      tags: [flatpak]
+
+    - name: Update all user Flatpaks (for each logged-in user)
+      ansible.builtin.shell: |
+        for user_home in /home/*/; do
+          user=$(basename "$user_home")
+          if id "$user" &>/dev/null; then
+            sudo -u "$user" flatpak update --user --noninteractive --assumeyes 2>&1 || true
+          fi
+        done
+      register: flatpak_user_result
+      changed_when: "'Nothing to do' not in flatpak_user_result.stdout"
+      when: flatpak_check.rc == 0
+      tags: [flatpak]
+
+    - name: Flatpak uninstall unused runtimes
+      ansible.builtin.command: flatpak uninstall --unused --noninteractive --assumeyes
+      changed_when: false
+      when: flatpak_check.rc == 0
+      tags: [flatpak]
+
+    - name: Log flatpak results
+      ansible.builtin.shell: |
+        echo "--- flatpak ---" >> {{ patch_log_file }}
+        echo "System: {{ flatpak_system_result.stdout | default('skipped') }}" >> {{ patch_log_file }}
+      changed_when: false
+      when: flatpak_check.rc == 0
+
+    # ────────────────────────────────────────────────
+    # 4. SNAP UPDATES
+    # ────────────────────────────────────────────────
+    - name: Check snapd is installed and running
+      ansible.builtin.command: systemctl is-active snapd
+      register: snapd_check
+      changed_when: false
+      failed_when: false
+      tags: [snap]
+
+    - name: Refresh all snaps
+      ansible.builtin.command: snap refresh
+      register: snap_refresh_result
+      changed_when: "'All snaps up to date' not in snap_refresh_result.stdout"
+      when: snapd_check.rc == 0
+      tags: [snap]
+
+    - name: Log snap results
+      ansible.builtin.shell: |
+        echo "--- snap ---" >> {{ patch_log_file }}
+        echo "{{ snap_refresh_result.stdout | default('snapd not active, skipped') }}" >> {{ patch_log_file }}
+      changed_when: false
+
+    # ────────────────────────────────────────────────
+    # 5. FIRMWARE CHECK (notify only — no auto-update)
+    # ────────────────────────────────────────────────
+    - name: Check fwupd is installed
+      ansible.builtin.command: which fwupdmgr
+      register: fwupd_check
+      changed_when: false
+      failed_when: false
+      tags: [firmware]
+
+    - name: Refresh fwupd metadata
+      ansible.builtin.command: fwupdmgr refresh --force
+      changed_when: false
+      failed_when: false
+      when: fwupd_check.rc == 0
+      tags: [firmware]
+
+    - name: Check for available firmware updates
+      ansible.builtin.command: fwupdmgr get-updates
+      register: fwupd_updates
+      changed_when: false
+      failed_when: false
+      when: fwupd_check.rc == 0
+      tags: [firmware]
+
+    - name: Notify if firmware updates are available
+      ansible.builtin.debug:
+        msg: |
+          ⚠️  FIRMWARE UPDATES AVAILABLE on {{ inventory_hostname }}:
+          {{ fwupd_updates.stdout }}
+          → Run manually: fwupdmgr update
+      when:
+        - fwupd_check.rc == 0
+        - fwupd_updates.rc == 0
+        - fwupd_updates.stdout | length > 0
+        - "'No upgrades' not in fwupd_updates.stdout"
+      tags: [firmware]
+
+    # ────────────────────────────────────────────────
+    # 6. REBOOT CHECK (notify only — no auto-reboot)
+    # ────────────────────────────────────────────────
+    - name: Check if reboot is required (kernel change)
+      ansible.builtin.shell: |
+        RUNNING=$(uname -r)
+        INSTALLED=$(rpm -q kernel --last | head -1 | awk '{print $1}' | sed 's/kernel-//')
+        if [ "$RUNNING" != "$INSTALLED" ]; then
+          echo "reboot_required"
+        else
+          echo "no_reboot"
+        fi
+      register: reboot_check
+      changed_when: false
+      tags: [reboot_check]
+
+    - name: Notify if reboot is required
+      ansible.builtin.debug:
+        msg: |
+          🔄  REBOOT REQUIRED on {{ inventory_hostname }}
+          Running kernel : {{ ansible_kernel }}
+          Installed kernel: {{ reboot_check.stdout | replace('reboot_required', '') | trim }}
+          → Schedule a maintenance window and run: sudo reboot
+      when: "'reboot_required' in reboot_check.stdout"
+      tags: [reboot_check]
+
+    - name: Confirm no reboot needed
+      ansible.builtin.debug:
+        msg: "✅  No reboot required on {{ inventory_hostname }}"
+      when: "'no_reboot' in reboot_check.stdout"
+      tags: [reboot_check]
+
+    # ────────────────────────────────────────────────
+    # 7. PATCH SUMMARY
+    # ────────────────────────────────────────────────
+    - name: Write patch summary to log
+      ansible.builtin.shell: |
+        echo "--- Summary ---" >> {{ patch_log_file }}
+        echo "DNF changed    : {{ dnf_upgrade_result.changed }}" >> {{ patch_log_file }}
+        echo "Reboot needed  : {{ 'yes' if 'reboot_required' in reboot_check.stdout else 'no' }}" >> {{ patch_log_file }}
+        echo "Completed      : $(date)" >> {{ patch_log_file }}
+        echo "" >> {{ patch_log_file }}
+      changed_when: false
+
+    - name: Print patch summary
+      ansible.builtin.debug:
+        msg: |
+          ════════════════════════════════════════
+           Nobara Patch Complete — {{ inventory_hostname }}
+          ════════════════════════════════════════
+           nobara-sync  : {{ 'ran' if nobara_sync_check.rc == 0 else 'not found' }}
+           dnf upgrade  : {{ 'packages updated' if dnf_upgrade_result.changed else 'already current' }}
+           flatpak      : {{ 'ran' if flatpak_check.rc == 0 else 'not installed' }}
+           snap         : {{ 'ran' if snapd_check.rc == 0 else 'not active' }}
+           firmware     : {{ 'updates available (manual action needed)' if (fwupd_check.rc == 0 and fwupd_updates is defined and 'No upgrades' not in fwupd_updates.stdout | default('')) else 'current or not checked' }}
+           reboot       : {{ '⚠️  REQUIRED' if 'reboot_required' in reboot_check.stdout else '✅ not needed' }}
+           log          : {{ patch_log_file }}
+          ════════════════════════════════════════

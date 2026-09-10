@@ -1,0 +1,21 @@
+---
+- name: Configure neofetch to run on login
+  hosts: pi_all
+  become: yes
+
+  tasks:
+    - name: Ensure neofetch package is installed
+      ansible.builtin.package:
+        name: neofetch
+        state: present
+
+    - name: Create /etc/profile.d/neofetch.sh script
+      ansible.builtin.copy:
+        content: |
+          #!/bin/bash
+          # This script runs neofetch for interactive login shells.
+          neofetch
+        dest: /etc/profile.d/nfetch.sh
+        owner: root
+        group: root
+        mode: '0755'

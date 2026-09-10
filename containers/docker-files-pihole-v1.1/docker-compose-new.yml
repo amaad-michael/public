@@ -1,0 +1,112 @@
+version: '3.9'
+
+networks:
+  pihole-backup:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  pihole_etc:
+  pihole_dnsmasq:
+  unbound_custom:
+
+services:
+  pihole:
+    image: pihole/pihole:2024.05.0 # Replace with explicit SHA256 digest in production
+    container_name: pihole-backup
+    networks:
+      pihole-backup:
+        ipv4_address: 172.20.0.2
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "${HOST_LAN_IP:-0.0.0.0}:80:80/tcp"
+      - "${HOST_LAN_IP:-0.0.0.0}:443:443/tcp"
+    environment:
+      - TZ=UTC
+      - FTLCONF_webserver_api_password=${PIHOLE_WEBPASSWORD:?Variable PIHOLE_WEBPASSWORD not set in .env}
+      - FTLCONF_dns_upstreams=172.20.0.3#5335
+      - FTLCONF_dns_listeningMode=ALL
+      - FTLCONF_dns_dnssec=true
+      - FTLCONF_privacyLevel=3
+    volumes:
+      - pihole_etc:/etc/pihole
+      - pihole_dnsmasq:/etc/dnsmasq.d
+    tmpfs:
+      - /var/log/pihole:rw,noexec,nosuid,nodev
+      - /var/log/lighttpd:rw,noexec,nosuid,nodev
+      - /var/run:rw,noexec,nosuid,nodev
+      - /run:rw,noexec,nosuid,nodev
+      - /tmp:rw,noexec,nosuid,nodev
+      - /var/cache/lighttpd:rw,noexec,nosuid,nodev
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETUID
+      - SETGID
+      - SETFCAP
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "dig", "@127.0.0.1", "pi.hole", "+short"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      unbound:
+        condition: service_healthy
+
+  unbound:
+    image: madnuttah/unbound:1.20.0 # Replace with explicit SHA256 digest in production
+    container_name: unbound-backup
+    networks:
+      pihole-backup:
+        ipv4_address: 172.20.0.3
+    volumes:
+      - ./unbound.conf:/usr/local/unbound/unbound.conf:ro
+      - unbound_custom:/usr/local/unbound/custom.conf.d
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev
+      - /var/run:rw,noexec,nosuid,nodev
+      - /usr/local/unbound/var:rw,noexec,nosuid,nodev
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - SETUID
+      - SETGID
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "dig", "@127.0.0.1", "-p", "5335", "internic.net", "+short"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

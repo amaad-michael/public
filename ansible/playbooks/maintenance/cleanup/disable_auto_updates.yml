@@ -1,0 +1,52 @@
+---
+- name: Disable Unattended Upgrades / Automatic Updates
+  hosts: all
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Gather service facts
+      ansible.builtin.service_facts:
+
+    # ==========================================
+    # DEBIAN / UBUNTU
+    # ==========================================
+    - name: Stop and disable unattended-upgrades service
+      ansible.builtin.service:
+        name: unattended-upgrades
+        state: stopped
+        enabled: no
+      when: 
+        - ansible_os_family == "Debian"
+        - "'unattended-upgrades.service' in ansible_facts.services"
+
+    - name: Explicitly set APT Periodic Unattended-Upgrade to 0
+      ansible.builtin.lineinfile:
+        path: /etc/apt/apt.conf.d/20auto-upgrades
+        regexp: '^APT::Periodic::Unattended-Upgrade'
+        line: 'APT::Periodic::Unattended-Upgrade "0";'
+        create: yes
+        mode: '0644'
+      when: ansible_os_family == "Debian"
+
+    # ==========================================
+    # RHEL / CENTOS / ROCKY / ALMA
+    # ==========================================
+    - name: Disable dnf-automatic timer (RHEL 8/9)
+      ansible.builtin.service:
+        name: dnf-automatic.timer
+        state: stopped
+        enabled: no
+      when: 
+        - ansible_os_family == "RedHat"
+        - ansible_distribution_major_version | int >= 8
+        - "'dnf-automatic.timer' in ansible_facts.services"
+
+    - name: Disable yum-cron service (RHEL 7)
+      ansible.builtin.service:
+        name: yum-cron
+        state: stopped
+        enabled: no
+      when: 
+        - ansible_os_family == "RedHat"
+        - ansible_distribution_major_version | int == 7
+        - "'yum-cron.service' in ansible_facts.services"

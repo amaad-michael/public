@@ -1,0 +1,142 @@
+- name: Pi-hole + Unbound Setup (Attended Pi-hole Installation)
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  vars:
+    pihole_install_script: /tmp/install_pihole.sh
+    pihole_config_file: /etc/pihole/setupVars.conf
+    unbound_config_file: /etc/unbound/unbound.conf
+    unbound_root_key: /var/lib/unbound/root.key
+    oisd_blocklist_url: "https://big.oisd.nl"
+    pihole_dns_upstream: "127.0.0.1#5335" # Unbound listening on localhost:5335
+
+  tasks:
+    - name: Ensure system is updated and common dependencies are installed
+      ansible.builtin.apt:
+        update_cache: yes
+        upgrade: dist
+        name:
+          - curl
+          - sudo
+          - unbound
+          - unbound-anchor
+        state: present
+      tags:
+        - setup
+        - dependencies
+
+    - name: Download Pi-hole installer script
+      ansible.builtin.get_url:
+        url: https://install.pi-hole.net
+        dest: "{{ pihole_install_script }}"
+        mode: '0755'
+      tags:
+        - pihole
+
+    - name: Notify user for manual Pi-hole installation
+      ansible.builtin.debug:
+        msg: |
+          =======================================================
+          ||        ACTION REQUIRED: Install Pi-hole Manually  ||
+          =======================================================
+
+          Pi-hole's interactive installer is ready.
+
+          1.  **SSH into the server:**
+              You will need to open a new terminal session and SSH into
+              the machine where you're running this playbook.
+
+          2.  **Run the Pi-hole installer:**
+              Execute the following command in your SSH session:
+              sudo bash {{ pihole_install_script }}
+
+          3.  **Follow the on-screen prompts:**
+              The Pi-hole installer will guide you through its setup.
+              - **IMPORTANT:** When prompted for upstream DNS, choose a **public DNS provider** for now (e.g., Google, Cloudflare, OpenDNS). We will switch to Unbound later.
+              - Complete the rest of the Pi-hole installation steps.
+
+          4.  **Return to this playbook:**
+              Once Pi-hole installation is complete in your SSH session,
+              come back here and press ENTER to continue this playbook.
+
+          =======================================================
+      tags:
+        - pihole
+
+    - name: Pause to allow manual Pi-hole installation to complete
+      ansible.builtin.pause:
+        prompt: "Press Enter when you have completed the Pi-hole installation manually in your SSH session."
+      tags:
+        - pihole
+
+    - name: Verify Pi-hole installation exists (after manual install)
+      ansible.builtin.stat:
+        path: "{{ pihole_config_file }}"
+      register: pihole_installed_check
+      failed_when: not pihole_installed_check.stat.exists
+      run_once: true # Only run this once, useful if running against multiple hosts
+      tags:
+        - pihole
+
+    - name: Confirm Pi-hole installation status
+      ansible.builtin.debug:
+        msg: "Pi-hole installation confirmed."
+      when: pihole_installed_check.stat.exists
+      tags:
+        - pihole
+
+    - name: Set Pi-hole to use Unbound as upstream DNS
+      ansible.builtin.lineinfile:
+        path: "{{ pihole_config_file }}"
+        regexp: '^PIHOLE_DNS_1='
+        line: "PIHOLE_DNS_1={{ pihole_dns_upstream }}"
+        create: yes
+      notify: Restart Pi-hole DNS
+      tags:
+        - pihole
+
+    - name: Add OISD blocklist to Pi-hole
+      ansible.builtin.command: "pihole -a -i \"{{ oisd_blocklist_url }}\""
+      changed_when: true
+      tags:
+        - pihole
+
+    - name: Force Pi-hole to update Gravity
+      ansible.builtin.command: "pihole -g"
+      changed_when: true
+      tags:
+        - pihole
+
+    - name: Deploy Unbound configuration file
+      ansible.builtin.copy:
+        src: unbound.conf # This file needs to be in the same directory as your playbook or referenced with a full path
+        dest: "{{ unbound_config_file }}"
+        mode: '0644'
+      notify: Restart Unbound service
+      tags:
+        - unbound
+
+    - name: Ensure Unbound's root hints are up to date
+      ansible.builtin.command: "unbound-anchor -a {{ unbound_root_key }}"
+      args:
+        creates: "{{ unbound_root_key }}"
+      notify: Restart Unbound service
+      tags:
+        - unbound
+
+  handlers:
+    - name: Restart Pi-hole DNS
+      ansible.builtin.command: pihole restartdns
+      listen: "Restart Pi-hole DNS"
+      tags:
+        - pihole
+
+    - name: Restart Unbound service
+      ansible.builtin.systemd:
+        name: unbound
+        state: restarted
+        enabled: yes
+      listen: "Restart Unbound service"
+      tags:
+        - unbound
