@@ -2,7 +2,7 @@
 - name: Golden Image Log Sanitization Playbook (v2)
   hosts: all
   become: true
-  
+
   vars:
     # --- SAFETY ---
     # Playbook is DESTRUCTIVE. Must be set to true to run.
@@ -25,7 +25,7 @@
     journal_service: systemd-journald
     pihole_service: pihole-FTL
     unbound_service: unbound
-    
+
     # --- Pi-hole File Ownership ---
     pihole_user: pihole
     pihole_group: pihole

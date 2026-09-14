@@ -12,10 +12,12 @@ command -v nmap >/dev/null 2>&1 || { echo "nmap missing"; exit 1; }
 mkdir -p "$LOG_DIR"
 
 # --- Header ---
-echo "==================================================" > "$REPORT_FILE"
-echo "MONTHLY DEEP SCAN REPORT: $DATE" >> "$REPORT_FILE"
-echo "Target: $TARGET | Scope: All 65,535 Ports | Mode: Version Detection" >> "$REPORT_FILE"
-echo "==================================================" >> "$REPORT_FILE"
+{
+    echo "=================================================="
+    echo "MONTHLY DEEP SCAN REPORT: $DATE"
+    echo "Target: $TARGET | Scope: All 65,535 Ports | Mode: Version Detection"
+    echo "=================================================="
+} > "$REPORT_FILE"
 
 # --- The Deep Scan ---
 # -T4: Aggressive timing (Critical for full port scans)
@@ -27,6 +29,8 @@ echo "==================================================" >> "$REPORT_FILE"
 nmap -T4 -p- -sV --open -R --system-dns -oN - $TARGET >> "$REPORT_FILE" 2>&1
 
 # --- Footer ---
-echo "" >> "$REPORT_FILE"
-echo "Scan Completed at $(date)" >> "$REPORT_FILE"
-echo "==================================================" >> "$REPORT_FILE"
+{
+    echo ""
+    echo "Scan Completed at $(date)"
+    echo "=================================================="
+} >> "$REPORT_FILE"

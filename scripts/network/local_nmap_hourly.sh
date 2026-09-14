@@ -38,10 +38,12 @@ grep -vE "Nmap done|scanned in" "$CURRENT_RAW" | \
 sed 's/Host is up .*/Host is up./' > "$CURRENT_CLEAN"
 
 # --- Log All Results (History) ---
-echo "--------------------------------------------------" >> "$HISTORY_LOG"
-echo "SCAN TIMESTAMP: $DATE" >> "$HISTORY_LOG"
-cat "$CURRENT_RAW" >> "$HISTORY_LOG"
-echo "" >> "$HISTORY_LOG"
+{
+    echo "--------------------------------------------------"
+    echo "SCAN TIMESTAMP: $DATE"
+    cat "$CURRENT_RAW"
+    echo ""
+} >> "$HISTORY_LOG"
 
 # --- Highlight Changes (Standard Diff) ---
 if [ -f "$PREV_CLEAN" ]; then
@@ -50,10 +52,12 @@ if [ -f "$PREV_CLEAN" ]; then
 
     # Check if diff found changes (Exit code 1 means differences found)
     if [ $? -eq 1 ]; then
-        echo "=========================================" >> "$CHANGE_LOG"
-        echo "CHANGE DETECTED: $DATE" >> "$CHANGE_LOG"
-        # Skip the first 2 lines of diff header (--- and +++)
-        echo "$DIFF_OUT" | tail -n +3 >> "$CHANGE_LOG"
-        echo "=========================================" >> "$CHANGE_LOG"
+        {
+            echo "========================================="
+            echo "CHANGE DETECTED: $DATE"
+            # Skip the first 2 lines of diff header (--- and +++)
+            echo "$DIFF_OUT" | tail -n +3
+            echo "========================================="
+        } >> "$CHANGE_LOG"
     fi
 fi

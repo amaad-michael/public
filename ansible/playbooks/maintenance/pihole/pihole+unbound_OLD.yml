@@ -92,7 +92,7 @@
 
     - name: Ensure Unbound is installed
       apt:
-        name: 
+        name:
           - unbound
           - unbound-anchor
         state: present

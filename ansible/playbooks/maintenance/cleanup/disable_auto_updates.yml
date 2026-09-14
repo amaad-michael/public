@@ -15,7 +15,7 @@
         name: unattended-upgrades
         state: stopped
         enabled: no
-      when: 
+      when:
         - ansible_os_family == "Debian"
         - "'unattended-upgrades.service' in ansible_facts.services"
 
@@ -36,7 +36,7 @@
         name: dnf-automatic.timer
         state: stopped
         enabled: no
-      when: 
+      when:
         - ansible_os_family == "RedHat"
         - ansible_distribution_major_version | int >= 8
         - "'dnf-automatic.timer' in ansible_facts.services"
@@ -46,7 +46,7 @@
         name: yum-cron
         state: stopped
         enabled: no
-      when: 
+      when:
         - ansible_os_family == "RedHat"
         - ansible_distribution_major_version | int == 7
         - "'yum-cron.service' in ansible_facts.services"

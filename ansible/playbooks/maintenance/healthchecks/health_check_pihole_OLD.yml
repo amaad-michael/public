@@ -1,4 +1,3 @@
-
 - name: Enterprise Pi-hole & Unbound Health Check (All-in-One)
   hosts: all
   become: yes

@@ -66,9 +66,11 @@ RESTART_TS=$(date '+%Y-%m-%d %H:%M:%S')
 systemctl restart gitea
 
 echo "==> [2/4] Verifying lockdown took..."
-systemctl show gitea -p ReadWritePaths | grep -qx 'ReadWritePaths=/var/lib/gitea' \
-    && echo "PASS: namespace hole closed" \
-    || { echo "FAIL: ReadWritePaths still includes /etc/gitea"; exit 1; }
+if systemctl show gitea -p ReadWritePaths | grep -qx 'ReadWritePaths=/var/lib/gitea'; then
+    echo "PASS: namespace hole closed"
+else
+    echo "FAIL: ReadWritePaths still includes /etc/gitea"; exit 1
+fi
 # git's login shell is nologin; force /bin/sh or runuser can't exec the
 # test at all (which would false-PASS the inverted check below).
 if runuser -s /bin/sh -u git -- test -w /etc/gitea/app.ini; then
@@ -76,9 +78,11 @@ if runuser -s /bin/sh -u git -- test -w /etc/gitea/app.ini; then
 else
     echo "PASS: app.ini read-only for git"
 fi
-systemctl is-active --quiet gitea \
-    && echo "PASS: service active post-restart" \
-    || { echo "FAIL: service down — journalctl -u gitea -n 50"; exit 1; }
+if systemctl is-active --quiet gitea; then
+    echo "PASS: service active post-restart"
+else
+    echo "FAIL: service down — journalctl -u gitea -n 50"; exit 1
+fi
 
 echo "==> [3/4] Canary: HTTP, SSH, and hook paths under final sandbox..."
 # HTTP with retry: gitea needs a moment to bind after restart; a single
@@ -89,16 +93,21 @@ for _ in 1 2 3 4 5; do
     if wget -q --spider "http://127.0.0.1:${HTTP_PORT}"; then HTTP_OK=1; break; fi
     sleep 2
 done
-[ "$HTTP_OK" -eq 1 ] && echo "PASS: HTTP plane" \
-    || { echo "FAIL: HTTP not answering on :${HTTP_PORT}"; exit 1; }
+if [ "$HTTP_OK" -eq 1 ]; then
+    echo "PASS: HTTP plane"
+else
+    echo "FAIL: HTTP not answering on :${HTTP_PORT}"; exit 1
+fi
 
 CANARY_DIR=$(mktemp -d)
 trap 'rm -rf "$CANARY_DIR"' EXIT
 # accept-new: see PLATFORM NOTES header. Scoped to this invocation only.
 export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new"
-git clone -q "ssh://git@${GITEA_HOST}:${SSH_PORT}/${TEST_REPO}.git" "$CANARY_DIR/repo" \
-    && echo "PASS: SSH clone (built-in SSH server, inside seccomp filter)" \
-    || { echo "FAIL: SSH clone — key uploaded? repo exists?"; exit 1; }
+if git clone -q "ssh://git@${GITEA_HOST}:${SSH_PORT}/${TEST_REPO}.git" "$CANARY_DIR/repo"; then
+    echo "PASS: SSH clone (built-in SSH server, inside seccomp filter)"
+else
+    echo "FAIL: SSH clone — key uploaded? repo exists?"; exit 1
+fi
 cd "$CANARY_DIR/repo"
 date > canary.txt
 git add canary.txt
@@ -109,9 +118,11 @@ git -c user.name="canary" -c user.email="canary@localhost" \
 # THE critical probe: push traverses pre-receive/update/post-receive —
 # the child-exec path SystemCallFilter=@system-service could plausibly
 # break. HTTP 200 alone never exercises it.
-git push -q origin HEAD \
-    && echo "PASS: push (server-side hook chain traversed)" \
-    || { echo "FAIL: push — sweep below for seccomp denials"; exit 1; }
+if git push -q origin HEAD; then
+    echo "PASS: push (server-side hook chain traversed)"
+else
+    echo "FAIL: push — sweep below for seccomp denials"; exit 1
+fi
 
 echo "==> [4/4] Sweeping journal for sandbox violations (since restart)..."
 # EPERM/SIGSYS            -> seccomp (SystemCallFilter) denial

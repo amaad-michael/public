@@ -54,6 +54,7 @@ for SERVER in "${SERVERS[@]}"; do
         echo "--- /etc/cron.* directories ---"
         for dir in hourly daily weekly monthly; do
             echo "/etc/cron.$dir:"
+            # shellcheck disable=SC2029 # $dir is a loop variable: client-side expansion is intentional
             ssh "$SERVER" "ls -l /etc/cron.$dir 2>/dev/null || echo 'Directory not found'"
             echo ""
         done
@@ -63,4 +64,3 @@ for SERVER in "${SERVERS[@]}"; do
 done
 
 echo "Cron job collection complete. Log saved to $LOG_FILE"
- 

@@ -1,15 +1,15 @@
-<div align="center">
-
 # 🛠️ public
 
 *Homelab automation: Ansible playbooks, container configs, and utility
 scripts for my Raspberry Pi cluster and home network.*
 
-![Shell](https://img.shields.io/badge/shell-%23121011.svg?style=flat&logo=gnu-bash&logoColor=white)
-![Ansible](https://img.shields.io/badge/ansible-%231A1918.svg?style=flat&logo=ansible&logoColor=white)
-![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=flat&logo=docker&logoColor=white)
+![Shell][shell-badge]
+![Ansible][ansible-badge]
+![Docker][docker-badge]
 
-</div>
+[shell-badge]: https://img.shields.io/badge/shell-%23121011.svg?style=flat&logo=gnu-bash&logoColor=white
+[ansible-badge]: https://img.shields.io/badge/ansible-%231A1918.svg?style=flat&logo=ansible&logoColor=white
+[docker-badge]: https://img.shields.io/badge/docker-%230db7ed.svg?style=flat&logo=docker&logoColor=white
 
 ## 📁 Layout
 

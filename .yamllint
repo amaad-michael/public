@@ -1,12 +1,20 @@
 ---
 # yamllint configuration for this repo.
 #
-# line-length is relaxed from the default 80 to 120: SHA-pinned GitHub
+# line-length is relaxed from the default 80 to 240: SHA-pinned GitHub
 # Actions (a security requirement — tags are mutable, SHAs are not) cannot
-# fit on an 80-column line, and splitting the pin across lines would break it.
-# All other default rules remain enforced.
+# fit on an 80-column line, and splitting the pin across lines would break
+# it. The Ansible playbooks in this repo also embed Jinja expressions,
+# shell one-liners, and markdown report templates that legitimately run
+# long (longest current line: 218 chars). The gate still catches anything
+# beyond that as a smell.
+#
+# braces allows one space inside flow mappings ({ a: b }) — the common
+# Ansible style — instead of yamllint's default of zero.
 extends: default
 
 rules:
   line-length:
-    max: 120
+    max: 240
+  braces:
+    max-spaces-inside: 1
