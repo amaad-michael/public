@@ -11,14 +11,16 @@ touch "$LOG_FILE"
 chmod 600 "$LOG_FILE"
 
 # Start logging
-echo "Collecting all local cron jobs..." > "$LOG_FILE"
-echo "Timestamp: $(date)" >> "$LOG_FILE"
-echo "Hostname: $(hostname)" >> "$LOG_FILE"
-echo "=================================" >> "$LOG_FILE"
+{
+    echo "Collecting all local cron jobs..."
+    echo "Timestamp: $(date)"
+    echo "Hostname: $(hostname)"
+    echo "================================="
+} > "$LOG_FILE"
 
 # Filtered user crontabs (UID >= 1000 and valid shell)
 echo "--- User Crontabs ---" >> "$LOG_FILE"
-getent passwd | awk -F: '$3 >= 1000 && $7 ~ /bash|sh/ {print $1}' | while read user; do
+getent passwd | awk -F: '$3 >= 1000 && $7 ~ /bash|sh/ {print $1}' | while read -r user; do
     echo "User: $user" >> "$LOG_FILE"
     crontab -u "$user" -l 2>/dev/null || echo "No crontab for $user" >> "$LOG_FILE"
     echo "" >> "$LOG_FILE"
@@ -33,10 +35,10 @@ echo "" >> "$LOG_FILE"
 echo "--- /etc/cron.d/ ---" >> "$LOG_FILE"
 for file in /etc/cron.d/*; do
     [ -f "$file" ] && {
-        echo "File: $file" >> "$LOG_FILE"
-        cat "$file" >> "$LOG_FILE"
-        echo "" >> "$LOG_FILE"
-    }
+        echo "File: $file"
+        cat "$file"
+        echo ""
+    } >> "$LOG_FILE"
 done
 
 # /etc/cron.{hourly,daily,weekly,monthly}
@@ -47,4 +49,3 @@ for dir in hourly daily weekly monthly; do
 done
 
 echo "Cron job collection complete. Log saved to $LOG_FILE"
- 

@@ -33,7 +33,7 @@ getenforce
 
 echo "== php-fpm via httpd =="
 TEST=/var/www/html/__lamp_check.php
-echo '<?php echo "PHP ".PHP_VERSION." OK\n";' > "$TEST"
+printf '%s\n' '<?php echo "PHP ".PHP_VERSION." OK\n";' > "$TEST"
 restorecon "$TEST"
 curl -fsS http://127.0.0.1/__lamp_check.php
 rm -f "$TEST"

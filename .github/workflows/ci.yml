@@ -1,0 +1,107 @@
+---
+# ---------------------------------------------------------------------------
+# ci.yml — hardened, reusable CI template.
+#
+# Drop into any new repo at .github/workflows/ci.yml alongside dependabot.yml.
+# Pairs with a .pre-commit-config.yaml in the repo root (the lint job runs it).
+#
+# Security properties (why this is stricter than a typical template):
+#  1. Every third-party action is pinned to a full commit SHA, not a mutable
+#     tag. A tag like @v4 can be moved by the action owner; a SHA cannot.
+#     Dependabot (dependabot.yml, github-actions ecosystem) keeps pins fresh.
+#  2. Least-privilege permissions: top-level `permissions: {}` denies
+#     everything, then each job grants only what it needs (contents: read).
+#     A compromised action therefore gets no token scopes to abuse.
+#  3. No `pull_request_target` trigger (it runs untrusted fork code with a
+#     privileged token). `pull_request` is the safe trigger for fork PRs.
+#  4. No `${{ ... }}` interpolation inside `run:` blocks. Expression contexts
+#     are attacker-controlled in PRs and enable script injection; values cross
+#     into scripts via `env:` instead (see the test-job example below).
+#  5. step-security/harden-runner in `audit` mode on every job: monitors
+#     egress so a compromised step phoning home shows up in the logs.
+#     (Switch to `block` for maximum strictness once you know a repo's
+#     network needs — block breaks builds that need unexpected egress.)
+#  6. Concurrency cancels superseded runs: no stale queued jobs executing
+#     after a force-push replaces them.
+# ---------------------------------------------------------------------------
+
+"on":
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:  # manual runs only; safe, no untrusted input
+
+permissions: {}  # deny-all default; jobs below grant their own
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint (pre-commit)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false  # job only reads; no token left in git config
+
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1  # v2.21.1
+        with:
+          egress-policy: audit
+
+      - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd  # v3.0.1
+        with:
+          extra_args: --all-files
+
+  # -----------------------------------------------------------------------
+  # Add this repo's real test job here. Secure pattern below — note the
+  # branch/PR values travel via `env:`, never interpolated into `run:`.
+  #
+  #   test:
+  #     name: Test
+  #     runs-on: ubuntu-latest
+  #     permissions:
+  #       contents: read
+  #     steps:
+  #       # v7.0.1
+  #       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+  #         with:
+  #           persist-credentials: false
+  #
+  #       # v2.21.1
+  #       - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1
+  #         with:
+  #           egress-policy: audit
+  #
+  #       - name: Run tests
+  #         env:
+  #           REF: ${{ github.ref }}
+  #         run: |
+  #           echo "testing ref $REF"
+  #           make test
+  # -----------------------------------------------------------------------
+
+  security:
+    name: Security scan (Trivy)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false  # job only reads; no token left in git config
+
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1  # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: '1'  # fail the job on HIGH/CRITICAL findings

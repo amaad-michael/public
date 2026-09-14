@@ -15,4 +15,3 @@
       file:
         path: "/home/rocky"
         state: absent
-

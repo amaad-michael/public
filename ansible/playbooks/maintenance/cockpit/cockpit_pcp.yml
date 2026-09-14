@@ -47,4 +47,3 @@
         msg: "PCP (Performance Co-Pilot) data collection is now configured on this server. Your central Cockpit instance should be able to gather performance data from this host."
       # This final task provides confirmation that the PCP setup is complete,
       # indicating that the server is ready to provide performance metrics to Cockpit.
-

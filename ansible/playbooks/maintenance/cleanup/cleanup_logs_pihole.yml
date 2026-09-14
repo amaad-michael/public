@@ -14,9 +14,9 @@
           WARNING: This playbook will permanently erase all log history
           (systemd journal, syslog, auth logs, pi-hole logs, bash history)
           to prepare this system as a 'golden image'.
-          
+
           This action is irreversible.
-          
+
           Press ENTER to continue, or Ctrl+C then 'A' to abort...
         seconds: 10
 

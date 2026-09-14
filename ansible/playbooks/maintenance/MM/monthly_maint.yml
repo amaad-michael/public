@@ -65,10 +65,10 @@
       set_fact:
         reboot_required: >-
           {{
-            (ansible_facts['os_family'] == 'Debian' and 
+            (ansible_facts['os_family'] == 'Debian' and
               (debian_updates_result.changed or (debian_reboot_required_file.stat.exists | default(false))))
             or
-            (ansible_facts['os_family'] == 'RedHat' and 
+            (ansible_facts['os_family'] == 'RedHat' and
               (rhel_updates_result.changed or (rhel_reboot_required | default(false))))
           }}
 

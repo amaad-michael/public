@@ -13,7 +13,6 @@ set -euo pipefail
 
 DRY_RUN=false
 AUTO_YES=false
-TIMESTAMP=$(date -Iseconds)
 
 # Adjust to your environment
 SERVICES=(pihole-FTL rsyslog systemd-journald unbound)
@@ -192,4 +191,3 @@ fi
 
 log ""
 log "Cleanup finished. No backups were created. This operation is irreversible."
-

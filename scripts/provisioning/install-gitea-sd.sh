@@ -56,6 +56,7 @@ SSH_PORT="2222"
 [ "$(id -u)" -eq 0 ] || { echo "ERROR: must run as root"; exit 1; }
 
 echo "==> Detecting OS..."
+# shellcheck disable=SC1091 # /etc/os-release is a system file, absent at lint time
 . /etc/os-release
 case "${ID:-} ${ID_LIKE:-}" in
   *debian*|*ubuntu*|*raspbian*)

@@ -78,6 +78,7 @@ dedupe_history() { awk '{rest=$0; sub(/^[^:]*:/,"",rest); if(!seen[rest]++) prin
 # revisions so large repos don't blow past ARG_MAX. Prints rev:path:line:match.
 # NOTE: revs must come BEFORE `--`; xargs appends at the end, hence sh -c.
 grep_history() {  # $1 = ERE pattern
+    # shellcheck disable=SC2016 # single quotes are intentional: $pat/$@ expand in the inner sh -c, not here
     git rev-list --all 2>/dev/null \
         | xargs -r -n 500 sh -c 'pat=$1; shift; git grep -n -I -i -E -e "$pat" "$@" -- 2>/dev/null' _ "$1"
 }

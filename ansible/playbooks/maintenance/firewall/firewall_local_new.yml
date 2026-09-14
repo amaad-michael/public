@@ -18,7 +18,7 @@
       - 443   # HTTPS (DNS-over-HTTPS)
       - 853   # DNS-over-TLS
       - 9090  # Custom App Port
-    
+
     allowed_udp_ports:
       - 53    # DNS UDP
 

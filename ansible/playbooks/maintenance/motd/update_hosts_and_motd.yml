@@ -14,7 +14,7 @@
       loop:
         - /etc/hosts
         - /etc/motd
-    
+
     - name: Generate new content for /etc/hosts
       ansible.builtin.copy:
         content: |
@@ -25,7 +25,7 @@
           fe00::0 ip6-localnet
           ff02::1 ip6-allnodes
           ff02::2 ip6-allrouters
-          
+
           ## Pi Cluster
           192.168.0.100   pi0
           192.168.0.101   pi1
@@ -36,7 +36,7 @@
         dest: /etc/hosts
         mode: '0644'
       register: hosts_update_result
-    
+
     - name: Generate new content for /etc/motd with Pi cluster info
       ansible.builtin.copy:
         content: |
@@ -55,12 +55,12 @@
         dest: /etc/motd
         mode: '0644'
       register: motd_update_result
-    
+
     - name: Validate updates - /etc/hosts
       ansible.builtin.command: "cat /etc/hosts"
       changed_when: false
       when: hosts_update_result.changed
-    
+
     - name: Validate updates - /etc/motd
       ansible.builtin.command: "cat /etc/motd"
       changed_when: false
