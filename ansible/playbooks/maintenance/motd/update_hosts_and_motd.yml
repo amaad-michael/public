@@ -10,6 +10,7 @@
         dest: "{{ item }}.backup"
         mode: preserve
         backup: yes
+        remote_src: yes
       loop:
         - /etc/hosts
         - /etc/motd

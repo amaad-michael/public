@@ -62,7 +62,7 @@ section()  { printf '\n%s== %s ==%s\n' "$DIM" "$1" "$RST"; }
 # Placeholder-looking values are almost certainly not real secrets.
 # Also covers template expressions (Jinja {{ }}, ${ }) — a reference to a
 # variable/vault lookup is not a hardcoded secret.
-PLACEHOLDER_RE='changeme|example|sample|placeholder|todo|fixme|your[_-]|x{3,}|\*{3,}|<[^>]*>|\$\{|\{\{|\{%'
+PLACEHOLDER_RE='changeme|example|sample|placeholder|todo|fixme|your[_-]|\b(always|on_create|yes|no|true|false|null)\b|x{3,}|\*{3,}|<[^>]*>|\$\{|\{\{|\{%'
 filter_placeholders() { grep -viE "$PLACEHOLDER_RE" || true; }
 
 # Mask the matched secret so scan output is safe to share/paste.
@@ -114,8 +114,8 @@ PATTERNS_FAIL=(
     "Private key material|-----[ ]BEGIN[ ]((RSA|DSA|EC|OPENSSH)[ ])?PRIVATE[ ]KEY-----"
     "PuTTY key file|PuTTY-User-Key""-File"
     "URL with embedded credentials|[a-zA-Z][a-zA-Z0-9+.-]*://[^/[:space:]:]+:[^/[:space:]@]+@"
-    "Password assignment|password[\"']?[[:space:]]*[:=][[:space:]]*[\"'][^\"']{4,}[\"']"
-    "API key assignment|api[_-]?key[\"']?[[:space:]]*[:=][[:space:]]*[\"'][^\"']{8,}[\"']"
+    "Password assignment|password[\"']?[[:space:]]*[:=][[:space:]]*(\"[^\"]{4,}\"|'[^']{4,}'|[^\"'[:space:],;}]{4,})"
+    "API key assignment|api[_-]?key[\"']?[[:space:]]*[:=][[:space:]]*(\"[^\"]{8,}\"|'[^']{8,}'|[^\"'[:space:],;}]{8,})"
 )
 
 found=0

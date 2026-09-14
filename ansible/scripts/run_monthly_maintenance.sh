@@ -6,7 +6,7 @@ set -euo pipefail
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-INVENTORY="$HOME/git/ansible/hosts"
+INVENTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/hosts"
 LOG_DIR="$SCRIPT_DIR/logs"
 LOG_FILE="$LOG_DIR/maintenance.log"
 

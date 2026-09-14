@@ -26,7 +26,7 @@ services:
       - "443:443"
     environment:
       - TZ=UTC
-      - FTLCONF_webserver_api_password=Provoke-Bleach-Expire-Overlaid2-Probably
+      - FTLCONF_webserver_api_password=${PIHOLE_API_PASSWORD:?set PIHOLE_API_PASSWORD in .env}
       - PIHOLE_UID=0
       - PIHOLE_GID=0
       - FTLCONF_dns_upstreams=172.20.0.3#5335
