@@ -1,3 +1,4 @@
+---
 # Keeps the SHA-pinned actions in ci.yml (and any other workflow) up to date.
 # Dependabot understands the `uses: owner/repo@<sha> # vX.Y.Z` pin style and
 # will open PRs bumping both the SHA and the version comment.

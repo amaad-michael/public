@@ -1,3 +1,4 @@
+---
 # ---------------------------------------------------------------------------
 # ci.yml — hardened, reusable CI template.
 #
@@ -28,9 +29,9 @@
   push:
     branches: [main]
   pull_request:
-  workflow_dispatch: # manual runs only; safe, no untrusted input
+  workflow_dispatch:  # manual runs only; safe, no untrusted input
 
-permissions: {} # deny-all default; jobs below grant their own
+permissions: {}  # deny-all default; jobs below grant their own
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -43,15 +44,15 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          persist-credentials: false # job only reads; no token left in git config
+          persist-credentials: false  # job only reads; no token left in git config
 
-      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1  # v2.21.1
         with:
           egress-policy: audit
 
-      - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
+      - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd  # v3.0.1
         with:
           extra_args: --all-files
 
@@ -65,20 +66,22 @@ jobs:
   #     permissions:
   #       contents: read
   #     steps:
-  #       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+  #       # v7.0.1
+  #       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
   #         with:
   #           persist-credentials: false
   #
-  #       - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+  #       # v2.21.1
+  #       - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1
   #         with:
   #           egress-policy: audit
   #
   #       - name: Run tests
   #         env:
-  #           REF: ${{ github.ref }}   # safe: passed as env, not interpolated
+  #           REF: ${{ github.ref }}
   #         run: |
   #           echo "testing ref $REF"
-  #           make test               # <-- replace with the repo's real command
+  #           make test
   # -----------------------------------------------------------------------
 
   security:
@@ -87,18 +90,18 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          persist-credentials: false
+          persist-credentials: false  # job only reads; no token left in git config
 
-      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1  # v2.21.1
         with:
           egress-policy: audit
 
       - name: Trivy filesystem scan
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         with:
           scan-type: fs
           scan-ref: .
           severity: HIGH,CRITICAL
-          exit-code: '1' # fail the job on HIGH/CRITICAL findings
+          exit-code: '1'  # fail the job on HIGH/CRITICAL findings

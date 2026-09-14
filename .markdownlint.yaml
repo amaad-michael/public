@@ -1,0 +1,6 @@
+---
+# markdownlint configuration for this repo.
+#
+# MD013 (line length) is disabled: prose line-length is an editor concern,
+# not a CI gate. All other rules remain enforced.
+MD013: false
