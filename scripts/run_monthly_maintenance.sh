@@ -6,7 +6,7 @@ set -euo pipefail
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-INVENTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/hosts"
+INVENTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")/../ansible" && pwd)/hosts"
 LOG_DIR="$SCRIPT_DIR/logs"
 LOG_FILE="$LOG_DIR/maintenance.log"
 
@@ -59,15 +59,15 @@ run_playbook() {
 
 # ── Execution sequence ────────────────────────────────────────────────────────
 run_playbook "Monthly Maintenance" \
-    "playbooks/maintenance/MM/monthly_maint.yml" \
+    "playbooks/monthly/monthly_maint.yml" \
     "pi_all"
 
 run_playbook "Pi-hole Maintenance" \
-    "playbooks/maintenance/MM/monthly_maint_pihole.yml" \
+    "playbooks/monthly/monthly_maint_pihole.yml" \
     "pi4"
 
 run_playbook "Simple Reboot" \
-    "playbooks/maintenance/reboots/reboot_simple.yml" \
+    "playbooks/reboots/reboot_simple.yml" \
     "pi0,pi2,pi3,pi4"
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
