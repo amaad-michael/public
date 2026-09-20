@@ -8,8 +8,8 @@ mkdir -p "$LOG_DIR"
 # Output log file
 LOG_FILE="$LOG_DIR/firewall_audit_$(date +%Y%m%d_%H%M%S).log"
 
-# List of servers
-SERVERS=("10.0.0.1" "10.0.0.2" "10.0.0.3")
+# List of servers (fleet from ansible/hosts: pi0-pi4, neo1)
+SERVERS=("192.168.0.100" "192.168.0.101" "192.168.0.102" "192.168.0.103" "192.168.0.104" "192.168.0.105")
 
 # Start logging
 echo "Starting firewall and port audit..." > "$LOG_FILE"

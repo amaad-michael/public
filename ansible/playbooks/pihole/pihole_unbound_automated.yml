@@ -22,6 +22,7 @@
           - unbound
           - unbound-anchor
         state: present
+      when: ansible_facts['os_family'] == 'Debian'
       tags:
         - setup
         - dependencies
@@ -31,6 +32,9 @@
         url: https://install.pi-hole.net
         dest: "{{ pihole_install_script }}"
         mode: '0755'
+        # Pinned 2026-09-20 against the live installer (99,235 bytes). Upstream
+        # updates this file in place, so re-pin the hash before re-running.
+        checksum: sha256:bd558069a224910e4b6264a44e2cd4bdb5a8fb45d232e10e6fb91dd804590dc7
       tags:
         - pihole
 

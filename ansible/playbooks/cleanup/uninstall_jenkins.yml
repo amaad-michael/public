@@ -113,7 +113,6 @@
             name: jenkins
             state: stopped
             enabled: no
-          ignore_errors: yes
 
         - name: 6. Log package removal
           ansible.builtin.lineinfile:
@@ -149,7 +148,7 @@
         - name: 7. Remove Jenkins (RHEL/Fedora)
           block:
             - name: Remove Jenkins package and dependencies
-              ansible.builtin.package:
+              ansible.builtin.dnf:
                 name: jenkins
                 state: absent
                 autoremove: yes
@@ -179,7 +178,6 @@
                 name: "{{ jenkins_user }}"
                 state: absent
                 remove: yes
-          ignore_errors: yes
 
         - name: 10. Remove all remaining Jenkins directories
           ansible.builtin.file:
@@ -192,7 +190,6 @@
             - "{{ jenkins_cache_dir }}"
             - /etc/default/jenkins
             - /etc/sysconfig/jenkins
-          ignore_errors: yes
 
         - name: 11. Log completion
           ansible.builtin.lineinfile:

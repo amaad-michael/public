@@ -21,6 +21,8 @@
           - '!all'
           - 'min'
           - 'date_time'
+          - 'network'  # Required for {{ ansible_default_ipv4.gateway }}
+          - 'pkg_mgr'  # Required for {{ ansible_pkg_mgr }}
 
     - name: Set package manager fact
       ansible.builtin.set_fact:
@@ -29,7 +31,8 @@
 
     - name: Set OS-specific variables
       ansible.builtin.set_fact:
-        # RHEL uses 'crond', Debian uses 'cron'
+        # RHEL uses 'sshd'/'crond'; Debian uses 'ssh'/'cron'
+        ssh_service: "{{ 'sshd' if ansible_os_family == 'RedHat' else 'ssh' }}"
         cron_service: "{{ 'crond' if ansible_os_family == 'RedHat' else 'cron' }}"
         syslog_path: "{{ '/var/log/messages' if ansible_os_family == 'RedHat' else '/var/log/syslog' }}"
         authlog_path: "{{ '/var/log/secure' if ansible_os_family == 'RedHat' else '/var/log/auth.log' }}"
@@ -37,7 +40,7 @@
     - name: Define Critical Services
       ansible.builtin.set_fact:
         critical_services:
-          - sshd
+          - "{{ ssh_service }}"
           - "{{ cron_service }}"
 
   tasks:

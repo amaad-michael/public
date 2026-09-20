@@ -93,7 +93,9 @@ if [[ "$ACTION" == "generate" || "$ACTION" == "both" ]]; then
     #
     # Using `-print0` + `xargs -0` guarantees correct handling of
     # whitespace, newlines, and Unicode characters in filenames.
-    find . -type f -print0 | xargs -0 sha256sum > "$MANIFEST"
+    # Exclude the manifest itself and this run's verify log: both change as
+    # the script runs, so hashing them guarantees a CORRUPT verdict.
+    find . -type f -not -name "$(basename "$MANIFEST")" -not -name 'verify_*.log' -print0 | xargs -0 sha256sum > "$MANIFEST"
     log "Manifest written to $MANIFEST ($(wc -l <"$MANIFEST") entries)"
 fi
 
