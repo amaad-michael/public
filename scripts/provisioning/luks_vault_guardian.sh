@@ -47,6 +47,8 @@ check_and_install_7z() {
         if command -v apt-get &> /dev/null; then
             sudo apt-get update && sudo apt-get install -y p7zip-full
         elif command -v dnf &> /dev/null; then
+            # p7zip is in EPEL on RHEL-family, not BaseOS/AppStream
+            sudo dnf install -y epel-release
             sudo dnf install -y p7zip
         elif command -v yum &> /dev/null; then
             sudo yum install -y p7zip

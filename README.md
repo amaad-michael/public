@@ -17,7 +17,8 @@ scripts for my Raspberry Pi cluster and home network.*
 public/
 ├── ansible/      # provisioning & maintenance playbooks
 ├── containers/   # Docker Compose setups (Pi-hole + Unbound DNS)
-└── scripts/      # network, monitoring & provisioning utilities
+├── scripts/      # network, monitoring & provisioning utilities
+└── deprecated/   # retired/_OLD files, kept for git history
 ```
 
 ## ⚠️ Note
