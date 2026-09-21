@@ -6,7 +6,7 @@
     - name: Ensure we are running as root
       ansible.builtin.fail:
         msg: "This playbook must be run with root privileges (use --become)"
-      when: ansible_user_id != 0
+      when: ansible_effective_user_id != 0
 
     - name: Display warning and pause
       ansible.builtin.pause:
@@ -48,7 +48,7 @@
 
         - name: Remove archived Pi-hole logs
           ansible.builtin.command:
-            cmd: find /var/log/pihole -name "pihole.log.*" -o -name "FTL.log.*" -exec rm -f {} \;
+            cmd: find /var/log/pihole \( -name "pihole.log.*" -o -name "FTL.log.*" \) -exec rm -f {} \;
           changed_when: true
 
     - name: Check for custom unbound.log
@@ -99,7 +99,7 @@
 
         - name: Remove archived system logs
           ansible.builtin.command:
-            cmd: find /var/log -name "auth.log.*" -o -name "syslog.*" -o -name "ufw.log.*" -exec rm -f {} \;
+            cmd: find /var/log \( -name "auth.log.*" -o -name "syslog.*" -o -name "ufw.log.*" \) -exec rm -f {} \;
           changed_when: true
 
     - name: Clear Bash History for Golden Image

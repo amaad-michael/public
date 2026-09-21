@@ -34,7 +34,7 @@
     - name: Ensure we are running as root
       ansible.builtin.fail:
         msg: "This playbook must be run with root privileges (use --become)"
-      when: ansible_user_id != 0
+      when: ansible_effective_user_id != 0
 
     - name: Check for explicit confirmation
       ansible.builtin.fail:
@@ -56,8 +56,6 @@
         - "{{ journal_service }}"
         - "{{ pihole_service }}"
         - "{{ unbound_service }}"
-      # Ignore errors in case a service isn't installed
-      ignore_errors: true
 
     # ------------------------------------------------------------------
     # Pi-hole Log Sanitization
@@ -189,7 +187,6 @@
         - "{{ journal_service }}"
         - "{{ pihole_service }}"
         - "{{ unbound_service }}"
-      ignore_errors: true
 
   # ------------------------------------------------------------------
   # Initial stat checks (run before main tasks)

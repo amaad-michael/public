@@ -75,7 +75,6 @@
         path: "{{ pihole_config_file }}"
       register: pihole_installed_check
       failed_when: not pihole_installed_check.stat.exists
-      run_once: true # Only run this once, useful if running against multiple hosts
       tags:
         - pihole
 

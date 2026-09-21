@@ -12,12 +12,6 @@
     log_lines: 50
     log_scan_period: "7 days ago"
     external_ping_target: "8.8.8.8"
-    critical_services:
-      - sshd
-      - crond # or 'cron' on Debian
-      # - nginx
-      # - httpd
-      # - postgresql
 
   pre_tasks:
     - name: Gather facts
@@ -27,6 +21,15 @@
           - 'min'
           - 'date_time' # Required for {{ ansible_date_time.iso8601 }}
           - 'network'   # Required for {{ ansible_default_ipv4.gateway }}
+
+    - name: Set OS-specific service names
+      ansible.builtin.set_fact:
+        # RHEL uses 'sshd'/'crond'; Debian uses 'ssh'/'cron'
+        ssh_service: "{{ 'sshd' if ansible_os_family == 'RedHat' else 'ssh' }}"
+        cron_service: "{{ 'crond' if ansible_os_family == 'RedHat' else 'cron' }}"
+        critical_services:
+          - "{{ ssh_service }}"
+          - "{{ cron_service }}"
 
     - name: Set package manager fact
       ansible.builtin.set_fact:

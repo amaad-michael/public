@@ -1,5 +1,5 @@
 - name: Enterprise Pi-hole & Unbound Health Check (All-in-One)
-  hosts: all
+  hosts: pi_dns
   become: yes
   gather_facts: true
 

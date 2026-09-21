@@ -46,7 +46,6 @@
         name: "{{ item }}"
         state: stopped
       loop: "{{ related_services }}"
-      ignore_errors: yes
       tags: uninstall
 
     - name: Check if Pi-hole uninstall script exists
@@ -59,7 +58,6 @@
       ansible.builtin.command:
         cmd: pihole uninstall --unattended
       when: pihole_binary.stat.exists
-      ignore_errors: yes
       tags: uninstall
 
     - name: Forcefully purge all related packages
@@ -68,7 +66,6 @@
         state: absent
         purge: yes
         autoremove: yes
-      ignore_errors: yes
       tags: uninstall
 
     - name: Backup Pi-hole configs before deletion (optional)
@@ -84,7 +81,6 @@
         path: "{{ item }}"
         state: absent
       loop: "{{ related_dirs }}"
-      ignore_errors: yes
       tags: uninstall
 
     - name: Remove Pi-hole cron jobs, logs, and config files
@@ -92,14 +88,12 @@
         path: "{{ item }}"
         state: absent
       loop: "{{ related_files }}"
-      ignore_errors: yes
       tags: uninstall
 
     - name: Remove 'pihole' group
       ansible.builtin.group:
         name: pihole
         state: absent
-      ignore_errors: yes
       tags: uninstall
 
     - name: Remove 'pihole' user
@@ -107,10 +101,10 @@
         name: pihole
         state: absent
         remove: yes
-      ignore_errors: yes
       tags: uninstall
 
     - name: Restore a functional /etc/resolv.conf
+      when: pihole_binary.stat.exists
       ansible.builtin.copy:
         content: |
           # Restored by Ansible
@@ -123,9 +117,9 @@
       tags: dns-reset
 
     - name: Verify DNS resolution post-uninstall
-      ansible.builtin.command: dig +short example.com
+      ansible.builtin.command: getent hosts example.com
       register: dns_test
-      failed_when: dns_test.stdout == ""
+      changed_when: false
       tags: verify
 
     - name: Final apt cleanup

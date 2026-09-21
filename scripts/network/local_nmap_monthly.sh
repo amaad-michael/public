@@ -3,8 +3,8 @@
 # --- Configuration ---
 TARGET="192.168.0.0/24"
 LOG_DIR="/var/log/netwatch"
-REPORT_FILE="$LOG_DIR/deep_scan.log"
 DATE=$(date +%Y-%m-%d_%H-%M)
+REPORT_FILE="$LOG_DIR/deep_scan_${DATE}.log"
 
 # Dependencies check
 command -v nmap >/dev/null 2>&1 || { echo "nmap missing"; exit 1; }
