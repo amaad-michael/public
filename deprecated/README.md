@@ -1,6 +1,6 @@
 # deprecated
 
-Files moved here by `organize-public-repo.sh` because their filenames mark them
+Files moved here in the 2026-09-18 reorganization (PR #3) because their filenames mark them
 as superseded (`_OLD`, `-old`, `.bak`, `~`). Git history is intact — use
 `git log --follow` on any file to see where it came from.
 
