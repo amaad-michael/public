@@ -1,14 +1,27 @@
 #!/usr/bin/env bash
 # --------------------------------------------------------------
-# HarborSonar – Commit & push helper (v1.0)
+# A. Michael Tatum – Commit & push helper (v1.1)
 # * Uses `set -euo pipefail` for deterministic error handling
 # * `read -r` prevents backslash mangling
 # * Checks command success directly (no `$?` indirection)
 # * All output goes to stdout; errors go to stderr
+# * Pushes to the currently checked-out branch (never hardcodes main)
+# * Asks for confirmation before pushing, as a reminder of where
+#   the commits are going
 # --------------------------------------------------------------
 
 set -euo pipefail
 trap 'echo "❌ Git helper failed at line $LINENO" >&2; exit 1' ERR
+
+# -----------------------------------------------------------------
+# Detect the currently checked-out branch
+# -----------------------------------------------------------------
+current_branch="$(git branch --show-current)"
+if [[ -z "$current_branch" ]]; then
+    echo "❌ Not on a branch (detached HEAD?) — aborting." >&2
+    exit 1
+fi
+echo "📍 Current branch: $current_branch"
 
 # -----------------------------------------------------------------
 # Prompt for a commit message – keep backslashes intact with -r
@@ -38,10 +51,21 @@ else
 fi
 
 # -----------------------------------------------------------------
-# Push to the main branch
+# Confirm before pushing – a reminder of where this is going
 # -----------------------------------------------------------------
-echo "🚀 Pushing to 'main' branch..."
-if git push origin main; then
+echo ""
+echo "⚠️  About to push to: origin/$current_branch"
+read -r -p "Push now? [y/N] " confirm
+if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+    echo "⏸️  Push cancelled. Commit is kept locally on '$current_branch'."
+    exit 0
+fi
+
+# -----------------------------------------------------------------
+# Push to the current branch
+# -----------------------------------------------------------------
+echo "🚀 Pushing to 'origin/$current_branch'..."
+if git push origin "$current_branch"; then
     echo "✅ Push succeeded."
 else
     echo "❌ Push failed." >&2
