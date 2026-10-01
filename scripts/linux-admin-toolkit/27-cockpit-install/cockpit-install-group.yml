@@ -141,6 +141,8 @@
       ansible.builtin.debug:
         msg: >-
           {{ inventory_hostname }}: cockpit {{ 'would be ' if ansible_check_mode else '' }}installed;
-          cockpit.socket {{ 'enabled+started' if (cockpit_socket_known.rc | default(-1)) == 0 else ('manual enablement (no systemd)' if ansible_facts['service_mgr'] != 'systemd' else 'to be enabled after install: systemctl enable --now cockpit.socket') }};
+          cockpit.socket {{ 'enabled+started' if (cockpit_socket_known.rc | default(-1)) == 0 else
+          ('manual enablement (no systemd)' if ansible_facts['service_mgr'] != 'systemd'
+          else 'to be enabled after install: systemctl enable --now cockpit.socket') }};
           firewall tool: {{ firewall_tool.stdout | default('unknown') }}.
           Reach it at https://{{ inventory_hostname }}:{{ cockpit_port }}/
