@@ -51,6 +51,7 @@ echo "== DNS resolvers (/etc/resolv.conf) =="
 if [[ -r /etc/resolv.conf ]]; then
     NS="$(grep -E '^[[:space:]]*nameserver' /etc/resolv.conf 2>/dev/null | awk '{ print $2 }' | sort -u || true)"
     if [[ -n "$NS" ]]; then
+        # shellcheck disable=SC2001
         sed 's/^/  nameserver: /' <<< "$NS"
     else
         echo "  (no nameserver entries in /etc/resolv.conf)"

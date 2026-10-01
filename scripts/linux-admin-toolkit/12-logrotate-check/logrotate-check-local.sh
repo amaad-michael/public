@@ -80,6 +80,7 @@ echo "== /etc/logrotate.d entries =="
 if [[ -d /etc/logrotate.d ]]; then
     ENTRIES="$(ls -1 /etc/logrotate.d 2>/dev/null || true)"
     if [[ -n "$ENTRIES" ]]; then
+        # shellcheck disable=SC2001
         sed 's/^/  /' <<< "$ENTRIES"
     else
         echo "  (empty)"

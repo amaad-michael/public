@@ -130,24 +130,24 @@ it (0 = clean, 1 = findings, 2 = usage/error).
    100–120s in this sandbox, where the apt mirror stalls). Fix: wrap in
    `timeout 120 apt-get update -qq` and/or add a `--no-refresh` flag that uses
    the cached package lists.
-2. **Stale shellcheck disable directive** — `12-logrotate-check/logrotate-check-local.sh:109`.
+1. **Stale shellcheck disable directive** — `12-logrotate-check/logrotate-check-local.sh:109`.
    The directive says `disable=SC2053` but the triggered check is SC2254, and
    the unquoted `$pat` in `case "$keylog" in $pat)` is **intentional** (glob
    matching of logrotate patterns is the point, per the comment). Fix: change
    the directive to `SC2254`.
-3. **Dead variable** — `14-firewall-audit/firewall-audit-local.sh:71,78,95`.
+1. **Dead variable** — `14-firewall-audit/firewall-audit-local.sh:71,78,95`.
    `have_ruleset` is assigned (0, then 1) but never read anywhere; the summary
    uses `ACTIVE` instead. Fix: delete the variable or use it in the summary.
-4. **Array-looking scalar expansion (SC1087)** — `27-cockpit-install/cockpit-install-local.sh:192`:
+1. **Array-looking scalar expansion (SC1087)** — `27-cockpit-install/cockpit-install-local.sh:192`:
    `grep -qE "[:.]$PORT[[:space:]]"` — `$PORT` is a scalar, so bash expands
    this correctly, but it reads as an array index and trips shellcheck's error
    severity. Fix: `"[:]...${PORT}[[:space:]]"`.
-5. **Unquoted expansion inside `${..}` pattern (SC2295, note)** —
+1. **Unquoted expansion inside `${..}` pattern (SC2295, note)** —
    `19-backup-verify/backup-verify-local.sh:119`: `rel="${f#$SOURCE/}"` treats
    `$SOURCE` as a glob pattern; a source path containing glob characters
    (`*`, `[`, `?`) would strip incorrectly. Fix: document the restriction or
    normalize with a quoted comparison. Low severity.
-6. **Cosmetic (SC2001, note)** — `24-net-inventory/net-inventory-local.sh:54`
+1. **Cosmetic (SC2001, note)** — `24-net-inventory/net-inventory-local.sh:54`
    and `12-logrotate-check/logrotate-check-local.sh:83`: `echo ... | sed`
    where `${var//search/replace}` would do. Cosmetic only.
 

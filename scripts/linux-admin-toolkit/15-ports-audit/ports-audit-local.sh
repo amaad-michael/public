@@ -80,6 +80,8 @@ echo "Total listeners: $n"
 echo "Scope legend: ALL-IF = bound to all interfaces (0.0.0.0 / ::); localhost = loopback only."
 if [ -n "$EXPECT_FILE" ]; then
   echo "Expect-file diff: $unexpected UNEXPECTED listener(s) vs $EXPECT_FILE"
-  [ "$unexpected" -gt 0 ] && exit 1 || true
+  if [ "$unexpected" -gt 0 ]; then
+    exit 1
+  fi
 fi
 exit 0

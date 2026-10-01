@@ -44,8 +44,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ "$KEEP" =~ ^[0-9]+$ ]] && [[ "$KEEP" -ge 1 ]] \
-  || { warn "--keep must be a positive integer (got '$KEEP')"; exit 2; }
+if ! [[ "$KEEP" =~ ^[0-9]+$ ]] || ! [[ "$KEEP" -ge 1 ]]; then
+  warn "--keep must be a positive integer (got '$KEEP')"
+  exit 2
+fi
 
 detect_distro() {
   if [[ -r /etc/os-release ]]; then
