@@ -1,0 +1,108 @@
+# system-update-group.yml
+# Apply OS package updates across a fleet: full (default) or security-only.
+#
+# Usage:
+#   ansible-playbook -i inv system-update-group.yml -e target_group=webservers
+#   ansible-playbook -i inv system-update-group.yml -e target_group=webservers -e security_only=true
+# Limit to one host: append -l host01
+# Dry-run: append --check (module check-mode; nothing is installed)
+#
+# Variables:
+#   security_only (default false)  RedHat: dnf update --security.
+#                                  Debian: upgrade only packages whose candidate
+#                                  version comes from a *-security repository
+#                                  (origin heuristic; see the local script's NOTES).
+#
+# Never reboots automatically; the play reports at the end whether a reboot
+# is required.
+
+- name: Apply OS updates (full or security-only)
+  # ansible-playbook -i inv system-update-group.yml -e target_group=webservers -l host01
+  hosts: "{{ target_group | default('all') }}"
+  become: true
+
+  vars:
+    security_only: false
+
+  tasks:
+    - name: Fail cleanly on unsupported OS families
+      ansible.builtin.fail:
+        msg: "Unsupported OS family {{ ansible_facts['os_family'] }}; only RedHat and Debian families are supported."
+      when: ansible_facts['os_family'] not in ['RedHat', 'Debian']
+
+    - name: RedHat | apply pending updates
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+        security: "{{ security_only | bool }}"
+      when: ansible_facts['os_family'] == 'RedHat'
+
+    - name: Debian | refresh package lists
+      ansible.builtin.apt:
+        update_cache: true
+      when: ansible_facts['os_family'] == 'Debian'
+
+    - name: Debian | find upgradable packages served by *-security repos
+      ansible.builtin.shell: |
+        set -euo pipefail
+        apt list --upgradable 2>/dev/null | awk -F/ 'NR>1 {print $1}' | while read -r pkg; do
+          [ -n "$pkg" ] || continue
+          cand="$(apt-cache policy "$pkg" 2>/dev/null | awk '/^ *Candidate:/ {print $2}')"
+          [ -n "$cand" ] && [ "$cand" != "(none)" ] || continue
+          if apt-cache policy "$pkg" 2>/dev/null | awk -v cand="$cand" '
+              /^[[:space:]]*\*\*\* /      { ver=$2; inblock=1; next }
+              /^[[:space:]]+[0-9][^ ]*[[:space:]]+[0-9]+$/ { ver=$1; inblock=1; next }
+              inblock && /^[[:space:]]+[0-9]+ http/ {
+                if (ver == cand && $2 ~ /security/) { found=1 }
+                inblock=0
+              }
+              END { exit found ? 0 : 1 }'; then
+            printf "%s\n" "$pkg"
+          fi
+        done
+      args:
+        executable: /bin/bash
+      register: debian_security_pkgs
+      changed_when: false
+      check_mode: false
+      when:
+        - ansible_facts['os_family'] == 'Debian'
+        - security_only | bool
+
+    - name: Debian | apply security-only updates
+      ansible.builtin.apt:
+        name: "{{ debian_security_pkgs.stdout_lines }}"
+        state: latest
+      when:
+        - ansible_facts['os_family'] == 'Debian'
+        - security_only | bool
+        - debian_security_pkgs.stdout_lines | length > 0
+
+    - name: Debian | apply full updates
+      ansible.builtin.apt:
+        upgrade: dist
+      when:
+        - ansible_facts['os_family'] == 'Debian'
+        - not (security_only | bool)
+
+    - name: RedHat | check whether a reboot is required
+      ansible.builtin.shell: needs-restarting -r
+      register: rhel_reboot
+      changed_when: false
+      failed_when: false
+      when: ansible_facts['os_family'] == 'RedHat'
+
+    - name: Debian | check whether a reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: debian_reboot
+      when: ansible_facts['os_family'] == 'Debian'
+
+    - name: Report reboot status
+      ansible.builtin.debug:
+        msg: >-
+          Reboot required: {{
+            (rhel_reboot.rc | default(0)) != 0
+            if ansible_facts['os_family'] == 'RedHat'
+            else (debian_reboot.stat.exists | default(false))
+          }}. This play never reboots automatically.

@@ -1,0 +1,75 @@
+# Usage:
+#   ansible-playbook -i inv logrotate-check-group.yml -e target_group=webservers
+#   ansible-playbook -i inv logrotate-check-group.yml -e target_group=webservers -l web01
+- name: Verify logrotate configuration (read-only)
+  hosts: "{{ target_group | default('all') }}"
+  gather_facts: true
+  tasks:
+    - name: Fail on unsupported OS family
+      ansible.builtin.fail:
+        msg: "Unsupported OS family '{{ ansible_facts['os_family'] }}'; this toolkit supports the RedHat and Debian families."
+      when: ansible_facts['os_family'] not in ['RedHat', 'Debian']
+
+    - name: Check that logrotate is installed
+      ansible.builtin.command: command -v logrotate
+      register: logrotate_bin
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: Parse-check the logrotate config (debug mode, rotates nothing)
+      ansible.builtin.command: logrotate --debug /etc/logrotate.conf
+      register: logrotate_debug
+      changed_when: false
+      check_mode: false
+      failed_when: false
+      become: true
+      when: logrotate_bin.rc == 0
+
+    - name: Report config parse failure
+      ansible.builtin.fail:
+        msg: >-
+          logrotate config FAILED to parse (logrotate --debug exited non-zero).
+          Output: {{ (logrotate_debug.stdout | default('')) + (logrotate_debug.stderr | default('')) }}
+      when: logrotate_bin.rc == 0 and logrotate_debug.rc != 0
+
+    - name: List /etc/logrotate.d entries
+      ansible.builtin.command: ls -1 /etc/logrotate.d
+      register: lr_d
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: Check key logs are covered by a logrotate config
+      ansible.builtin.shell: |
+        set -o pipefail
+        pats="$(grep -hE '^[^[:space:]#]' /etc/logrotate.conf /etc/logrotate.d/* 2>/dev/null \
+          | awk '{ for (i = 1; i <= NF; i++) if ($i ~ /\//) print $i }' || true)"
+        for keylog in /var/log/syslog /var/log/messages /var/log/auth.log /var/log/secure; do
+          [ -e "$keylog" ] || { echo "N/A (absent on this host): $keylog"; continue; }
+          hit=""
+          while IFS= read -r pat; do
+            [ -n "$pat" ] || continue
+            case "$keylog" in $pat) hit="$pat"; break ;; esac
+          done <<< "$pats"
+          if [ -n "$hit" ]; then
+            echo "COVERED: $keylog  (pattern: $hit)"
+          else
+            echo "GAP: $keylog is not covered by any logrotate config"
+          fi
+        done
+      args:
+        executable: /bin/bash
+      register: lr_cover
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: Show /etc/logrotate.d entries
+      ansible.builtin.debug:
+        var: lr_d.stdout_lines
+      when: lr_d.rc == 0
+
+    - name: Show key-log coverage report
+      ansible.builtin.debug:
+        var: lr_cover.stdout_lines

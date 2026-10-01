@@ -1,0 +1,61 @@
+# sudo-manage-group.yml
+# Grant or revoke sudo across a fleet via drop-in files in /etc/sudoers.d/.
+#
+# Usage:
+#   ansible-playbook -i inv sudo-manage-group.yml -e target_group=webservers \
+#     -e username=deploy -e action=grant
+#   ansible-playbook -i inv sudo-manage-group.yml -e target_group=webservers \
+#     -e username=deploy -e action=grant -e "commands=/usr/bin/systemctl restart nginx"
+#   ansible-playbook -i inv sudo-manage-group.yml -e target_group=webservers \
+#     -e username=deploy -e action=revoke
+# Limit to one host: append -l host01
+#
+# Variables:
+#   username   (required) login name
+#   action     (required) grant | revoke
+#   commands   (optional) command list for the grant, e.g. "cmd1, cmd2"; default ALL
+
+- name: Manage sudo access
+  # ansible-playbook -i inv sudo-manage-group.yml -e target_group=webservers -l host01
+  hosts: "{{ target_group | default('all') }}"
+  become: true
+
+  vars:
+    commands: "ALL"
+
+  tasks:
+    - name: Require username and action
+      ansible.builtin.fail:
+        msg: "Pass -e username=<login> -e action=grant|revoke"
+      when: username is not defined or action is not defined
+
+    - name: Validate action
+      ansible.builtin.fail:
+        msg: "action must be 'grant' or 'revoke', got '{{ action }}'"
+      when: action not in ['grant', 'revoke']
+
+    - name: Fail cleanly on unsupported OS families
+      ansible.builtin.fail:
+        msg: "Unsupported OS family {{ ansible_facts['os_family'] }}; only RedHat and Debian families are supported."
+      when: ansible_facts['os_family'] not in ['RedHat', 'Debian']
+
+    - name: Install sudoers drop-in
+      ansible.builtin.copy:
+        dest: "/etc/sudoers.d/90-{{ username }}"
+        content: "{{ username }} ALL=(ALL:ALL) {{ commands }}\n"
+        mode: "0440"
+        validate: "visudo -cf %s"
+      when: action == 'grant'
+      notify: Validate sudoers
+
+    - name: Remove sudoers drop-in
+      ansible.builtin.file:
+        path: "/etc/sudoers.d/90-{{ username }}"
+        state: absent
+      when: action == 'revoke'
+      notify: Validate sudoers
+
+  handlers:
+    - name: Validate sudoers
+      ansible.builtin.command: visudo -c
+      changed_when: false

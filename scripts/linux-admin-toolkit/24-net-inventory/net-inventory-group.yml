@@ -1,0 +1,57 @@
+# Usage:
+#   ansible-playbook -i inv net-inventory-group.yml -e target_group=webservers
+#   ansible-playbook -i inv net-inventory-group.yml -e target_group=webservers -l web01
+- name: Network inventory (read-only)
+  hosts: "{{ target_group | default('all') }}"
+  gather_facts: true
+  tasks:
+    - name: Fail on unsupported OS family
+      ansible.builtin.fail:
+        msg: "Unsupported OS family '{{ ansible_facts['os_family'] }}'; this toolkit supports the RedHat and Debian families."
+      when: ansible_facts['os_family'] not in ['RedHat', 'Debian']
+
+    - name: Collect interfaces and IPs
+      ansible.builtin.command: ip -brief address
+      register: net_addrs
+      changed_when: false
+      check_mode: false
+
+    - name: Collect default routes
+      ansible.builtin.command: ip route show default
+      register: net_routes
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: Collect DNS resolvers
+      ansible.builtin.shell: |
+        set -o pipefail
+        if [ -r /etc/resolv.conf ]; then
+          grep -E '^[[:space:]]*nameserver' /etc/resolv.conf 2>/dev/null \
+            | awk '{ print $2 }' | sort -u || true
+          if grep -Eq '^[[:space:]]*nameserver[[:space:]]+(127\.0\.0\.53|::1)([[:space:]]|$)' /etc/resolv.conf 2>/dev/null \
+             && command -v resolvectl >/dev/null 2>&1; then
+            echo "---NOTE: systemd-resolved stub in use; upstream servers:---"
+            resolvectl dns 2>/dev/null || resolvectl status 2>/dev/null || true
+          fi
+        else
+          echo "WARNING: /etc/resolv.conf is not readable"
+        fi
+      args:
+        executable: /bin/bash
+      register: net_dns
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: Show interfaces and IPs
+      ansible.builtin.debug:
+        var: net_addrs.stdout_lines
+
+    - name: Show default routes
+      ansible.builtin.debug:
+        var: net_routes.stdout_lines
+
+    - name: Show DNS resolvers
+      ansible.builtin.debug:
+        var: net_dns.stdout_lines

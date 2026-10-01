@@ -1,0 +1,85 @@
+# cron-inventory-group.yml
+# Read-only inventory of cron jobs across a fleet: every user's crontab,
+# /etc/crontab, /etc/cron.d/*, and the cron period directories.
+# Changes nothing on the targets.
+#
+# Usage:
+#   ansible-playbook -i inv cron-inventory-group.yml -e target_group=webservers
+# Limit to one host: append -l host01
+
+- name: Inventory cron jobs (read-only)
+  # ansible-playbook -i inv cron-inventory-group.yml -e target_group=webservers -l host01
+  hosts: "{{ target_group | default('all') }}"
+
+  tasks:
+    - name: Fail cleanly on unsupported OS families
+      ansible.builtin.fail:
+        msg: "Unsupported OS family {{ ansible_facts['os_family'] }}; only RedHat and Debian families are supported."
+      when: ansible_facts['os_family'] not in ['RedHat', 'Debian']
+
+    - name: List users from the passwd database
+      ansible.builtin.command: getent passwd
+      register: passwd_db
+      changed_when: false
+
+    - name: Build the user list
+      ansible.builtin.set_fact:
+        cron_users: "{{ passwd_db.stdout_lines | map('split', ':') | map('first') | list }}"
+
+    - name: Read each user's crontab (requires privilege; skipped quietly when absent)
+      ansible.builtin.command: "crontab -l -u {{ item }}"
+      loop: "{{ cron_users }}"
+      become: true
+      register: user_crontabs
+      changed_when: false
+      failed_when: false
+
+    - name: Show user crontabs that exist
+      ansible.builtin.debug:
+        msg: "--- user crontab: {{ item.item }} ---\n{{ item.stdout }}"
+      loop: "{{ user_crontabs.results }}"
+      when: item.stdout | length > 0
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Read /etc/crontab
+      ansible.builtin.command: cat /etc/crontab
+      register: etc_crontab
+      changed_when: false
+      failed_when: false
+
+    - name: Show /etc/crontab
+      ansible.builtin.debug:
+        msg: "--- /etc/crontab ---\n{{ etc_crontab.stdout }}"
+      when: etc_crontab.rc == 0
+
+    - name: Find files in /etc/cron.d
+      ansible.builtin.find:
+        paths: /etc/cron.d
+        file_type: file
+      register: cron_d
+
+    - name: Read /etc/cron.d files
+      ansible.builtin.command: "cat {{ item.path }}"
+      loop: "{{ cron_d.files }}"
+      register: cron_d_contents
+      changed_when: false
+      loop_control:
+        label: "{{ item.path }}"
+
+    - name: Show /etc/cron.d files
+      ansible.builtin.debug:
+        msg: "--- /etc/cron.d/{{ item.item.path | basename }} ---\n{{ item.stdout }}"
+      loop: "{{ cron_d_contents.results }}"
+      loop_control:
+        label: "{{ item.item.path }}"
+
+    - name: List the cron period directories
+      ansible.builtin.command: ls -la /etc/cron.hourly /etc/cron.daily /etc/cron.weekly /etc/cron.monthly
+      register: cron_periods
+      changed_when: false
+      failed_when: false
+
+    - name: Show the cron period directories
+      ansible.builtin.debug:
+        msg: "--- /etc/cron.{hourly,daily,weekly,monthly} ---\n{{ cron_periods.stdout }}\n{{ cron_periods.stderr }}"

@@ -1,0 +1,66 @@
+# ansible-playbook -i inv perm-audit-group.yml -e target_group=webservers [-l somehost]
+# Optional: -e top_n=100
+---
+- name: Audit risky file permissions (read-only)
+  hosts: "{{ target_group | default('all') }}"
+  become: true
+  gather_facts: true
+
+  vars:
+    top_n: 50
+    std_paths:
+      - /usr/bin/
+      - /usr/sbin/
+      - /bin/
+      - /sbin/
+      - /usr/libexec/
+      - /usr/lib/
+      - /usr/lib64/
+      - /lib/
+      - /lib64/
+      - /usr/local/bin/
+      - /usr/local/sbin/
+      - /opt/
+      - /snap/
+
+  tasks:
+    - name: Fail on unsupported OS family
+      ansible.builtin.fail:
+        msg: "Unsupported os_family={{ ansible_facts['os_family'] }} (need RedHat or Debian)"
+      when: ansible_facts['os_family'] not in ['RedHat', 'Debian']
+
+    - name: Find world-writable regular files
+      ansible.builtin.command: >
+        find / \( -path /proc -o -path /sys -o -path /dev \) -prune
+        -o -type f -perm -0002 -print
+      register: ww
+      changed_when: false
+      failed_when: false
+
+    - name: Find SUID binaries
+      ansible.builtin.command: >
+        find / \( -path /proc -o -path /sys -o -path /dev \) -prune
+        -o -type f -perm -4000 -print
+      register: suid
+      changed_when: false
+      failed_when: false
+
+    - name: Find SGID binaries
+      ansible.builtin.command: >
+        find / \( -path /proc -o -path /sys -o -path /dev \) -prune
+        -o -type f -perm -2000 -print
+      register: sgid
+      changed_when: false
+      failed_when: false
+
+    - name: Flag SUID/SGID binaries outside the standard-path allowlist
+      ansible.builtin.set_fact:
+        flagged_suid: "{{ suid.stdout_lines | default([]) | reject('regex', '^(' + (std_paths | map('regex_escape') | join('|')) + ')') | list }}"
+        flagged_sgid: "{{ sgid.stdout_lines | default([]) | reject('regex', '^(' + (std_paths | map('regex_escape') | join('|')) + ')') | list }}"
+
+    - name: Show permission audit summary
+      ansible.builtin.debug:
+        msg:
+          - "world-writable regular files: {{ ww.stdout_lines | default([]) | length }} (showing first {{ top_n }}): {{ (ww.stdout_lines | default([]))[:top_n | int] }}"
+          - "SUID total: {{ suid.stdout_lines | default([]) | length }}, outside allowlist: {{ flagged_suid | length }} {{ flagged_suid }}"
+          - "SGID total: {{ sgid.stdout_lines | default([]) | length }}, outside allowlist: {{ flagged_sgid | length }} {{ flagged_sgid }}"

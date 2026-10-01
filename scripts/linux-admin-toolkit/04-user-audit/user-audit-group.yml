@@ -1,0 +1,74 @@
+# user-audit-group.yml
+# READ-ONLY user audit across a fleet: dormant users, empty-password
+# accounts, duplicate UID 0. Changes nothing; use --check is unnecessary
+# since no task mutates state.
+#
+# Usage:
+#   ansible-playbook -i inv user-audit-group.yml -e target_group=webservers
+#   ansible-playbook -i inv user-audit-group.yml -e target_group=webservers -e days=30
+# Limit to one host: append -l host01
+#
+# Variables:
+#   days   (optional, default 90) dormancy threshold for "no login in N days"
+
+- name: Audit local user accounts (read-only)
+  # ansible-playbook -i inv user-audit-group.yml -e target_group=webservers -l host01
+  hosts: "{{ target_group | default('all') }}"
+  become: true
+
+  vars:
+    days: 90
+
+  tasks:
+    - name: Fail cleanly on unsupported OS families
+      ansible.builtin.fail:
+        msg: "Unsupported OS family {{ ansible_facts['os_family'] }}; only RedHat and Debian families are supported."
+      when: ansible_facts['os_family'] not in ['RedHat', 'Debian']
+
+    - name: Collect dormant users (UID>=1000, login shell, no login in N days)
+      ansible.builtin.shell: |
+        set -o pipefail
+        cutoff=$(date -d "{{ days }} days ago" +%s)
+        awk -F: '($3 >= 1000) && ($7 !~ /(nologin|false)$/) {print $1}' /etc/passwd |
+        while read -r u; do
+          line=$(lastlog -u "$u" | tail -n +2)
+          case "$line" in
+            *"**Never logged in**"*) echo "$u: never logged in" ;;
+            *)
+              last=$(echo "$line" | grep -oE '[A-Z][a-z]{2} [A-Z][a-z]{2} +[0-9]{1,2} [0-9:]+ [^ ]+ [0-9]{4}$' || true)
+              epoch=$(date -d "$last" +%s 2>/dev/null || echo "")
+              if [ -n "$epoch" ] && [ "$epoch" -lt "$cutoff" ]; then
+                echo "$u: last login $last"
+              fi ;;
+          esac
+        done
+      args:
+        executable: /bin/bash
+      register: dormant
+      changed_when: false
+
+    - name: Collect accounts with empty password field
+      ansible.builtin.shell: |
+        set -o pipefail
+        awk -F: '($2 == "") {print $1}' /etc/shadow || true
+      args:
+        executable: /bin/bash
+      register: empty_pw
+      changed_when: false
+
+    - name: Collect accounts with UID 0
+      ansible.builtin.shell: |
+        set -o pipefail
+        awk -F: '($3 == 0) {print $1}' /etc/passwd
+      args:
+        executable: /bin/bash
+      register: uid0
+      changed_when: false
+
+    - name: Report findings
+      ansible.builtin.debug:
+        msg:
+          - "=== User audit on {{ inventory_hostname }} ==="
+          - "(a) Dormant users (no login in {{ days }} days): {{ dormant.stdout_lines | default(['none']) }}"
+          - "(b) Empty password field: {{ empty_pw.stdout_lines | default(['none']) }}"
+          - "(c) UID 0 accounts: {{ uid0.stdout_lines }}"

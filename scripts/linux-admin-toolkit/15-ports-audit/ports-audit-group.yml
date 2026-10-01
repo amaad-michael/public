@@ -1,0 +1,57 @@
+# ansible-playbook -i inv ports-audit-group.yml -e target_group=webservers [-l somehost]
+# Optional: -e expect_ports="80/tcp 443/tcp 127.0.0.1:3306" to diff against allowed listeners.
+---
+- name: Audit listening ports (read-only)
+  hosts: "{{ target_group | default('all') }}"
+  become: true
+  gather_facts: true
+
+  vars:
+    expect_ports: ""
+
+  tasks:
+    - name: Fail on unsupported OS family
+      ansible.builtin.fail:
+        msg: "Unsupported os_family={{ ansible_facts['os_family'] }} (need RedHat or Debian)"
+      when: ansible_facts['os_family'] not in ['RedHat', 'Debian']
+
+    - name: List listening sockets
+      ansible.builtin.command: ss -tulnpH
+      register: ss_out
+      changed_when: false
+      failed_when: ss_out.rc != 0
+
+    - name: Parse listeners and flag all-interface / unexpected ones
+      ansible.builtin.shell: |
+        set -u
+        expect="{{ expect_ports }}"
+        printf '%s\n' "$SSDATA" | while read -r proto _state _r _s local _p proc; do
+          [ -z "${proto:-}" ] && continue
+          addr="${local%:*}"; port="${local##*:}"
+          case "$addr" in
+            "0.0.0.0"|"::"|"[::]"|"*") scope="ALL-IF" ;;
+            "127.0.0.1"|"::1"|"[::1]") scope="localhost" ;;
+            *) scope="other" ;;
+          esac
+          pname="$(printf '%s' "$proc" | grep -oE '\"[^\"]+\"' | head -1 | tr -d '\"')"
+          pid="$(printf '%s' "$proc" | grep -oE 'pid=[0-9]+' | head -1 | cut -d= -f2)"
+          line="$proto $local [$scope] ${pname:-?}(${pid:-?})"
+          if [ -n "$expect" ]; then
+            ok=0
+            for e in $expect; do
+              case "$e" in "$local"|"$port"|"$port/${proto,,}"|"$addr:$port") ok=1;; esac
+            done
+            [ "$ok" = 0 ] && line="$line UNEXPECTED"
+          fi
+          echo "$line"
+        done
+      args:
+        executable: /bin/bash
+      environment:
+        SSDATA: "{{ ss_out.stdout }}"
+      register: parsed
+      changed_when: false
+
+    - name: Show listener report
+      ansible.builtin.debug:
+        var: parsed.stdout_lines
