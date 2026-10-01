@@ -1,0 +1,71 @@
+# ansible-playbook -i inv login-audit-group.yml -e target_group=webservers [-l somehost]
+# Optional: -e days=14 -e threshold=5
+---
+- name: Summarize failed logins (read-only)
+  hosts: "{{ target_group | default('all') }}"
+  become: true
+  gather_facts: true
+
+  vars:
+    days: 7
+    threshold: 10
+
+  tasks:
+    - name: Fail on unsupported OS family
+      ansible.builtin.fail:
+        msg: "Unsupported os_family={{ ansible_facts['os_family'] }} (need RedHat or Debian)"
+      when: ansible_facts['os_family'] not in ['RedHat', 'Debian']
+
+    - name: Collect failed sshd log lines
+      ansible.builtin.shell: |
+        set -u
+        if journalctl --no-pager --since "-{{ days }} days" _COMM=sshd -o cat 2>/dev/null | grep -aE 'Failed|authentication failure'; then
+          exit 0
+        fi
+        {% if ansible_facts['os_family'] == 'RedHat' %}LOG=/var/log/secure{% else %}LOG=/var/log/auth.log{% endif %}
+        found=0
+        for f in "$LOG" "$LOG".1 "$LOG".2*; do
+          [ -r "$f" ] || continue
+          case "$f" in *.gz) zcat "$f" 2>/dev/null;; *) cat "$f";; esac | grep -aE 'Failed|authentication failure' && found=1
+        done
+        [ "$found" = 1 ] || echo "NOTE: no sshd journal entries and no readable $LOG — no login data available"
+      args:
+        executable: /bin/bash
+      register: failures
+      changed_when: false
+      failed_when: false
+
+    - name: Tally failures per IP and per username
+      ansible.builtin.shell: |
+        set -u
+        tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT
+        printf '%s\n' "$FDATA" > "$tmp"
+        echo "== per IP =="
+        grep -aoE 'from [0-9a-fA-F:.]+' "$tmp" | awk '{print $2}' \
+          | sort | uniq -c | sort -rn | head -30 \
+          | while read -r cnt ip; do
+              flag=""; [ "$cnt" -gt {{ threshold }} ] && flag="  <-- POSSIBLE BRUTE FORCE"
+              printf '%6s  %-40s%s\n' "$cnt" "$ip" "$flag"
+            done
+        echo "== per username =="
+        grep -aE 'Failed' "$tmp" \
+          | grep -aoE 'for (invalid user )?[A-Za-z0-9._-]+ from' \
+          | sed -E 's/^for (invalid user )?//; s/ from$//' \
+          | sort | uniq -c | sort -rn | head -30
+      args:
+        executable: /bin/bash
+      environment:
+        FDATA: "{{ failures.stdout }}"
+      register: tally
+      changed_when: false
+      when: "'NOTE: no sshd' not in failures.stdout"
+
+    - name: Show failed-login summary
+      ansible.builtin.debug:
+        msg: "window={{ days }}d threshold={{ threshold }} | {{ failures.stdout_lines | default(['no data']) | join('; ') }}"
+      when: "'NOTE: no sshd' in failures.stdout"
+
+    - name: Show failed-login tally
+      ansible.builtin.debug:
+        var: tally.stdout_lines
+      when: tally.stdout_lines is defined

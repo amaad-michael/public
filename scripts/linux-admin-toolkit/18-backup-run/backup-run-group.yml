@@ -1,0 +1,79 @@
+---
+# Run a timestamped rsync backup across a group of hosts.
+#
+#   ansible-playbook -i inv 18-backup-run-group.yml -e target_group=webservers \
+#     -e backup_source=/etc -e backup_dest=/mnt/backups/etc
+# Limit to specific hosts:
+#   ansible-playbook -i inv 18-backup-run-group.yml -e target_group=webservers -l host1
+# Dry-run first:
+#   ansible-playbook -i inv 18-backup-run-group.yml -e target_group=webservers \
+#     -e backup_source=/etc -e backup_dest=/mnt/backups/etc -e backup_check_mode=true
+- name: Run timestamped rsync backup on group
+  hosts: "{{ target_group | default('all') }}"
+  gather_facts: true
+
+  vars:
+    backup_source: ""        # required: directory to back up on each target
+    backup_dest: ""          # required: backup root on each target
+    backup_retention_days: 7
+    backup_check_mode: false # true = dry-run, nothing created or deleted
+
+  tasks:
+    - name: Require backup_source and backup_dest
+      ansible.builtin.assert:
+        that:
+          - backup_source | length > 0
+          - backup_dest | length > 0
+        fail_msg: "Set -e backup_source=/path -e backup_dest=/path"
+
+    - name: Fail on unsupported OS family
+      ansible.builtin.fail:
+        msg: >-
+          Unsupported OS family '{{ ansible_facts['os_family'] }}'.
+          Only RedHat and Debian families are supported.
+      when: ansible_facts['os_family'] not in ['RedHat', 'Debian']
+
+    - name: Ensure rsync is installed
+      ansible.builtin.package:
+        name: rsync
+        state: present
+      become: true
+
+    - name: Stage the backup script on the target
+      ansible.builtin.copy:
+        src: backup-run-local.sh
+        dest: /tmp/backup-run-local.sh
+        mode: "0755"
+
+    - name: Dry-run the backup
+      ansible.builtin.command:
+        cmd: >-
+          /tmp/backup-run-local.sh
+          --source {{ backup_source | quote }}
+          --dest {{ backup_dest | quote }}
+          --retention {{ backup_retention_days | quote }}
+          --check
+      register: backup_dry
+      changed_when: false
+      when: backup_check_mode | bool
+
+    - name: Show dry-run output
+      ansible.builtin.debug:
+        var: backup_dry.stdout_lines
+      when: backup_check_mode | bool
+
+    - name: Run the backup
+      ansible.builtin.command:
+        cmd: >-
+          /tmp/backup-run-local.sh
+          --source {{ backup_source | quote }}
+          --dest {{ backup_dest | quote }}
+          --retention {{ backup_retention_days | quote }}
+      register: backup_run
+      changed_when: backup_run.rc == 0
+      when: not (backup_check_mode | bool)
+
+    - name: Show backup result
+      ansible.builtin.debug:
+        var: backup_run.stdout_lines
+      when: not (backup_check_mode | bool)

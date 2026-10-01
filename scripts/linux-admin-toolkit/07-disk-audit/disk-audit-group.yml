@@ -1,0 +1,68 @@
+# Usage:
+#   ansible-playbook -i inv 07-disk-audit-group.yml -e target_group=webservers
+#   ansible-playbook -i inv 07-disk-audit-group.yml -l webservers
+---
+- name: Disk audit (read-only)
+  hosts: "{{ target_group | default('all') }}"
+  gather_facts: true
+  tasks:
+    - name: Fail on unsupported OS family
+      ansible.builtin.fail:
+        msg: "Unsupported OS family '{{ ansible_facts['os_family'] }}' on {{ inventory_hostname }} (need RedHat or Debian)."
+      when: ansible_facts['os_family'] not in ['RedHat', 'Debian']
+
+    - name: Filesystem usage with WARN flag at 80%
+      ansible.builtin.shell: |
+        df -h | awk 'NR==1{print; next}
+          {line=$0; gsub(/%/,"",$5);
+           printf "%s%s\n", line, (($5+0)>=80 ? "  <-- WARN (>= 80%)" : "")}'
+      args:
+        executable: /bin/bash
+      register: disk_df_h
+      changed_when: false
+
+    - name: Inode usage with WARN flag at 80%
+      ansible.builtin.shell: |
+        df -i | awk 'NR==1{print; next}
+          {line=$0; gsub(/%/,"",$5);
+           printf "%s%s\n", line, (($5+0)>=80 ? "  <-- WARN (>= 80%)" : "")}'
+      args:
+        executable: /bin/bash
+      register: disk_df_i
+      changed_when: false
+
+    - name: Largest directories (bounded du scan, depth 2, excl. /proc /sys /dev)
+      ansible.builtin.shell: |
+        set -o pipefail
+        B=""
+        command -v timeout >/dev/null 2>&1 && B="timeout 180"
+        { ${B} du -x -d 2 / --exclude=/proc --exclude=/sys --exclude=/dev 2>/dev/null || true; } \
+          | sort -rn | head -25 || true
+      args:
+        executable: /bin/bash
+      register: disk_du
+      changed_when: false
+
+    - name: Top 20 largest files on the root filesystem
+      ansible.builtin.shell: |
+        set -o pipefail
+        B=""
+        command -v timeout >/dev/null 2>&1 && B="timeout 180"
+        { ${B} find / -xdev -type f -printf '%s\t%p\n' 2>/dev/null || true; } \
+          | sort -rn | head -20 || true
+      args:
+        executable: /bin/bash
+      register: disk_files
+      changed_when: false
+
+    - name: Show disk audit report
+      ansible.builtin.debug:
+        msg: |
+          ===== Filesystem usage (df -h) =====
+          {{ disk_df_h.stdout }}
+          ===== Inode usage (df -i) =====
+          {{ disk_df_i.stdout }}
+          ===== Largest directories (depth <= 2) =====
+          {{ disk_du.stdout }}
+          ===== Top 20 largest files =====
+          {{ disk_files.stdout }}

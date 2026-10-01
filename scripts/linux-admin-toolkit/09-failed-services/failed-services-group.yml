@@ -1,0 +1,43 @@
+# Usage:
+#   ansible-playbook -i inv 09-failed-services-group.yml -e target_group=webservers
+#   ansible-playbook -i inv 09-failed-services-group.yml -l webservers
+---
+- name: Failed services report (read-only)
+  hosts: "{{ target_group | default('all') }}"
+  gather_facts: true
+  tasks:
+    - name: Fail on unsupported OS family
+      ansible.builtin.fail:
+        msg: "Unsupported OS family '{{ ansible_facts['os_family'] }}' on {{ inventory_hostname }} (need RedHat or Debian)."
+      when: ansible_facts['os_family'] not in ['RedHat', 'Debian']
+
+    - name: Check whether systemd is PID 1
+      ansible.builtin.shell: |
+        ps -p 1 -o comm= 2>/dev/null || echo unknown
+      args:
+        executable: /bin/bash
+      register: pid1
+      changed_when: false
+
+    - name: Check for systemd runtime directory
+      ansible.builtin.stat:
+        path: /run/systemd/system
+      register: systemd_dir
+
+    - name: List failed systemd units
+      ansible.builtin.command: systemctl --failed --no-legend --no-pager
+      register: failed_units
+      changed_when: false
+      failed_when: false
+      when:
+        - pid1.stdout | default('') | trim == 'systemd'
+        - systemd_dir.stat.isdir | default(false)
+
+    - name: Show failed services report
+      ansible.builtin.debug:
+        msg: >-
+          {% if pid1.stdout | default('') | trim == 'systemd' and (systemd_dir.stat.isdir | default(false)) %}
+          {% if (failed_units.stdout | default('') | trim) == '' %}No failed units.{% else %}{{ failed_units.stdout }}{% endif %}
+          {% else %}
+          NOTE: systemd is not PID 1 on {{ inventory_hostname }} (PID 1 is '{{ pid1.stdout | default('') | trim }}'); cannot query failed units via systemctl.
+          {% endif %}

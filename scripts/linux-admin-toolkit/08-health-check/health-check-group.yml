@@ -1,0 +1,55 @@
+# Usage:
+#   ansible-playbook -i inv 08-health-check-group.yml -e target_group=webservers
+#   ansible-playbook -i inv 08-health-check-group.yml -l webservers
+---
+- name: System health check (read-only)
+  hosts: "{{ target_group | default('all') }}"
+  gather_facts: true
+  tasks:
+    - name: Fail on unsupported OS family
+      ansible.builtin.fail:
+        msg: "Unsupported OS family '{{ ansible_facts['os_family'] }}' on {{ inventory_hostname }} (need RedHat or Debian)."
+      when: ansible_facts['os_family'] not in ['RedHat', 'Debian']
+
+    - name: CPU, memory and swap health report (WARN 80 / CRIT 90)
+      ansible.builtin.shell: |
+        set -o pipefail
+        WARN=80
+        CRIT=90
+        classify() {
+          awk -v p="$1" -v w="$WARN" -v c="$CRIT" 'BEGIN {
+            if (p >= c) print "CRIT"; else if (p >= w) print "WARN"; else print "OK" }'
+        }
+        CORES=$(nproc)
+        read -r L1 L5 L15 _ < /proc/loadavg
+        echo "--- CPU ---"
+        echo "Cores: ${CORES}"
+        echo "Load averages (1/5/15 min): ${L1} ${L5} ${L15}"
+        for pair in "1-min:${L1}" "5-min:${L5}" "15-min:${L15}"; do
+          label="${pair%%:*}"; load="${pair##*:}"
+          pct=$(awk -v l="$load" -v c="$CORES" 'BEGIN{printf "%.1f", (c>0 ? l/c*100 : 0)}')
+          echo "  load ${label}: ${load} (${pct}% of ${CORES} cores) -> $(classify "$pct")"
+        done
+        echo "--- Memory ---"
+        free -m
+        MT=$(free -m | awk '/^Mem:/{print $2}')
+        MA=$(free -m | awk '/^Mem:/{print $7}')
+        MP=$(awk -v t="$MT" -v a="$MA" 'BEGIN{printf "%.1f", (t>0 ? (t-a)/t*100 : 0)}')
+        echo "Memory used: ${MP}% of ${MT} MiB -> $(classify "$MP")"
+        echo "--- Swap ---"
+        ST=$(free -m | awk '/^Swap:/{print $2}')
+        SU=$(free -m | awk '/^Swap:/{print $3}')
+        if [ "${ST:-0}" -eq 0 ]; then
+          echo "No swap configured -> OK"
+        else
+          SP=$(awk -v u="$SU" -v t="$ST" 'BEGIN{printf "%.1f", (t>0 ? u/t*100 : 0)}')
+          echo "Swap used: ${SU} of ${ST} MiB (${SP}%) -> $(classify "$SP")"
+        fi
+      args:
+        executable: /bin/bash
+      register: health_report
+      changed_when: false
+
+    - name: Show health check report
+      ansible.builtin.debug:
+        msg: "{{ health_report.stdout }}"

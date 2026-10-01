@@ -1,0 +1,69 @@
+# Usage:
+#   ansible-playbook -i inv log-errors-group.yml -e target_group=webservers
+#   ansible-playbook -i inv log-errors-group.yml -e target_group=webservers -l web01
+#   ansible-playbook -i inv log-errors-group.yml -e target_group=webservers -e err_lines=100
+- name: Show errors/warnings since yesterday (read-only)
+  hosts: "{{ target_group | default('all') }}"
+  gather_facts: true
+  vars:
+    err_lines: 50
+  tasks:
+    - name: Fail on unsupported OS family
+      ansible.builtin.fail:
+        msg: "Unsupported OS family '{{ ansible_facts['os_family'] }}'; this toolkit supports the RedHat and Debian families."
+      when: ansible_facts['os_family'] not in ['RedHat', 'Debian']
+
+    - name: Collect errors/warnings from the systemd journal
+      ansible.builtin.shell: |
+        set -o pipefail
+        tmp="$(mktemp)"
+        journalctl -p err..warning --since yesterday --no-pager -o short 2>/dev/null \
+          | grep -v '^-- ' >"$tmp" || true
+        echo "---SUMMARY---"
+        awk '{ id=$5; sub(/:$/, "", id); sub(/\[[0-9]+\]$/, "", id); print id }' "$tmp" \
+          | sort | uniq -c | sort -rn | head -20
+        echo "---LINES---"
+        tail -n {{ err_lines | int }} "$tmp"
+        rm -f "$tmp"
+      args:
+        executable: /bin/bash
+      register: journal_out
+      changed_when: false
+      check_mode: false
+      failed_when: false
+      become: true
+      when: ansible_facts['service_mgr'] == 'systemd'
+
+    - name: Collect errors/warnings from the syslog text file (no systemd journal)
+      ansible.builtin.shell: |
+        set -o pipefail
+        logfile=/var/log/syslog
+        [ -r "$logfile" ] || logfile=/var/log/messages
+        today="$(date '+%b %e')"; yesterday="$(date -d 'yesterday' '+%b %e')"
+        tmp="$(mktemp)"
+        { grep -E "^(${today}|${yesterday})" "$logfile" 2>/dev/null || true; } \
+          | grep -iE 'error|fail|warn|crit|alert|emerg' >"$tmp" || true
+        echo "---SUMMARY---"
+        awk '{ id=$5; sub(/:$/, "", id); sub(/\[[0-9]+\]$/, "", id); print id }' "$tmp" \
+          | sort | uniq -c | sort -rn | head -20
+        echo "---LINES---"
+        tail -n {{ err_lines | int }} "$tmp"
+        rm -f "$tmp"
+      args:
+        executable: /bin/bash
+      register: syslog_out
+      changed_when: false
+      check_mode: false
+      failed_when: false
+      become: true
+      when: ansible_facts['service_mgr'] != 'systemd'
+
+    - name: Show journal findings
+      ansible.builtin.debug:
+        var: journal_out.stdout_lines
+      when: journal_out is defined and not (journal_out.skipped | default(false))
+
+    - name: Show syslog findings
+      ansible.builtin.debug:
+        var: syslog_out.stdout_lines
+      when: syslog_out is defined and not (syslog_out.skipped | default(false))

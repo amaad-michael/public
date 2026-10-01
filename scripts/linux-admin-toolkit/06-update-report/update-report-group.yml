@@ -1,0 +1,98 @@
+# update-report-group.yml
+# READ-ONLY: report pending OS updates and reboot-required status per host.
+#
+# Usage:
+#   ansible-playbook -i inv update-report-group.yml -e target_group=webservers
+# Limit to one host: append -l host01
+#
+# Changes nothing: the Debian package-list refresh only updates the apt
+# cache; no package is installed, upgraded, or removed. The dnf/yum
+# check-update command is read-only by design.
+
+- name: Report pending updates (read-only)
+  # ansible-playbook -i inv update-report-group.yml -e target_group=webservers -l host01
+  hosts: "{{ target_group | default('all') }}"
+
+  tasks:
+    - name: Fail cleanly on unsupported OS families
+      ansible.builtin.fail:
+        msg: "Unsupported OS family {{ ansible_facts['os_family'] }}; only RedHat and Debian families are supported."
+      when: ansible_facts['os_family'] not in ['RedHat', 'Debian']
+
+    - name: RedHat | list pending updates (dnf check-update)
+      ansible.builtin.command: dnf check-update
+      check_mode: false
+      register: rhel_updates
+      changed_when: false
+      failed_when: rhel_updates.rc not in [0, 100]
+      become: true
+      when: ansible_facts['os_family'] == 'RedHat'
+
+    - name: RedHat | check whether a reboot is required
+      ansible.builtin.shell: needs-restarting -r
+      check_mode: false
+      register: rhel_reboot
+      changed_when: false
+      failed_when: false
+      become: true
+      when: ansible_facts['os_family'] == 'RedHat'
+
+    - name: RedHat | compare running vs newest installed kernel
+      ansible.builtin.shell: |
+        set -euo pipefail
+        echo "running=$(uname -r | sed 's/\.[^.]*$//')"
+        echo "newest=$(rpm -q --queryformat '%{VERSION}-%{RELEASE}\n' kernel 2>/dev/null | sort -V | tail -n 1)"
+      args:
+        executable: /bin/bash
+      check_mode: false
+      register: rhel_kernels
+      changed_when: false
+      when: ansible_facts['os_family'] == 'RedHat'
+
+    - name: Debian | refresh package lists (cache only; installs nothing)
+      ansible.builtin.apt:
+        update_cache: true
+      become: true
+      when: ansible_facts['os_family'] == 'Debian'
+
+    - name: Debian | list upgradable packages
+      ansible.builtin.command: apt list --upgradable
+      check_mode: false
+      register: debian_updates
+      changed_when: false
+      failed_when: false
+      when: ansible_facts['os_family'] == 'Debian'
+
+    - name: Debian | check for /var/run/reboot-required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: debian_reboot
+      when: ansible_facts['os_family'] == 'Debian'
+
+    - name: Debian | compare running vs newest installed kernel
+      ansible.builtin.shell: |
+        set -euo pipefail
+        echo "running=$(uname -r)"
+        echo "newest=$(dpkg-query -W -f='${Package}\n' 'linux-image-[0-9]*' 2>/dev/null | sed 's/^linux-image-//' | sort -V | tail -n 1)"
+      args:
+        executable: /bin/bash
+      check_mode: false
+      register: debian_kernels
+      changed_when: false
+      when: ansible_facts['os_family'] == 'Debian'
+
+    - name: Show update report
+      ansible.builtin.debug:
+        msg: |
+          {{ inventory_hostname }} update report:
+          {% if ansible_facts['os_family'] == 'RedHat' %}
+          pending updates (rc 100 = updates available):
+          {{ rhel_updates.stdout | default('(none)') }}
+          reboot required (needs-restarting -r): {{ 'YES' if rhel_reboot.rc != 0 else 'no' }}
+          {{ rhel_kernels.stdout | default('') }}
+          {% else %}
+          pending updates:
+          {{ debian_updates.stdout | default('(none)') }}
+          reboot required (/var/run/reboot-required): {{ 'YES' if debian_reboot.stat.exists else 'no' }}
+          {{ debian_kernels.stdout | default('') }}
+          {% endif %}

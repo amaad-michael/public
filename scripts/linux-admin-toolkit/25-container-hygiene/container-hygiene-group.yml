@@ -1,0 +1,60 @@
+---
+# Container hygiene across a group of hosts: report, dry-run, or prune.
+#
+# Report only (default — deletes nothing):
+#   ansible-playbook -i inv 25-container-hygiene-group.yml -e target_group=webservers
+# Dry-run with reclaimable-space estimate:
+#   ansible-playbook -i inv 25-container-hygiene-group.yml -e target_group=webservers \
+#     -e hygiene_check=true
+# Prune for real (explicit confirmation required):
+#   ansible-playbook -i inv 25-container-hygiene-group.yml -e target_group=webservers \
+#     -e hygiene_prune=true
+# Limit to specific hosts: add -l host1
+- name: Container hygiene on group
+  hosts: "{{ target_group | default('all') }}"
+  gather_facts: true
+
+  vars:
+    hygiene_check: false # true = dry-run report of reclaimable space
+    hygiene_prune: false # true = actually prune (requires explicit opt-in)
+
+  tasks:
+    - name: Fail on unsupported OS family
+      ansible.builtin.fail:
+        msg: >-
+          Unsupported OS family '{{ ansible_facts['os_family'] }}'.
+          Only RedHat and Debian families are supported.
+      when: ansible_facts['os_family'] not in ['RedHat', 'Debian']
+
+    - name: Stage the hygiene script on the target
+      ansible.builtin.copy:
+        src: container-hygiene-local.sh
+        dest: /tmp/container-hygiene-local.sh
+        mode: "0755"
+
+    - name: Report container disk usage (report only, deletes nothing)
+      ansible.builtin.command:
+        cmd: >-
+          /tmp/container-hygiene-local.sh
+          {{ '--check' if (hygiene_check | bool) else '' }}
+      register: hygiene_report
+      changed_when: false
+      when: not (hygiene_prune | bool)
+
+    - name: Show hygiene report
+      ansible.builtin.debug:
+        var: hygiene_report.stdout_lines
+      when: not (hygiene_prune | bool)
+
+    - name: Prune container clutter (explicit opt-in only)
+      ansible.builtin.command:
+        cmd: /tmp/container-hygiene-local.sh --yes
+      register: hygiene_prune_out
+      changed_when: hygiene_prune_out.rc == 0
+      become: true
+      when: hygiene_prune | bool
+
+    - name: Show prune result
+      ansible.builtin.debug:
+        var: hygiene_prune_out.stdout_lines
+      when: hygiene_prune | bool

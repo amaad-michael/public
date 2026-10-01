@@ -1,0 +1,83 @@
+# ansible-playbook -i inv firewall-audit-group.yml -e target_group=webservers [-l somehost]
+---
+- name: Detect active firewall stack and dump ruleset (read-only)
+  hosts: "{{ target_group | default('all') }}"
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Fail on unsupported OS family
+      ansible.builtin.fail:
+        msg: "Unsupported os_family={{ ansible_facts['os_family'] }} (need RedHat or Debian)"
+      when: ansible_facts['os_family'] not in ['RedHat', 'Debian']
+
+    - name: Check firewalld state
+      ansible.builtin.command: firewall-cmd --state
+      register: fwd_state
+      changed_when: false
+      failed_when: false
+
+    - name: Dump firewalld zone config
+      ansible.builtin.command: firewall-cmd --list-all-zones
+      register: fwd_zones
+      changed_when: false
+      failed_when: false
+      when: fwd_state.stdout | default('') | trim == 'running'
+
+    - name: Check ufw status
+      ansible.builtin.command: ufw status verbose
+      register: ufw_status
+      changed_when: false
+      failed_when: false
+
+    - name: Dump nftables ruleset
+      ansible.builtin.command: nft list ruleset
+      register: nft_ruleset
+      changed_when: false
+      failed_when: false
+
+    - name: Dump iptables rules
+      ansible.builtin.command: iptables -S
+      register: iptables_rules
+      changed_when: false
+      failed_when: false
+
+    - name: Dump ip6tables rules
+      ansible.builtin.command: ip6tables -S
+      register: ip6tables_rules
+      changed_when: false
+      failed_when: false
+
+    - name: Summarize firewall state
+      ansible.builtin.debug:
+        msg:
+          - "firewalld: {{ fwd_state.stdout | default('not installed/inactive') | trim }}"
+          - "ufw first line: {{ (ufw_status.stdout_lines | default(['not installed']))[0] }}"
+          - "nftables rules: {{ nft_ruleset.stdout_lines | default([]) | length }} lines"
+          - "iptables rules: {{ iptables_rules.stdout_lines | default([]) | select('match','^-A') | list | length }} (-A rules)"
+          - "ip6tables rules: {{ ip6tables_rules.stdout_lines | default([]) | select('match','^-A') | list | length }} (-A rules)"
+
+    - name: Show firewalld full config
+      ansible.builtin.debug:
+        var: fwd_zones.stdout_lines
+      when: fwd_zones.stdout is defined and (fwd_zones.stdout | length) > 0
+
+    - name: Show ufw full status
+      ansible.builtin.debug:
+        var: ufw_status.stdout_lines
+      when: "'active' in (ufw_status.stdout | default(''))"
+
+    - name: Show nftables ruleset
+      ansible.builtin.debug:
+        var: nft_ruleset.stdout_lines
+      when: nft_ruleset.rc is defined and nft_ruleset.rc == 0 and (nft_ruleset.stdout | length) > 0
+
+    - name: Show iptables rules
+      ansible.builtin.debug:
+        var: iptables_rules.stdout_lines
+      when: iptables_rules.rc is defined and iptables_rules.rc == 0
+
+    - name: Show ip6tables rules
+      ansible.builtin.debug:
+        var: ip6tables_rules.stdout_lines
+      when: ip6tables_rules.rc is defined and ip6tables_rules.rc == 0

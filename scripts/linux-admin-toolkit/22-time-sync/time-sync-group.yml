@@ -1,0 +1,86 @@
+# Usage (read-only check):
+#   ansible-playbook -i inv time-sync-group.yml -e target_group=webservers
+# Usage (remediate; idempotent; --check shows what would change):
+#   ansible-playbook -i inv time-sync-group.yml -e target_group=webservers -e time_fix=true
+#   ansible-playbook -i inv time-sync-group.yml -e target_group=webservers -e time_fix=true -l web01 --check
+- name: Time sync health check (and optional fix)
+  hosts: "{{ target_group | default('all') }}"
+  gather_facts: true
+  vars:
+    time_fix: false
+  tasks:
+    - name: Fail on unsupported OS family
+      ansible.builtin.fail:
+        msg: "Unsupported OS family '{{ ansible_facts['os_family'] }}'; this toolkit supports the RedHat and Debian families."
+      when: ansible_facts['os_family'] not in ['RedHat', 'Debian']
+
+    - name: Detect time service backend (chrony preferred)
+      ansible.builtin.shell: |
+        if command -v chronyc >/dev/null 2>&1; then echo chrony
+        elif command -v timedatectl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then echo timesyncd
+        elif command -v ntpq >/dev/null 2>&1; then echo ntp
+        else echo none; fi
+      args:
+        executable: /bin/bash
+      register: time_backend
+      changed_when: false
+      check_mode: false
+
+    - name: Chrony sync status
+      ansible.builtin.command: chronyc tracking
+      register: chrony_status
+      changed_when: false
+      check_mode: false
+      failed_when: false
+      when: time_backend.stdout == 'chrony'
+
+    - name: systemd-timesyncd sync status
+      ansible.builtin.shell: |
+        timedatectl show-timesync --all 2>/dev/null || timedatectl status
+      args:
+        executable: /bin/bash
+      register: timesyncd_status
+      changed_when: false
+      check_mode: false
+      failed_when: false
+      when: time_backend.stdout == 'timesyncd'
+
+    - name: NTP sync status
+      ansible.builtin.command: ntpq -pn
+      register: ntp_status
+      changed_when: false
+      check_mode: false
+      failed_when: false
+      when: time_backend.stdout == 'ntp'
+
+    - name: Show sync status
+      ansible.builtin.debug:
+        msg: "{{ (chrony_status.stdout | default(timesyncd_status.stdout | default(ntp_status.stdout | default('')))) }}"
+      when: time_backend.stdout != 'none'
+
+    - name: Fail when no time service tooling exists
+      ansible.builtin.fail:
+        msg: >-
+          No time-sync tooling found on {{ inventory_hostname }}. Install chrony:
+          Debian-family: apt-get update && apt-get install -y chrony;
+          RedHat-family: dnf install -y chrony (or yum install -y chrony).
+      when: time_backend.stdout == 'none'
+
+    - name: Choose service name for the fix
+      ansible.builtin.set_fact:
+        time_service: >-
+          {{ 'chronyd' if time_backend.stdout == 'chrony' and ansible_facts['os_family'] == 'RedHat'
+             else 'chrony' if time_backend.stdout == 'chrony'
+             else 'systemd-timesyncd' if time_backend.stdout == 'timesyncd'
+             else 'ntpd' if time_backend.stdout == 'ntp' and ansible_facts['os_family'] == 'RedHat'
+             else 'ntp' if time_backend.stdout == 'ntp'
+             else '' }}
+      when: time_fix | bool
+
+    - name: Enable and start the time service (idempotent)
+      ansible.builtin.service:
+        name: "{{ time_service }}"
+        state: started
+        enabled: true
+      become: true
+      when: time_fix | bool and time_service != ''

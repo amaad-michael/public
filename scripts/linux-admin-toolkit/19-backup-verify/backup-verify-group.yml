@@ -1,0 +1,58 @@
+---
+# Verify the latest timestamped backup across a group of hosts (read-only).
+#
+#   ansible-playbook -i inv 19-backup-verify-group.yml -e target_group=webservers \
+#     -e verify_dest=/mnt/backups/etc -e verify_source=/etc
+# Limit to specific hosts:
+#   ansible-playbook -i inv 19-backup-verify-group.yml -e target_group=webservers -l host1
+# Without --source, the playbook compares manifest counts against actual counts:
+#   ansible-playbook -i inv 19-backup-verify-group.yml -e target_group=webservers \
+#     -e verify_dest=/mnt/backups/etc -e verify_max_age_days=7
+- name: Verify latest backup on group (read-only)
+  hosts: "{{ target_group | default('all') }}"
+  gather_facts: true
+
+  vars:
+    verify_dest: ""          # required: backup root on each target
+    verify_source: ""        # optional: original source dir for checksum spot-check
+    verify_max_age_days: 1
+
+  tasks:
+    - name: Require verify_dest
+      ansible.builtin.assert:
+        that:
+          - verify_dest | length > 0
+        fail_msg: "Set -e verify_dest=/path"
+
+    - name: Fail on unsupported OS family
+      ansible.builtin.fail:
+        msg: >-
+          Unsupported OS family '{{ ansible_facts['os_family'] }}'.
+          Only RedHat and Debian families are supported.
+      when: ansible_facts['os_family'] not in ['RedHat', 'Debian']
+
+    - name: Stage the verify script on the target
+      ansible.builtin.copy:
+        src: backup-verify-local.sh
+        dest: /tmp/backup-verify-local.sh
+        mode: "0755"
+
+    - name: Verify latest backup (read-only)
+      ansible.builtin.command:
+        cmd: >-
+          /tmp/backup-verify-local.sh
+          --dest {{ verify_dest | quote }}
+          {{ ('--source ' ~ (verify_source | quote)) if (verify_source | default('') | length > 0) else '' }}
+          --max-age-days {{ verify_max_age_days | quote }}
+      register: verify_out
+      changed_when: false
+      failed_when: false
+
+    - name: Show per-check results
+      ansible.builtin.debug:
+        var: verify_out.stdout_lines
+
+    - name: Fail the play when any check failed
+      ansible.builtin.fail:
+        msg: "Backup verification FAILED on {{ inventory_hostname }} (see output above)."
+      when: verify_out.rc != 0

@@ -1,0 +1,50 @@
+# Usage:
+#   ansible-playbook -i inv 10-uptime-report-group.yml -e target_group=webservers
+#   ansible-playbook -i inv 10-uptime-report-group.yml -l webservers
+---
+- name: Uptime and reboot history report (read-only)
+  hosts: "{{ target_group | default('all') }}"
+  gather_facts: true
+  tasks:
+    - name: Fail on unsupported OS family
+      ansible.builtin.fail:
+        msg: "Unsupported OS family '{{ ansible_facts['os_family'] }}' on {{ inventory_hostname }} (need RedHat or Debian)."
+      when: ansible_facts['os_family'] not in ['RedHat', 'Debian']
+
+    - name: Current uptime
+      ansible.builtin.command: uptime
+      register: uptime_now
+      changed_when: false
+
+    - name: Boot time (uptime -s, fallback to who -b)
+      ansible.builtin.shell: |
+        uptime -s 2>/dev/null || who -b 2>/dev/null || echo "(boot time unavailable)"
+      args:
+        executable: /bin/bash
+      register: boot_time
+      changed_when: false
+      failed_when: false
+
+    - name: Recent reboot history (last 10 entries)
+      ansible.builtin.shell: |
+        if command -v last >/dev/null 2>&1; then
+          out=$(last reboot 2>/dev/null | head -10 || true)
+          [ -n "$out" ] && echo "$out" || echo "(no reboot records found in wtmp)"
+        else
+          echo "(NOTE: 'last' is not installed; reboot history unavailable)"
+        fi
+      args:
+        executable: /bin/bash
+      register: reboot_hist
+      changed_when: false
+      failed_when: false
+
+    - name: Show uptime report
+      ansible.builtin.debug:
+        msg: |
+          ===== Current uptime =====
+          {{ uptime_now.stdout }}
+          ===== Boot time =====
+          {{ boot_time.stdout }}
+          ===== Recent reboot history (last 10) =====
+          {{ reboot_hist.stdout }}

@@ -1,0 +1,107 @@
+# service-manage-group.yml
+# Manage a systemd service consistently across a fleet, verifying the
+# desired end state.
+#
+# Usage:
+#   ansible-playbook -i inv service-manage-group.yml -e target_group=webservers \
+#     -e service=nginx -e action=restart
+# Limit to one host: append -l host01
+#
+# Variables:
+#   service  (required) unit name, e.g. nginx or nginx.service
+#   action   (optional, default status) start|stop|restart|reload|enable|disable|status
+#   now      (optional, default false) with enable: also start now;
+#            with disable: also stop now
+#
+# Dry-run: append --check (reports what would change)
+
+- name: Manage systemd services
+  # ansible-playbook -i inv service-manage-group.yml -e target_group=webservers -e service=nginx -e action=restart -l host01
+  hosts: "{{ target_group | default('all') }}"
+  become: true
+
+  vars:
+    action: status
+    now: false
+
+  tasks:
+    - name: Require a service name
+      ansible.builtin.fail:
+        msg: "Pass -e service=<unit> (e.g. -e service=nginx)"
+      when: service is not defined
+
+    - name: Validate action
+      ansible.builtin.fail:
+        msg: "action must be one of start|stop|restart|reload|enable|disable|status (got '{{ action }}')"
+      when: action not in ['start', 'stop', 'restart', 'reload', 'enable', 'disable', 'status']
+
+    - name: Fail cleanly on unsupported OS families
+      ansible.builtin.fail:
+        msg: "Unsupported OS family {{ ansible_facts['os_family'] }}; only RedHat and Debian families are supported."
+      when: ansible_facts['os_family'] not in ['RedHat', 'Debian']
+
+    - name: Normalize unit name
+      ansible.builtin.set_fact:
+        unit_name: "{{ service if '.' in service else service + '.service' }}"
+
+    - name: Start, stop, restart, or reload the service
+      ansible.builtin.systemd:
+        name: "{{ unit_name }}"
+        state: "{{ {'start': 'started', 'stop': 'stopped', 'restart': 'restarted', 'reload': 'reloaded'}[action] }}"
+      when: action in ['start', 'stop', 'restart', 'reload']
+
+    - name: Enable or disable the service
+      ansible.builtin.systemd:
+        name: "{{ unit_name }}"
+        enabled: "{{ action == 'enable' }}"
+      when: action in ['enable', 'disable']
+
+    - name: Start now (enable --now)
+      ansible.builtin.systemd:
+        name: "{{ unit_name }}"
+        state: started
+      when: action == 'enable' and now | bool
+
+    - name: Stop now (disable --now)
+      ansible.builtin.systemd:
+        name: "{{ unit_name }}"
+        state: stopped
+      when: action == 'disable' and now | bool
+
+    - name: Verify the service is active after start/restart/enable-now
+      ansible.builtin.command: "systemctl is-active {{ unit_name }}"
+      register: svc_active
+      changed_when: false
+      failed_when: svc_active.rc != 0
+      when: action in ['start', 'restart'] or (action == 'enable' and now | bool)
+
+    - name: Verify the service is inactive after stop/disable-now
+      ansible.builtin.command: "systemctl is-active {{ unit_name }}"
+      register: svc_inactive
+      changed_when: false
+      failed_when: svc_inactive.rc == 0
+      when: action == 'stop' or (action == 'disable' and now | bool)
+
+    - name: Verify the service is enabled
+      ansible.builtin.command: "systemctl is-enabled {{ unit_name }}"
+      register: svc_enabled
+      changed_when: false
+      failed_when: "'enabled' not in svc_enabled.stdout"
+      when: action == 'enable'
+
+    - name: Verify the service is disabled
+      ansible.builtin.command: "systemctl is-enabled {{ unit_name }}"
+      register: svc_disabled
+      changed_when: false
+      failed_when: "'disabled' not in svc_disabled.stdout"
+      when: action == 'disable'
+
+    - name: Report service status (read-only)
+      when: action == 'status'
+      block:
+        - name: Gather service facts
+          ansible.builtin.service_facts:
+
+        - name: Show status for the unit
+          ansible.builtin.debug:
+            msg: "{{ unit_name }}: {{ ansible_facts.services[unit_name] | default('unit not found') }}"

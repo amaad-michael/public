@@ -1,0 +1,70 @@
+# user-add-group.yml
+# Create local users across a fleet with SSH keys and optional sudo.
+#
+# Usage:
+#   ansible-playbook -i inv user-add-group.yml -e target_group=webservers \
+#     -e username=deploy -e "ssh_key=$(cat ~/.ssh/id_ed25519.pub)" -e sudo=true
+# Limit to one host: append -l host01
+#
+# Variables:
+#   username   (required) login name to create
+#   ssh_key    (optional) SSH public key text to install
+#   sudo       (optional, default false) grant full sudo via drop-in
+#   shell      (optional, default /bin/bash)
+
+- name: Manage local users
+  # ansible-playbook -i inv user-add-group.yml -e target_group=webservers -l host01
+  hosts: "{{ target_group | default('all') }}"
+  become: true
+
+  vars:
+    sudo: false
+    shell: /bin/bash
+
+  tasks:
+    - name: Require a username
+      ansible.builtin.fail:
+        msg: "Pass -e username=<login> (e.g. -e username=deploy)"
+      when: username is not defined
+
+    - name: Fail cleanly on unsupported OS families
+      ansible.builtin.fail:
+        msg: "Unsupported OS family {{ ansible_facts['os_family'] }}; only RedHat and Debian families are supported."
+      when: ansible_facts['os_family'] not in ['RedHat', 'Debian']
+
+    - name: Ensure user exists
+      ansible.builtin.user:
+        name: "{{ username }}"
+        shell: "{{ shell }}"
+        create_home: true
+        state: present
+      register: created_user
+
+    - name: Ensure .ssh directory exists
+      ansible.builtin.file:
+        path: "{{ created_user.home }}/.ssh"
+        state: directory
+        mode: "0700"
+        owner: "{{ username }}"
+        group: "{{ username }}"
+      when: ssh_key is defined
+
+    - name: Ensure SSH authorized key is present
+      ansible.builtin.authorized_key:
+        user: "{{ username }}"
+        key: "{{ ssh_key }}"
+        state: present
+      when: ssh_key is defined
+
+    - name: Render sudoers drop-in
+      ansible.builtin.copy:
+        dest: "/etc/sudoers.d/90-{{ username }}"
+        content: "{{ username }} ALL=(ALL:ALL) ALL\n"
+        mode: "0440"
+        validate: "visudo -cf %s"
+      when: sudo | bool
+
+    - name: Validate sudoers after change
+      ansible.builtin.command: visudo -c
+      changed_when: false
+      when: sudo | bool

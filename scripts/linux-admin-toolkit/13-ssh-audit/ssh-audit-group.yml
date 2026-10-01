@@ -1,0 +1,74 @@
+# ansible-playbook -i inv ssh-audit-group.yml -e target_group=webservers [-l somehost]
+---
+- name: Audit sshd config against hardening baseline (read-only)
+  hosts: "{{ target_group | default('all') }}"
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Fail on unsupported OS family
+      ansible.builtin.fail:
+        msg: "Unsupported os_family={{ ansible_facts['os_family'] }} (need RedHat or Debian)"
+      when: ansible_facts['os_family'] not in ['RedHat', 'Debian']
+
+    - name: Get effective sshd config via sshd -T
+      ansible.builtin.command: sshd -T
+      register: sshd_t
+      changed_when: false
+      failed_when: false
+
+    - name: Read sshd_config fallback
+      ansible.builtin.slurp:
+        src: /etc/ssh/sshd_config
+      register: sshd_config_raw
+      changed_when: false
+      failed_when: false
+      when: sshd_t.rc != 0
+
+    - name: Audit sshd hardening baseline
+      ansible.builtin.shell: |
+        set -u
+        cfg="$(mktemp)"; trap 'rm -f "$cfg"' EXIT
+        {% if sshd_t.rc == 0 %}
+        printf '%s\n' '{{ sshd_t.stdout | replace("'", "'\\''") }}' > "$cfg"
+        src="sshd -T"
+        {% else %}
+        printf '%s\n' '{{ (sshd_config_raw.content | default("") | b64decode) | replace("'", "'\\''") }}' > "$cfg"
+        src="sshd_config (sshd -T unavailable)"
+        {% endif %}
+        if [ ! -s "$cfg" ]; then echo "SKIP: no sshd config readable"; exit 0; fi
+        val() { awk -v k="$1" 'tolower($1)==k{if(!seen[k]++){print $2; exit}}' "$cfg"; }
+        secs() { case "${1,,}" in
+                   *m) echo $((${1%m}*60));; *h) echo $((${1%h}*3600));;
+                   ''|*[!0-9]*) echo "unset";; *) echo "$1";; esac; }
+        check() { # name current expected comparator
+          local ok=0
+          case "$4" in
+            eq) [ "${2,,}" = "${3,,}" ] && ok=1;;
+            le) [ "$2" != "unset" ] && [ "$2" -le "$3" ] 2>/dev/null && ok=1;;
+            in) case ",${3,,}," in *",${2,,},"*) ok=1;; esac;;
+          esac
+          [ "$ok" = 1 ] && echo "PASS  $1 current=$2 expected=$3" \
+                        || echo "FAIL  $1 current=$2 expected=$3"
+        }
+        echo "source: $src"
+        check "PermitRootLogin"           "$(val permitrootlogin)" "no,prohibit-password" in
+        check "PasswordAuthentication"    "$(val passwordauthentication)" "no" eq
+        kia="$(val kbdinteractiveauthentication)"; [ -z "$kia" ] && kia="$(val challengeresponseauthentication)"
+        check "KbdInteractiveAuthentication" "$kia" "no" eq
+        check "X11Forwarding"             "$(val x11forwarding)" "no" eq
+        check "MaxAuthTries"              "$(val maxauthtries)" "4" le
+        check "LoginGraceTime"            "$(secs "$(val logingracetime)")" "60" le
+        check "Protocol"                  "$(val protocol)" "2" eq
+        au="$(val allowusers)"; ag="$(val allowgroups)"
+        [ -z "$au$ag" ] && echo "NOTE  AllowUsers/AllowGroups not set" \
+                       || echo "NOTE  AllowUsers=$au AllowGroups=$ag"
+      args:
+        executable: /bin/bash
+      register: audit_out
+      changed_when: false
+      failed_when: false
+
+    - name: Show sshd audit result
+      ansible.builtin.debug:
+        var: audit_out.stdout_lines

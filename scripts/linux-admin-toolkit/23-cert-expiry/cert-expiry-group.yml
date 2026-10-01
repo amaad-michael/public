@@ -1,0 +1,56 @@
+# Usage:
+#   ansible-playbook -i inv cert-expiry-group.yml -e target_group=webservers
+#   ansible-playbook -i inv cert-expiry-group.yml -e target_group=webservers -e cert_days=60
+#   ansible-playbook -i inv cert-expiry-group.yml -e target_group=webservers -e '{"cert_extra_dirs":["/opt/certs"]}'
+- name: Check TLS certificate expiry (read-only)
+  hosts: "{{ target_group | default('all') }}"
+  gather_facts: true
+  vars:
+    cert_days: 30
+    cert_extra_dirs: []
+  tasks:
+    - name: Fail on unsupported OS family
+      ansible.builtin.fail:
+        msg: "Unsupported OS family '{{ ansible_facts['os_family'] }}'; this toolkit supports the RedHat and Debian families."
+      when: ansible_facts['os_family'] not in ['RedHat', 'Debian']
+
+    - name: Scan certificates for upcoming expiry
+      ansible.builtin.shell: |
+        set -o pipefail
+        days={{ cert_days | int }}
+        dirs="/etc/ssl/certs /etc/pki/tls/certs /etc/letsencrypt/live{% for d in cert_extra_dirs %} {{ d }}{% endfor %}"
+        now=$(date +%s); checked=0; expired=0; soon=0; skipped=0
+        warnlist="$(mktemp)"
+        for d in $dirs; do
+          [ -d "$d" ] || continue
+          while IFS= read -r -d '' f; do
+            end="$(openssl x509 -enddate -noout -in "$f" 2>/dev/null)" \
+              || { skipped=$((skipped + 1)); continue; }
+            end="${end#notAfter=}"
+            eepoch="$(date -d "$end" +%s 2>/dev/null)" \
+              || { skipped=$((skipped + 1)); continue; }
+            left=$(( (eepoch - now) / 86400 ))
+            checked=$((checked + 1))
+            if [ "$left" -lt 0 ]; then
+              expired=$((expired + 1))
+              printf 'EXPIRED  %6d days  %s\n' "$left" "$f" >>"$warnlist"
+            elif [ "$left" -le "$days" ]; then
+              soon=$((soon + 1))
+              printf 'EXPIRING %6d days  %s\n' "$left" "$f" >>"$warnlist"
+            fi
+          done < <(find "$d" \( -type f -o -type l \) \( -name '*.crt' -o -name '*.pem' \) -print0 2>/dev/null)
+        done
+        echo "checked=$checked expired=$expired expiring_within_${days}d=$soon skipped_noncert=$skipped"
+        sort -t' ' -k2 -n "$warnlist" 2>/dev/null || true
+        rm -f "$warnlist"
+      args:
+        executable: /bin/bash
+      register: cert_scan
+      changed_when: false
+      check_mode: false
+      failed_when: false
+      become: true
+
+    - name: Show certificate expiry report
+      ansible.builtin.debug:
+        var: cert_scan.stdout_lines

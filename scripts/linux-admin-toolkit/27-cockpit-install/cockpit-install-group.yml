@@ -1,0 +1,148 @@
+# cockpit-install-group.yml
+# Install Cockpit across a fleet, enable/start cockpit.socket, and open
+# 9090/tcp in the active firewall. Idempotent.
+#
+# Usage:
+#   ansible-playbook -i inv cockpit-install-group.yml -e target_group=webservers
+# Limit to one host: append -l host01
+# Dry-run: append --check (module check-mode; nothing is installed)
+#
+# Behavior:
+#   * Package: dnf/yum on RedHat, apt on Debian (state=present).
+#   * cockpit.socket is enabled+started only when the target's service
+#     manager is systemd; otherwise a manual step is printed.
+#   * Firewall: firewalld --permanent --add-port=9090/tcp + reload when
+#     firewall-cmd exists, else 'ufw allow 9090/tcp' when ufw exists.
+#     If neither is present, the rule the admin should add is printed.
+
+- name: Install Cockpit and open 9090/tcp
+  # ansible-playbook -i inv cockpit-install-group.yml -e target_group=webservers -l host01
+  hosts: "{{ target_group | default('all') }}"
+  become: true
+
+  vars:
+    cockpit_port: 9090
+
+  tasks:
+    - name: Fail cleanly on unsupported OS families
+      ansible.builtin.fail:
+        msg: "Unsupported OS family {{ ansible_facts['os_family'] }}; only RedHat and Debian families are supported."
+      when: ansible_facts['os_family'] not in ['RedHat', 'Debian']
+
+    - name: RedHat | install cockpit
+      ansible.builtin.dnf:
+        name: cockpit
+        state: present
+      when: ansible_facts['os_family'] == 'RedHat'
+
+    - name: Debian | install cockpit
+      ansible.builtin.apt:
+        name: cockpit
+        state: present
+        update_cache: true
+      when: ansible_facts['os_family'] == 'Debian'
+
+    - name: Check whether systemd knows the cockpit.socket unit
+      ansible.builtin.command: systemctl cat cockpit.socket
+      register: cockpit_socket_known
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      when: ansible_facts['service_mgr'] == 'systemd'
+
+    - name: Enable and start cockpit.socket
+      ansible.builtin.systemd:
+        name: cockpit.socket
+        enabled: true
+        state: started
+      when:
+        - ansible_facts['service_mgr'] == 'systemd'
+        - cockpit_socket_known.rc == 0
+
+    - name: cockpit.socket unit not yet known | print follow-up step
+      ansible.builtin.debug:
+        msg: >-
+          The cockpit.socket unit is not known to systemd on {{ inventory_hostname }} yet
+          (normal for a fresh install evaluated in check mode). After installing,
+          run: systemctl enable --now cockpit.socket
+      when:
+        - ansible_facts['service_mgr'] == 'systemd'
+        - (cockpit_socket_known.rc | default(-1)) != 0
+
+    - name: Non-systemd hosts | print manual socket step
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }} is not running systemd (service_mgr={{ ansible_facts['service_mgr'] }}),
+          so cockpit.socket was not enabled. Manual step on a systemd host:
+          systemctl enable --now cockpit.socket
+      when: ansible_facts['service_mgr'] != 'systemd'
+
+    - name: Detect firewall tooling
+      ansible.builtin.shell: |
+        if command -v firewall-cmd >/dev/null 2>&1; then echo firewalld
+        elif command -v ufw >/dev/null 2>&1; then echo ufw
+        else echo none
+        fi
+      register: firewall_tool
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: firewalld | check whether the port is already open
+      ansible.builtin.command: "firewall-cmd --query-port={{ cockpit_port }}/tcp"
+      register: firewalld_query
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      when: firewall_tool.stdout == 'firewalld'
+
+    - name: firewalld | open cockpit port permanently
+      ansible.builtin.command: "firewall-cmd --permanent --add-port={{ cockpit_port }}/tcp"
+      register: firewalld_add
+      changed_when: firewalld_add.rc == 0
+      failed_when: firewalld_add.rc != 0
+      when:
+        - firewall_tool.stdout == 'firewalld'
+        - firewalld_query.rc != 0
+
+    - name: firewalld | reload to apply permanent rules
+      ansible.builtin.command: firewall-cmd --reload
+      changed_when: true
+      when:
+        - firewall_tool.stdout == 'firewalld'
+        - firewalld_add is defined
+        - firewalld_add.changed | default(false)
+
+    - name: ufw | check whether the port is already allowed
+      ansible.builtin.shell: ufw status | grep -qE "^{{ cockpit_port }}/tcp.*ALLOW"
+      register: ufw_query
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      when: firewall_tool.stdout == 'ufw'
+
+    - name: ufw | allow cockpit port
+      ansible.builtin.command: "ufw allow {{ cockpit_port }}/tcp"
+      changed_when: true
+      when:
+        - firewall_tool.stdout == 'ufw'
+        - ufw_query.rc != 0
+
+    - name: No firewall tool | print manual rule
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }} has neither firewall-cmd nor ufw; no firewall
+          rule was applied. Allow inbound TCP {{ cockpit_port }} manually, e.g.
+          'iptables -A INPUT -p tcp --dport {{ cockpit_port }} -j ACCEPT' or the
+          equivalent cloud security-group rule.
+      when: firewall_tool.stdout == 'none'
+
+    - name: Report cockpit status
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }}: cockpit {{ 'would be ' if ansible_check_mode else '' }}installed;
+          cockpit.socket {{ 'enabled+started' if (cockpit_socket_known.rc | default(-1)) == 0 else
+          ('manual enablement (no systemd)' if ansible_facts['service_mgr'] != 'systemd'
+          else 'to be enabled after install: systemctl enable --now cockpit.socket') }};
+          firewall tool: {{ firewall_tool.stdout | default('unknown') }}.
+          Reach it at https://{{ inventory_hostname }}:{{ cockpit_port }}/
