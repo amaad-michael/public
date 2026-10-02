@@ -1,0 +1,41 @@
+# llm-lb.conf
+# nginx reverse proxy / load balancer for llama.cpp inference nodes.
+# Uses least_conn to avoid sending heavy requests to the lighter board.
+
+upstream llm_pool {
+    least_conn;
+
+{% for node in llm_nodes %}
+    server {{ node.host }}:{{ node.port }};  # {{ node.label }}
+{% endfor %}
+}
+
+server {
+    listen {{ lb_port }};
+    server_name _;
+
+    # Health check endpoint — returns LB status without hitting a backend
+    location /lb-health {
+        access_log off;
+        return 200 'llm-lb ok\n';
+        add_header Content-Type text/plain;
+    }
+
+    # Proxy all inference traffic to the pool
+    location / {
+        proxy_pass http://llm_pool;
+
+        # Inference takes time — do not let nginx time out mid-generation
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 300s;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+        # Disable buffering — stream tokens as they generate
+        proxy_buffering off;
+        proxy_cache off;
+    }
+}

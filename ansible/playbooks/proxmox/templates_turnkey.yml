@@ -1,0 +1,192 @@
+---
+# ============================================================
+# PROJECT : Proxmox VE Homelab Automation
+# AUTHOR  : Michael Tatum (HarborSonar)
+# REPO    : michaeltatum.xyz
+# UPDATED : 2025-03-14
+# ============================================================
+#
+# FILE    : templates_turnkey.yml
+# STEP    : 4b of 5
+# PURPOSE : Download Turnkey Linux LXC appliance templates via pveam.
+#           Templates land in local storage ready for manual container
+#           creation via pct create or the PVE web UI.
+#
+# RUN     : ansible-playbook -i inventory.ini templates_turnkey.yml
+#
+# WHAT IT DOWNLOADS (configured in pve_turnkey_templates var):
+#   - debian-12-turnkey-core       Clean Debian baseline
+#   - debian-12-turnkey-gitea      Self-hosted Git
+#   - debian-12-turnkey-wireguard  VPN server
+#   - debian-12-turnkey-pihole     DNS ad-blocker
+#   - debian-12-turnkey-nginx      Web server / reverse proxy
+#
+# RE-RUN SAFE: skips templates already present in storage.
+# DOES NOT create containers — intentional. Create manually:
+#
+#   pct create 201 local:vztmpl/<template>.tar.gz \
+#     --hostname <name> --memory 512 --cores 1 \
+#     --net0 name=eth0,bridge=vmbr0,ip=dhcp,firewall=1 \
+#     --storage local-lvm --rootfs local-lvm:8 \
+#     --unprivileged 1 --onboot 1 --start 1
+#
+# BROWSE ALL TURNKEY APPLIANCES:
+#   pveam available --section turnkeylinux
+#   https://www.turnkeylinux.org/all
+#
+# PREV    : prep_proxmox.yml
+# RELATED : templates_cloudinit.yml (KVM VM templates)
+# DOCS    : LXC_MANUAL.md
+# ============================================================
+
+- name: Download Turnkey Linux LXC templates
+  hosts: proxmox_targets
+  become: true
+  gather_facts: true
+
+  vars:
+    # Storage must be filesystem-type (local, not local-lvm) for CT templates
+    pve_ct_storage: local
+
+    # Turnkey appliances to pull.
+    # Names must match exactly what pveam reports — the task below validates this.
+    # Format: partial match string used to find the latest version automatically.
+    pve_turnkey_templates:
+      - match: "debian-12-turnkey-core"
+        desc: "Debian 12 clean baseline"
+      - match: "debian-12-turnkey-gitea"
+        desc: "Gitea — self-hosted Git"
+      - match: "debian-12-turnkey-wireguard"
+        desc: "WireGuard VPN"
+      - match: "debian-12-turnkey-pihole"
+        desc: "Pi-hole DNS ad-blocker"
+      - match: "debian-12-turnkey-nginx"
+        desc: "Nginx web server"
+
+  pre_tasks:
+    - name: Verify target is Debian-based
+      ansible.builtin.fail:
+        msg: "Debian-based host required. Detected: {{ ansible_distribution }}"
+      when: ansible_os_family != "Debian"
+
+    - name: Verify Proxmox VE is installed
+      ansible.builtin.command: pveversion
+      register: pve_version
+      changed_when: false
+      failed_when: pve_version.rc != 0
+
+    - name: Show PVE version
+      ansible.builtin.debug:
+        msg: "Targeting {{ pve_version.stdout }}"
+
+  tasks:
+
+    # -------------------------------------------------------------------------
+    # 1. Refresh the template index
+    # -------------------------------------------------------------------------
+    - name: Update pveam template index
+      ansible.builtin.command: pveam update
+      changed_when: false
+      register: pveam_update
+
+    - name: Show pveam update result
+      ansible.builtin.debug:
+        msg: "{{ pveam_update.stdout_lines }}"
+
+    # -------------------------------------------------------------------------
+    # 2. Resolve exact template filenames from partial match strings
+    #    Picks the latest version if multiple hits exist (sort -V, take last)
+    # -------------------------------------------------------------------------
+    - name: Resolve latest template filename for each appliance
+      ansible.builtin.shell: >
+        pveam available --section turnkeylinux |
+        awk '{print $2}' |
+        grep "{{ item.match }}" |
+        sort -V |
+        tail -1
+      register: pveam_resolved
+      loop: "{{ pve_turnkey_templates }}"
+      loop_control:
+        label: "{{ item.desc }}"
+      changed_when: false
+      failed_when: pveam_resolved.stdout | length == 0
+
+    - name: Fail if any template could not be resolved
+      ansible.builtin.fail:
+        msg: >
+          Could not resolve template for '{{ item.item.match }}' ({{ item.item.desc }}).
+          Run 'pveam available --section turnkeylinux | grep {{ item.item.match }}' on the host to verify the name.
+      loop: "{{ pveam_resolved.results }}"
+      loop_control:
+        label: "{{ item.item.desc }}"
+      when: item.stdout | trim | length == 0
+
+    # -------------------------------------------------------------------------
+    # 3. Check which templates are already downloaded
+    # -------------------------------------------------------------------------
+    - name: List already-downloaded CT templates
+      ansible.builtin.command: pveam list {{ pve_ct_storage }}
+      register: pveam_local_list
+      changed_when: false
+
+    - name: Report already-present templates
+      ansible.builtin.debug:
+        msg: "Already downloaded — skipping: {{ item.stdout | trim }}"
+      loop: "{{ pveam_resolved.results }}"
+      loop_control:
+        label: "{{ item.item.desc }}"
+      when: (item.stdout | trim) in pveam_local_list.stdout
+
+    # -------------------------------------------------------------------------
+    # 4. Download missing templates
+    # -------------------------------------------------------------------------
+    - name: Download missing Turnkey templates
+      ansible.builtin.command: >
+        pveam download {{ pve_ct_storage }} {{ item.stdout | trim }}
+      loop: "{{ pveam_resolved.results }}"
+      loop_control:
+        label: "{{ item.item.desc }}"
+      when: (item.stdout | trim) not in pveam_local_list.stdout
+      changed_when: true
+      register: pveam_download
+      async: 300     # large templates can take time — run async
+      poll: 10
+
+    # -------------------------------------------------------------------------
+    # 5. Verify all templates are present
+    # -------------------------------------------------------------------------
+    - name: Re-list downloaded templates post-download
+      ansible.builtin.command: pveam list {{ pve_ct_storage }}
+      register: pveam_final_list
+      changed_when: false
+
+    - name: Assert each template is present in storage
+      ansible.builtin.assert:
+        that: (item.stdout | trim) in pveam_final_list.stdout
+        fail_msg: "Template {{ item.stdout | trim }} was not found in {{ pve_ct_storage }} after download"
+        success_msg: "Confirmed: {{ item.stdout | trim }}"
+      loop: "{{ pveam_resolved.results }}"
+      loop_control:
+        label: "{{ item.item.desc }}"
+
+    # -------------------------------------------------------------------------
+    # 6. Summary + manual creation reference
+    # -------------------------------------------------------------------------
+    - name: Print Turnkey template summary
+      ansible.builtin.debug:
+        msg:
+          - "===== Turnkey LXC Templates Ready ====="
+          - "Storage : {{ pve_ct_storage }}"
+          - ""
+          - "Downloaded templates:"
+          - "{% for r in pveam_resolved.results %}"
+          - "  {{ r.item.desc }}"
+          - "    File : {{ r.stdout | trim }}"
+          - "    CMD  : pct create <VMID> {{ pve_ct_storage }}:vztmpl/{{ r.stdout | trim }} --hostname <name> --memory 512 --cores 1 --net0 name=eth0,bridge=vmbr0,ip=dhcp --storage local-lvm --rootfs local-lvm:8 --unprivileged 1 --start 1"
+          - "{% endfor %}"
+          - ""
+          - "List all available Turnkey templates:"
+          - "  pveam available --section turnkeylinux"
+          - "List downloaded templates:"
+          - "  pveam list {{ pve_ct_storage }}"
+          - "======================================="

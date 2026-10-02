@@ -1,0 +1,15 @@
+
+[Unit]
+Description=Monthly Log Rotation & Cleanup
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/log-clean.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=6
+
+[Install]
+WantedBy=multi-user.target

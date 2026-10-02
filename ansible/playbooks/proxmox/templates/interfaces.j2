@@ -1,0 +1,19 @@
+# Managed by Ansible — do not edit manually
+# Generated for Proxmox VE on {{ inventory_hostname }}
+
+auto lo
+iface lo inet loopback
+
+# Physical NIC — enslaved to bridge, no IP
+auto {{ pve_bridge_iface }}
+iface {{ pve_bridge_iface }} inet manual
+
+# Proxmox bridge vmbr0
+auto {{ pve_bridge_name }}
+iface {{ pve_bridge_name }} inet static
+    address {{ pve_bridge_ip }}/{{ pve_bridge_prefix }}
+    gateway {{ pve_bridge_gateway }}
+    bridge-ports {{ pve_bridge_iface }}
+    bridge-stp off
+    bridge-fd 0
+    dns-nameservers {{ pve_bridge_dns }}

@@ -1,0 +1,486 @@
+---
+# ============================================================
+# PROJECT : Proxmox VE Homelab Automation
+# AUTHOR  : Michael Tatum (HarborSonar)
+# REPO    : michaeltatum.xyz
+# UPDATED : 2025-03-14
+# ============================================================
+#
+# FILE    : prep_proxmox.yml
+# STEP    : 3 of 5
+# PURPOSE : Configure an existing Proxmox VE server for homelab use
+#           Works against fresh installs or pre-existing PVE servers.
+#           Handles root or sudo SSH automatically.
+#
+# RUN     : ansible-playbook -i inventory.ini prep_proxmox.yml \
+#             -e pve_admin_password="YourPassword" \
+#             -e pve_allowed_mgmt_cidr="192.168.1.0/24"
+#
+# WHAT IT DOES:
+#   1. System baseline   — full upgrade, baseline packages, NTP
+#   2. Subscription nag  — patches proxmoxlib.js to remove popup
+#   3. Users/permissions — homelab admin + ansible@pam with scoped roles
+#   4. Storage pools     — local content types, optional NFS
+#   5. Firewall          — pve-firewall, LAN-only management access
+#   6. Fail2ban          — SSH + PVE web UI brute-force protection
+#   7. Unattended upgrades — security + PVE patches, no auto-reboot
+#
+# REQUIREMENTS:
+#   - Proxmox VE already installed and reachable via SSH
+#   - community.general and community.proxmox collections installed
+#     ansible-galaxy collection install community.general community.proxmox
+#
+# KEY VARS TO OVERRIDE:
+#   pve_admin_password      — homelab user password (required)
+#   pve_allowed_mgmt_cidr   — your LAN CIDR (default: 192.168.1.0/24)
+#   pve_nfs_enabled         — set true + fill NFS vars to add NAS storage
+#   unattended_upgrades_email — optional patch notification email
+#
+# PREV    : configure_proxmox.yml
+# NEXT    : templates_cloudinit.yml + templates_turnkey.yml
+# ============================================================
+
+- name: Prep and configure existing Proxmox VE server
+  hosts: proxmox_targets
+  become: true
+  gather_facts: true
+
+  vars:
+    # --- Connection ---
+    # Set to true if connecting as a non-root sudo user, false if connecting as root directly
+    use_sudo: "{{ (ansible_user is defined and ansible_user != 'root') | bool }}"
+
+    # --- Users ---
+    pve_admin_user: homelab
+    pve_admin_email: "{{ pve_admin_user }}@pve.local"
+    pve_admin_password: "ChangeMeNow123!"   # Override via -e or vault
+
+    pve_api_user: ansible@pam
+    pve_api_token_name: ansible-token
+
+    # --- Storage ---
+    pve_storage_local_content:
+      - images
+      - rootdir
+      - iso
+      - snippets
+      - vztmpl
+      - backup
+
+    # NFS storage — set pve_nfs_enabled: true and fill in your NFS details to enable
+    pve_nfs_enabled: false
+    pve_nfs_server: "192.168.1.50"
+    pve_nfs_export: "/mnt/nas/proxmox"
+    pve_nfs_storage_id: nas-storage
+
+    # --- Firewall ---
+    pve_firewall_enabled: true
+    pve_allowed_mgmt_cidr: "192.168.1.0/24"  # Adjust to your LAN
+
+    # --- Fail2ban ---
+    fail2ban_bantime: 3600
+    fail2ban_findtime: 600
+    fail2ban_maxretry: 5
+
+    # --- Patching ---
+    unattended_upgrades_email: ""   # Set to receive patch emails, or leave blank
+
+  pre_tasks:
+    - name: Verify target is Debian-based
+      ansible.builtin.fail:
+        msg: "This playbook only supports Debian-based systems. Detected: {{ ansible_distribution }}"
+      when: ansible_os_family != "Debian"
+
+    - name: Verify Proxmox VE is installed
+      ansible.builtin.command: pveversion
+      register: pve_version
+      changed_when: false
+      failed_when: pve_version.rc != 0
+
+    - name: Show Proxmox version
+      ansible.builtin.debug:
+        msg: "Targeting {{ pve_version.stdout }}"
+
+    - name: Detect privilege escalation method
+      ansible.builtin.debug:
+        msg: "Running as: {{ 'sudo user' if use_sudo else 'root' }}"
+
+  tasks:
+
+    # =========================================================================
+    # 1. SYSTEM BASELINE
+    # =========================================================================
+    - name: Ensure no-subscription repo is present
+      ansible.builtin.apt_repository:
+        repo: "deb http://download.proxmox.com/debian/pve {{ ansible_distribution_release }} pve-no-subscription"
+        state: present
+        filename: pve-no-subscription
+
+    - name: Remove enterprise repo
+      ansible.builtin.file:
+        path: /etc/apt/sources.list.d/pve-enterprise.list
+        state: absent
+
+    - name: Remove Ceph enterprise repo
+      ansible.builtin.file:
+        path: /etc/apt/sources.list.d/ceph.list
+        state: absent
+
+    - name: Full apt upgrade
+      ansible.builtin.apt:
+        upgrade: dist
+        update_cache: true
+      environment:
+        DEBIAN_FRONTEND: noninteractive
+
+    - name: Install baseline packages
+      ansible.builtin.apt:
+        name:
+          - curl
+          - wget
+          - vim
+          - htop
+          - iotop
+          - net-tools
+          - dnsutils
+          - chrony
+          - libguestfs-tools
+          - unattended-upgrades
+          - apt-listchanges
+          - fail2ban
+          - qemu-guest-agent
+          - nfs-common
+        state: present
+      environment:
+        DEBIAN_FRONTEND: noninteractive
+
+    - name: Enable and start chrony (NTP)
+      ansible.builtin.service:
+        name: chrony
+        state: started
+        enabled: true
+
+    # =========================================================================
+    # 2. DISABLE SUBSCRIPTION NAG
+    # =========================================================================
+    - name: Detect proxmox-widget-toolkit path
+      ansible.builtin.find:
+        paths: /usr/share/javascript/proxmox-widget-toolkit
+        patterns: "proxmoxlib.js"
+      register: proxmoxlib_find
+
+    - name: Patch subscription nag out of proxmoxlib.js
+      ansible.builtin.replace:
+        path: "{{ proxmoxlib_find.files[0].path }}"
+        regexp: "Ext\\.Msg\\.show\\(\\{[^}]*title: gettext\\('No valid subscription'\\)[\\s\\S]*?\\}\\);"
+        replace: "void(0);"
+        backup: true
+      when: proxmoxlib_find.matched > 0
+      notify: Restart pveproxy
+
+    # =========================================================================
+    # 3. USERS AND PERMISSIONS
+    # =========================================================================
+    - name: Create homelab admin PAM user on the system
+      ansible.builtin.user:
+        name: "{{ pve_admin_user }}"
+        shell: /bin/bash
+        create_home: true
+        state: present
+
+    - name: Set homelab admin password (system)
+      ansible.builtin.user:
+        name: "{{ pve_admin_user }}"
+        password: "{{ pve_admin_password | password_hash('sha512') }}"
+
+    # pveum privilege list cannot be split without altering the command
+    # yamllint disable rule:line-length
+    - name: Create Proxmox admin role
+      ansible.builtin.command: >
+        pveum role add HomelabAdmin
+        --privs "Datastore.Allocate,Datastore.AllocateSpace,Datastore.AllocateTemplate,Datastore.Audit,Pool.Allocate,Pool.Audit,Sys.Audit,Sys.Console,Sys.Modify,Sys.PowerMgmt,Sys.Syslog,VM.Allocate,VM.Audit,VM.Backup,VM.Clone,VM.Config.CDROM,VM.Config.CPU,VM.Config.Cloudinit,VM.Config.Disk,VM.Config.HWType,VM.Config.Memory,VM.Config.Network,VM.Config.Options,VM.Console,VM.Migrate,VM.Monitor,VM.PowerMgmt,VM.Snapshot,VM.Snapshot.Rollback,SDN.Use"
+      failed_when: false   # role may already exist
+      changed_when: false
+    # yamllint enable rule:line-length
+
+    - name: Add homelab admin to Proxmox
+      ansible.builtin.command: >
+        pveum user add {{ pve_admin_user }}@pam
+        --email {{ pve_admin_email }}
+        --comment "Homelab admin"
+      failed_when: false
+      changed_when: false
+
+    - name: Assign HomelabAdmin role to homelab user
+      ansible.builtin.command: >
+        pveum acl modify / --user {{ pve_admin_user }}@pam --role HomelabAdmin
+      changed_when: false
+
+    - name: Create Ansible automation user
+      ansible.builtin.user:
+        name: ansible
+        shell: /bin/bash
+        create_home: true
+        state: present
+
+    # pveum privilege list cannot be split without altering the command
+    # yamllint disable rule:line-length
+    - name: Create Proxmox role for Ansible
+      ansible.builtin.command: >
+        pveum role add AnsibleRole
+        --privs "Datastore.AllocateSpace,Datastore.Audit,Pool.Allocate,Sys.Audit,Sys.Console,Sys.Modify,VM.Allocate,VM.Audit,VM.Clone,VM.Config.CDROM,VM.Config.CPU,VM.Config.Cloudinit,VM.Config.Disk,VM.Config.HWType,VM.Config.Memory,VM.Config.Network,VM.Config.Options,VM.Migrate,VM.Monitor,VM.PowerMgmt,SDN.Use"
+      failed_when: false
+      changed_when: false
+    # yamllint enable rule:line-length
+
+    - name: Add ansible user to Proxmox
+      ansible.builtin.command: >
+        pveum user add {{ pve_api_user }}
+        --comment "Ansible automation user"
+      failed_when: false
+      changed_when: false
+
+    - name: Assign AnsibleRole to ansible user
+      ansible.builtin.command: >
+        pveum acl modify / --user {{ pve_api_user }} --role AnsibleRole
+      changed_when: false
+
+    - name: Create Ansible API token
+      ansible.builtin.command: >
+        pveum user token add {{ pve_api_user }} {{ pve_api_token_name }}
+        --privsep 0 --output-format json
+      register: pve_token_output
+      failed_when: false   # token may already exist from install playbook
+      changed_when: pve_token_output.rc == 0
+
+    - name: Show API token (save this — shown once)
+      ansible.builtin.debug:
+        msg: "{{ pve_token_output.stdout | from_json }}"
+      when:
+        - pve_token_output.rc == 0
+        - pve_token_output.stdout is defined
+        - pve_token_output.stdout | length > 0
+
+    # =========================================================================
+    # 4. STORAGE POOLS
+    # =========================================================================
+    - name: Ensure local storage serves all content types
+      ansible.builtin.command: >
+        pvesm set local --content {{ pve_storage_local_content | join(',') }}
+      changed_when: false
+
+    - name: Create /var/lib/vz subdirs for local storage
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: www-data
+        mode: '0755'
+      loop:
+        - /var/lib/vz/template/iso
+        - /var/lib/vz/template/cache
+        - /var/lib/vz/dump
+        - /var/lib/vz/snippets
+
+    - name: Configure NFS storage (if enabled)
+      when: pve_nfs_enabled
+      block:
+        - name: Add NFS storage to Proxmox
+          ansible.builtin.command: >
+            pvesm add nfs {{ pve_nfs_storage_id }}
+            --server {{ pve_nfs_server }}
+            --export {{ pve_nfs_export }}
+            --content images,backup,iso,snippets,vztmpl
+            --options hard,intr
+          failed_when: false
+          changed_when: false
+
+        - name: Verify NFS storage is active
+          ansible.builtin.command: pvesm status
+          register: pvesm_status
+          changed_when: false
+
+        - name: Confirm NFS appears in storage list
+          ansible.builtin.debug:
+            msg: "{{ pvesm_status.stdout_lines | select('search', pve_nfs_storage_id) | list }}"
+
+    # =========================================================================
+    # 5. FIREWALL (pve-firewall)
+    # =========================================================================
+    - name: Enable Proxmox datacenter firewall
+      ansible.builtin.copy:
+        dest: /etc/pve/firewall/cluster.fw
+        content: |
+          [OPTIONS]
+          enable: 1
+          policy_in: DROP
+          policy_out: ACCEPT
+          log_level_in: warning
+
+          [RULES]
+          # Allow management LAN full access to PVE
+          IN ACCEPT --source {{ pve_allowed_mgmt_cidr }} --log warning
+          # Allow established/related
+          IN ACCEPT -m state --state ESTABLISHED,RELATED
+        mode: '0640'
+        owner: root
+        group: www-data
+      when: pve_firewall_enabled
+
+    - name: Enable host-level firewall for this node
+      ansible.builtin.copy:
+        dest: /etc/pve/nodes/{{ ansible_hostname }}/host.fw
+        content: |
+          [OPTIONS]
+          enable: 1
+
+          [RULES]
+          # Web UI
+          IN ACCEPT --dport 8006 --proto tcp --source {{ pve_allowed_mgmt_cidr }}
+          # SSH
+          IN ACCEPT --dport 22 --proto tcp --source {{ pve_allowed_mgmt_cidr }}
+          # SPICE console
+          IN ACCEPT --dport 3128 --proto tcp --source {{ pve_allowed_mgmt_cidr }}
+          # VNC console range
+          IN ACCEPT --dport 5900:5999 --proto tcp --source {{ pve_allowed_mgmt_cidr }}
+          # Live migration
+          IN ACCEPT --dport 60000:60050 --proto tcp --source {{ pve_allowed_mgmt_cidr }}
+        mode: '0640'
+        owner: root
+        group: www-data
+      when: pve_firewall_enabled
+
+    - name: Enable and start pve-firewall service
+      ansible.builtin.service:
+        name: pve-firewall
+        state: started
+        enabled: true
+      when: pve_firewall_enabled
+
+    # =========================================================================
+    # 7. FAIL2BAN
+    # =========================================================================
+    - name: Deploy fail2ban jail for SSH and Proxmox UI
+      ansible.builtin.copy:
+        dest: /etc/fail2ban/jail.d/proxmox.conf
+        content: |
+          [DEFAULT]
+          bantime  = {{ fail2ban_bantime }}
+          findtime = {{ fail2ban_findtime }}
+          maxretry = {{ fail2ban_maxretry }}
+          backend  = systemd
+
+          [sshd]
+          enabled  = true
+          port     = ssh
+          filter   = sshd
+          logpath  = /var/log/auth.log
+
+          [proxmox-web]
+          enabled  = true
+          port     = 8006
+          filter   = proxmox
+          logpath  = /var/log/daemon.log
+          maxretry = {{ fail2ban_maxretry }}
+        mode: '0644'
+      notify: Restart fail2ban
+
+    - name: Deploy Proxmox fail2ban filter
+      ansible.builtin.copy:
+        dest: /etc/fail2ban/filter.d/proxmox.conf
+        content: |
+          [Definition]
+          failregex = pvedaemon\[.*\]: authentication failure; rhost=<HOST> user=.* msg=.*
+          ignoreregex =
+        mode: '0644'
+      notify: Restart fail2ban
+
+    - name: Enable and start fail2ban
+      ansible.builtin.service:
+        name: fail2ban
+        state: started
+        enabled: true
+
+    # =========================================================================
+    # 8. UNATTENDED UPGRADES / AUTO-PATCHING
+    # =========================================================================
+    - name: Configure unattended-upgrades for Proxmox
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/50unattended-upgrades
+        content: |
+          Unattended-Upgrade::Origins-Pattern {
+              "origin=Debian,codename=${distro_codename}-security,label=Debian-Security";
+              "origin=Proxmox,codename=${distro_codename},label=Proxmox Debian Repository";
+          };
+          Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+          Unattended-Upgrade::MinimalSteps "true";
+          Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+          Unattended-Upgrade::Remove-Unused-Dependencies "true";
+          Unattended-Upgrade::Automatic-Reboot "false";
+          Unattended-Upgrade::Automatic-Reboot-WithUsers "false";
+          {% if unattended_upgrades_email | length > 0 %}
+          Unattended-Upgrade::Mail "{{ unattended_upgrades_email }}";
+          Unattended-Upgrade::MailReport "on-change";
+          {% endif %}
+        mode: '0644'
+
+    - name: Configure auto-upgrade schedule
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        content: |
+          APT::Periodic::Update-Package-Lists "1";
+          APT::Periodic::Download-Upgradeable-Packages "1";
+          APT::Periodic::AutocleanInterval "7";
+          APT::Periodic::Unattended-Upgrade "1";
+        mode: '0644'
+
+    - name: Enable and start unattended-upgrades service
+      ansible.builtin.service:
+        name: unattended-upgrades
+        state: started
+        enabled: true
+
+    # =========================================================================
+    # 8. SUMMARY
+    # =========================================================================
+    - name: Final validation — PVE services running
+      ansible.builtin.service:
+        name: "{{ item }}"
+        state: started
+        enabled: true
+      loop:
+        - pvedaemon
+        - pveproxy
+        - pvestatd
+        - pve-cluster
+        - pve-firewall
+
+    - name: Print configuration summary
+      ansible.builtin.debug:
+        msg:
+          - "============================================"
+          - "  Proxmox VE Homelab Config Complete"
+          - "============================================"
+          - "Version     : {{ pve_version.stdout }}"
+          - "Web UI      : https://{{ ansible_default_ipv4.address }}:8006"
+          - "Admin user  : {{ pve_admin_user }}@pam"
+          - "API user    : {{ pve_api_user }} / token: {{ pve_api_token_name }}"
+          - "Templates   : run templates_cloudinit.yml + templates_turnkey.yml"
+          - "Storage     : local ({{ pve_storage_local_content | join(', ') }})"
+          - "NFS storage : {{ 'enabled → ' + pve_nfs_storage_id if pve_nfs_enabled else 'disabled' }}"
+          - "Firewall    : {{ 'enabled (LAN: ' + pve_allowed_mgmt_cidr + ')' if pve_firewall_enabled else 'disabled' }}"
+          - "Fail2ban    : enabled ({{ fail2ban_maxretry }} retries / {{ fail2ban_bantime }}s ban)"
+          - "Auto-patch  : enabled (security + PVE, no auto-reboot)"
+          - "Sub nag     : patched"
+          - "============================================"
+
+  handlers:
+    - name: Restart pveproxy
+      ansible.builtin.service:
+        name: pveproxy
+        state: restarted
+
+    - name: Restart fail2ban
+      ansible.builtin.service:
+        name: fail2ban
+        state: restarted

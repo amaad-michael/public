@@ -1,0 +1,380 @@
+---
+version: '3.9'
+
+networks:
+  standby-net:
+    driver: bridge
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  alertmanager_data:
+  traefik_data:
+  step_ca_data:
+  headscale_data:
+  vaultwarden_data:
+  uptime_kuma_data:
+
+services:
+  # Prometheus - metrics collection
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    container_name: standby-prometheus
+    networks:
+      - standby-net
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus_data:/prometheus
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-admin-api=false'
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Grafana - dashboards & visualization
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: standby-grafana
+    networks:
+      - standby-net
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-changeme}
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+      - GF_SECURITY_DISABLE_BRUTE_FORCE_LOGIN_PROTECTION=false
+      - GF_SECURITY_COOKIE_SAMESITE=Strict
+      - GF_SECURITY_COOKIE_SECURE=true
+      - GF_SECURITY_COOKIE_HTTPONLY=true
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      - prometheus
+
+  # Alertmanager - alert routing & aggregation
+  alertmanager:
+    image: prom/alertmanager:v0.26.0
+    container_name: standby-alertmanager
+    networks:
+      - standby-net
+    ports:
+      - "9093:9093"
+    volumes:
+      - alertmanager_data:/alertmanager
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9093/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Traefik - reverse proxy & ingress
+  traefik:
+    image: traefik:v2.10.4
+    container_name: standby-traefik
+    networks:
+      - standby-net
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    environment:
+      - TRAEFIK_API_INSECURE=false
+      - TRAEFIK_API_DASHBOARD=true
+      - TRAEFIK_ENTRYPOINTS_WEB_ADDRESS=:80
+      - TRAEFIK_ENTRYPOINTS_WEBSECURE_ADDRESS=:443
+      - TRAEFIK_PROVIDERS_DOCKER=true
+      - TRAEFIK_PROVIDERS_DOCKER_EXPOSEDBYDEFAULT=false
+      - TRAEFIK_ENTRYPOINTS_WEBSECURE_TLS=true
+      - TRAEFIK_ACCESSLOG=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_data:/letsencrypt
+      - ./traefik.yml:/traefik.yml:ro
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Ntfy - push notifications
+  ntfy:
+    image: binwiederhier/ntfy:v2.4.0
+    container_name: standby-ntfy
+    networks:
+      - standby-net
+    ports:
+      - "8081:80"
+    volumes:
+      - ./ntfy.conf:/etc/ntfy/server.conf:ro
+    environment:
+      - NTFY_BASE_URL=http://standby-ntfy:80
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETUID
+      - SETGID
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # step-ca - certificate authority
+  step-ca:
+    image: smallstep/step-ca:0.24.4
+    container_name: standby-step-ca
+    networks:
+      - standby-net
+    ports:
+      - "9000:9000"
+    environment:
+      - STEPCA_INIT_NAME=Nobara-Standby
+      - STEPCA_INIT_DNS_NAMES=localhost,127.0.0.1
+      - STEPCA_INIT_ADMIN_SUBJECT=admin@nobara-standby
+      - STEPCA_INIT_PROVISIONER_NAME=admin
+    volumes:
+      - step_ca_data:/home/step
+    entrypoint: /bin/bash
+    command: -c 'step-ca-init --helm && /usr/bin/step-ca /home/step/config/ca.json'
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-k", "https://localhost:9000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Headscale - VPN orchestration
+  headscale:
+    image: headscale/headscale:0.22.3
+    container_name: standby-headscale
+    networks:
+      - standby-net
+    ports:
+      - "8082:8080"
+      - "3478:3478/udp"
+    volumes:
+      - headscale_data:/var/lib/headscale
+      - ./headscale.conf:/etc/headscale/config.yaml:ro
+      - ./policy.hujson:/etc/headscale/policy.hujson:ro
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - NET_RAW
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Vaultwarden - password manager
+  vaultwarden:
+    image: vaultwarden/server:1.0.0
+    container_name: standby-vaultwarden
+    networks:
+      - standby-net
+    ports:
+      - "8000:80"
+    environment:
+      - DOMAIN=https://vaultwarden.localhost:8000
+      - LOG_LEVEL=info
+      - EXTENDED_LOGGING=true
+      - LOG_FILE=/data/vaultwarden.log
+      - SHOW_PASSWORD_HINT=false
+      - INVITATION_ORG_NAME=Standby
+      - ORG_CREATION_USERS=
+      - INVITATIONS_ALLOWED=false
+      - SIGNUPS_ALLOWED=false
+      - IP_HEADER=X-Real-IP
+      - IP_HEADER_TRUSTED_PROXY_COUNT=1
+    volumes:
+      - vaultwarden_data:/data
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETUID
+      - SETGID
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/alive"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Uptime Kuma - status monitoring
+  uptime-kuma:
+    image: louislam/uptime-kuma:1.23.11
+    container_name: standby-uptime-kuma
+    networks:
+      - standby-net
+    ports:
+      - "3001:3001"
+    volumes:
+      - uptime_kuma_data:/app/data
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
