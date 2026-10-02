@@ -1,0 +1,122 @@
+---
+# llm-lb-setup.yml
+# Configures the 0.5GB NanoPi board as an nginx reverse proxy / LB
+# in front of the LLM inference nodes.
+# Target group: llm_lb (single host, defined in your inventory)
+# Run: ansible-playbook llm-lb-setup.yml -i inventory.ini -K
+
+- name: Configure NanoPi nginx LLM load balancer
+  hosts: llm_lb
+  become: yes
+  vars:
+    server_port: 8080
+    lb_port: 80
+
+    # Define your inference nodes here or override in inventory group_vars
+    llm_nodes:
+      - host: "192.168.1.101"   # llm-01 — 4GB board (7B model)
+        port: "{{ server_port }}"
+        label: "4gb-heavy"
+      - host: "192.168.1.102"   # llm-02 — 2GB board (1.5B model)
+        port: "{{ server_port }}"
+        label: "2gb-light"
+
+  tasks:
+
+    # ── System ────────────────────────────────────────────────────────────────
+
+    - name: Set hostname from inventory
+      hostname:
+        name: "{{ inventory_hostname }}"
+
+    - name: Update apt cache and upgrade packages
+      apt:
+        update_cache: yes
+        upgrade: dist
+        cache_valid_time: 3600
+
+    - name: Install nginx and supporting packages
+      apt:
+        name:
+          - nginx
+          - curl
+          - prometheus-node-exporter
+        state: present
+
+    - name: Disable unnecessary services
+      systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: no
+      loop:
+        - bluetooth
+        - avahi-daemon
+      ignore_errors: yes
+
+    # ── nginx config ──────────────────────────────────────────────────────────
+
+    - name: Remove default nginx site
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: Reload nginx
+
+    - name: Deploy llm upstream config
+      template:
+        src: llm-lb.conf.j2
+        dest: /etc/nginx/sites-available/llm-lb.conf
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Reload nginx
+
+    - name: Enable llm-lb site
+      file:
+        src: /etc/nginx/sites-available/llm-lb.conf
+        dest: /etc/nginx/sites-enabled/llm-lb.conf
+        state: link
+      notify: Reload nginx
+
+    - name: Validate nginx config
+      command: nginx -t
+      changed_when: false
+
+    - name: Enable and start nginx
+      systemd:
+        name: nginx
+        enabled: yes
+        state: started
+
+    # ── Firewall ──────────────────────────────────────────────────────────────
+
+    - name: Install ufw
+      apt:
+        name: ufw
+        state: present
+
+    - name: Allow SSH
+      ufw:
+        rule: allow
+        name: OpenSSH
+
+    - name: Allow LB port on LAN only
+      ufw:
+        rule: allow
+        port: "{{ lb_port }}"
+        proto: tcp
+        src: "{{ ansible_default_ipv4.network }}/24"
+
+    - name: Enable ufw
+      ufw:
+        state: enabled
+        policy: deny
+
+  handlers:
+    - name: Reload nginx
+      systemd:
+        name: nginx
+        state: reloaded
+
+# ── Jinja2 template (inline note) ────────────────────────────────────────────
+# Create templates/llm-lb.conf.j2 alongside this playbook.
+# See llm-lb.conf.j2 in the templates/ directory.

@@ -1,0 +1,151 @@
+---
+# ============================================================
+# PROJECT : Proxmox VE Homelab Automation
+# AUTHOR  : Michael Tatum (HarborSonar)
+# REPO    : michaeltatum.xyz
+# UPDATED : 2025-03-14
+# ============================================================
+#
+# FILE    : configure_proxmox.yml
+# STEP    : 2 of 5
+# PURPOSE : Post-install validation after host reboots into PVE kernel
+#
+# RUN     : ansible-playbook -i inventory.ini configure_proxmox.yml --ask-become-pass
+#
+# WHAT IT DOES:
+#   - Verifies PVE version and services are running
+#   - Confirms vmbr0 bridge is up
+#   - Validates SSH hardening (PermitRootLogin off)
+#   - Confirms ansible@pam API token exists
+#   - Prints access summary with Web UI URL
+#
+# REQUIREMENTS:
+#   - install_proxmox.yml must have completed
+#   - Host must have rebooted into PVE kernel
+#
+# PREV    : install_proxmox.yml
+# NEXT    : prep_proxmox.yml
+# ============================================================
+
+- name: Configure and validate Proxmox VE post-install
+  hosts: proxmox_targets
+  become: true
+  gather_facts: true
+
+  vars:
+    pve_api_user: ansible@pam
+    pve_api_token_name: ansible-token
+
+  pre_tasks:
+    - name: Verify target is Debian-based
+      ansible.builtin.fail:
+        msg: "This playbook only supports Debian-based systems. Detected: {{ ansible_distribution }}"
+      when: ansible_os_family != "Debian"
+
+    - name: Verify Proxmox VE is installed
+      ansible.builtin.command: pveversion
+      register: pve_version
+      changed_when: false
+      failed_when: pve_version.rc != 0
+
+    - name: Show Proxmox version
+      ansible.builtin.debug:
+        msg: "Running {{ pve_version.stdout }}"
+
+  tasks:
+
+    # -------------------------------------------------------------------------
+    # 1. Confirm no-subscription repo, enterprise repo absent
+    # -------------------------------------------------------------------------
+    - name: Confirm enterprise repo is removed
+      ansible.builtin.file:
+        path: /etc/apt/sources.list.d/pve-enterprise.list
+        state: absent
+
+    - name: Confirm Ceph enterprise repo is removed
+      ansible.builtin.file:
+        path: /etc/apt/sources.list.d/ceph.list
+        state: absent
+
+    - name: Confirm no-subscription repo is present
+      ansible.builtin.apt_repository:
+        repo: "deb http://download.proxmox.com/debian/pve {{ ansible_distribution_release }} pve-no-subscription"
+        state: present
+        filename: pve-no-subscription
+
+    - name: Run full apt upgrade
+      ansible.builtin.apt:
+        upgrade: dist
+        update_cache: true
+      environment:
+        DEBIAN_FRONTEND: noninteractive
+
+    # -------------------------------------------------------------------------
+    # 2. Validate network bridge
+    # -------------------------------------------------------------------------
+    - name: Check vmbr0 is up
+      ansible.builtin.command: ip link show vmbr0
+      register: vmbr0_status
+      changed_when: false
+      failed_when: vmbr0_status.rc != 0
+
+    - name: Confirm vmbr0 state
+      ansible.builtin.debug:
+        msg: "vmbr0 is UP — {{ vmbr0_status.stdout_lines[0] }}"
+
+    # -------------------------------------------------------------------------
+    # 3. Validate services
+    # -------------------------------------------------------------------------
+    - name: Ensure Proxmox services are running and enabled
+      ansible.builtin.service:
+        name: "{{ item }}"
+        state: started
+        enabled: true
+      loop:
+        - pvedaemon
+        - pveproxy
+        - pvestatd
+        - pve-cluster
+
+    # -------------------------------------------------------------------------
+    # 4. Validate SSH hardening
+    # -------------------------------------------------------------------------
+    - name: Verify PermitRootLogin is disabled
+      ansible.builtin.command: sshd -T -C user=root
+      register: sshd_config_check
+      changed_when: false
+
+    - name: Assert root login is disabled
+      ansible.builtin.assert:
+        that: "'permitrootlogin no' in sshd_config_check.stdout"
+        fail_msg: "SSH PermitRootLogin is NOT set to no — check /etc/ssh/sshd_config"
+        success_msg: "SSH PermitRootLogin is correctly disabled"
+
+    # -------------------------------------------------------------------------
+    # 5. Validate API token exists
+    # -------------------------------------------------------------------------
+    - name: List tokens for ansible user
+      ansible.builtin.command: pveum user token list {{ pve_api_user }} --output-format json
+      register: pve_token_list
+      changed_when: false
+      failed_when: pve_token_list.rc != 0
+
+    - name: Confirm ansible token is present
+      ansible.builtin.assert:
+        that: "pve_api_token_name in pve_token_list.stdout"
+        fail_msg: "API token '{{ pve_api_token_name }}' not found for {{ pve_api_user }}"
+        success_msg: "API token '{{ pve_api_token_name }}' confirmed for {{ pve_api_user }}"
+
+    # -------------------------------------------------------------------------
+    # 6. Print access summary
+    # -------------------------------------------------------------------------
+    - name: Print Proxmox access summary
+      ansible.builtin.debug:
+        msg:
+          - "===== Proxmox VE Ready ====="
+          - "Web UI  : https://{{ ansible_default_ipv4.address }}:8006"
+          - "Version : {{ pve_version.stdout }}"
+          - "API user: {{ pve_api_user }}"
+          - "Token   : {{ pve_api_token_name }}"
+          - "Bridge  : vmbr0 on {{ ansible_default_ipv4.interface }}"
+          - "============================"

@@ -1,0 +1,96 @@
+---
+api:
+  insecure: false
+  dashboard: true
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entrypoint:
+          scheme: https
+          permanent: false
+
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        certResolver: letsencrypt
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: admin@nobara-standby
+      storage: /letsencrypt/acme.json
+      httpChallenge:
+        entryPoint: web
+
+providers:
+  docker:
+    exposedByDefault: false
+    network: standby-net
+
+  file:
+    filename: /traefik.yml
+    watch: true
+
+http:
+  middlewares:
+    SecurityHeaders:
+      headers:
+        customRequestHeaders:
+          X-Frame-Options: "DENY"
+          X-Content-Type-Options: "nosniff"
+          X-XSS-Protection: "1; mode=block"
+          Referrer-Policy: "strict-origin-when-cross-origin"
+          Permissions-Policy: "geolocation=(), microphone=(), camera=(), payment=()"
+          Strict-Transport-Security: "max-age=63072000; includeSubDomains"
+          Content-Security-Policy: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+
+    RateLimitAuth:
+      rateLimit:
+        average: 100
+        burst: 200
+        period: 1m
+
+    BasicAuth:
+      basicAuth:
+        users:
+          - "admin:${TRAEFIK_AUTH_HASH:-$apr1$changeme}"
+
+  routers:
+    api-router:
+      rule: "Host(`traefik.localhost`) && PathPrefix(`/api`)"
+      service: api@internal
+      entryPoints:
+        - websecure
+      middlewares:
+        - SecurityHeaders
+        - BasicAuth
+      tls:
+        certResolver: letsencrypt
+
+    dashboard-router:
+      rule: "Host(`traefik.localhost`) && PathPrefix(`/dashboard`)"
+      service: dashboard@internal
+      entryPoints:
+        - websecure
+      middlewares:
+        - SecurityHeaders
+        - BasicAuth
+      tls:
+        certResolver: letsencrypt
+
+log:
+  level: INFO
+  filePath: /var/log/traefik/traefik.log
+
+accessLog:
+  filePath: /var/log/traefik/access.log
+  format: json
+
+metrics:
+  prometheus:
+    addEntryPointsLabels: true
+    addServicesLabels: true

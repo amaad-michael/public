@@ -1,0 +1,58 @@
+---
+groups:
+  - name: standby_stack
+    interval: 30s
+    rules:
+      - alert: PrometheusDown
+        expr: up{job="prometheus"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus is down"
+          description: "Prometheus instance standby-prometheus:9090 is unreachable"
+
+      - alert: GrafanaDown
+        expr: up{job="grafana"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Grafana is down"
+          description: "Grafana instance standby-grafana:3000 is unreachable"
+
+      - alert: AlertmanagerDown
+        expr: up{job="alertmanager"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Alertmanager is down"
+          description: "Alertmanager instance standby-alertmanager:9093 is unreachable"
+
+      - alert: TraefikDown
+        expr: up{job="traefik"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Traefik is down"
+          description: "Traefik instance standby-traefik:8080 is unreachable"
+
+      - alert: HeadscaleDown
+        expr: up{job="headscale"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Headscale is down"
+          description: "Headscale instance standby-headscale:8080 is unreachable"
+
+      - alert: UptimeKumaDown
+        expr: up{job="uptime-kuma"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Uptime Kuma is down"
+          description: "Uptime Kuma instance standby-uptime-kuma:3001 is unreachable"

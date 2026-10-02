@@ -1,0 +1,12 @@
+
+[Unit]
+Description=Timer for Weekly Temp & Junk File Cleanup
+
+[Timer]
+OnCalendar=Mon *-*-* 02:30:00
+Persistent=true
+RandomizedDelaySec=15m
+AccuracySec=1m
+
+[Install]
+WantedBy=timers.target

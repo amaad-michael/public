@@ -1,0 +1,3 @@
+# mdl (Ruby markdownlint) configuration.
+# Prose line length (MD013) is an editor concern, not a CI gate.
+rules "~MD013"

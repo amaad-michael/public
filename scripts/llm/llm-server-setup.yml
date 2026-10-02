@@ -1,0 +1,181 @@
+---
+# llm-server-setup.yml
+# Configures a bare Debian/Ubuntu ARM64 NanoPi board as a llama.cpp inference server.
+# Target groups: llm_2gb, llm_4gb (defined in your inventory)
+# Run: ansible-playbook llm-server-setup.yml -i inventory.ini -K
+
+- name: Configure NanoPi LLM inference server
+  hosts: llm_2gb:llm_4gb
+  become: yes
+  vars:
+    llm_user: "{{ ansible_user }}"
+    llm_home: "/home/{{ ansible_user }}"
+    llama_dir: "{{ llm_home }}/llama.cpp"
+    model_dir: "{{ llm_home }}/models"
+    llama_server_bin: "{{ llama_dir }}/build/bin/llama-server"
+    server_port: 8080
+    ctx_size: 2048
+    n_predict: 512
+    threads: "{{ ansible_processor_nproc }}"
+
+    # Model selection per group
+    model_filename: >-
+      {{
+        'qwen2.5-coder-7b-instruct-q4_k_m.gguf'
+        if inventory_hostname in groups['llm_4gb']
+        else 'qwen2.5-coder-1.5b-instruct-q4_k_m.gguf'
+      }}
+    model_url: >-
+      {{
+        'https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/qwen2.5-coder-7b-instruct-q4_k_m.gguf'
+        if inventory_hostname in groups['llm_4gb']
+        else 'https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf'
+      }}
+
+  tasks:
+
+    # ── System ────────────────────────────────────────────────────────────────
+
+    - name: Set hostname from inventory
+      hostname:
+        name: "{{ inventory_hostname }}"
+
+    - name: Update apt cache and upgrade packages
+      apt:
+        update_cache: yes
+        upgrade: dist
+        cache_valid_time: 3600
+
+    - name: Install build dependencies
+      apt:
+        name:
+          - git
+          - cmake
+          - build-essential
+          - python3-pip
+          - curl
+          - wget
+          - tmux
+          - htop
+          - prometheus-node-exporter
+        state: present
+
+    - name: Disable unnecessary services
+      systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: no
+      loop:
+        - bluetooth
+        - avahi-daemon
+      ignore_errors: yes  # not all boards have these
+
+    # ── llama.cpp ─────────────────────────────────────────────────────────────
+
+    - name: Clone llama.cpp
+      git:
+        repo: https://github.com/ggerganov/llama.cpp
+        dest: "{{ llama_dir }}"
+        depth: 1
+        update: yes
+      become_user: "{{ llm_user }}"
+
+    - name: Build llama.cpp (native ARMv8, this takes a while)
+      shell: |
+        cmake -B build -DLLAMA_NATIVE=ON
+        cmake --build build --config Release -j{{ ansible_processor_nproc }}
+      args:
+        chdir: "{{ llama_dir }}"
+        creates: "{{ llama_server_bin }}"
+      become_user: "{{ llm_user }}"
+
+    # ── Model ─────────────────────────────────────────────────────────────────
+
+    - name: Create models directory
+      file:
+        path: "{{ model_dir }}"
+        state: directory
+        owner: "{{ llm_user }}"
+        mode: '0755'
+
+    - name: Download model (this will take a while on LAN depending on your WAN speed)
+      get_url:
+        url: "{{ model_url }}"
+        dest: "{{ model_dir }}/{{ model_filename }}"
+        mode: '0644'
+        owner: "{{ llm_user }}"
+        timeout: 3600
+      become_user: "{{ llm_user }}"
+
+    # ── systemd service ───────────────────────────────────────────────────────
+
+    - name: Deploy llama-server systemd unit
+      template:
+        src: llama-server.service.j2
+        dest: /etc/systemd/system/llama-server.service
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Reload and restart llama-server
+
+    - name: Enable and start llama-server
+      systemd:
+        name: llama-server
+        enabled: yes
+        state: started
+        daemon_reload: yes
+
+    # ── Firewall ──────────────────────────────────────────────────────────────
+
+    - name: Install ufw
+      apt:
+        name: ufw
+        state: present
+
+    - name: Allow SSH
+      ufw:
+        rule: allow
+        name: OpenSSH
+
+    - name: Allow llama-server port on LAN only
+      ufw:
+        rule: allow
+        port: "{{ server_port }}"
+        proto: tcp
+        src: "{{ ansible_default_ipv4.network }}/24"
+
+    - name: Enable ufw
+      ufw:
+        state: enabled
+        policy: deny
+
+  handlers:
+    - name: Reload and restart llama-server
+      systemd:
+        name: llama-server
+        state: restarted
+        daemon_reload: yes
+
+# ── Jinja2 template (inline note) ────────────────────────────────────────────
+# Create templates/llama-server.service.j2 alongside this playbook:
+#
+# [Unit]
+# Description=llama.cpp inference server
+# After=network.target
+#
+# [Service]
+# Type=simple
+# User={{ llm_user }}
+# WorkingDirectory={{ llm_home }}
+# ExecStart={{ llama_server_bin }} \
+#   --model {{ model_dir }}/{{ model_filename }} \
+#   --host 0.0.0.0 \
+#   --port {{ server_port }} \
+#   --threads {{ threads }} \
+#   --ctx-size {{ ctx_size }} \
+#   --n-predict {{ n_predict }}
+# Restart=on-failure
+# RestartSec=5
+#
+# [Install]
+# WantedBy=multi-user.target

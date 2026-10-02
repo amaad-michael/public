@@ -1,0 +1,231 @@
+---
+# ============================================================
+# PROJECT : Proxmox VE Homelab Automation
+# AUTHOR  : Michael Tatum (HarborSonar)
+# REPO    : michaeltatum.xyz
+# UPDATED : 2025-03-14
+# ============================================================
+#
+# FILE    : templates_cloudinit.yml
+# STEP    : 4a of 5
+# PURPOSE : Download cloud images and register as Proxmox KVM/QEMU
+#           VM templates for cloning blank Debian/Ubuntu VMs on demand.
+#
+# RUN     : ansible-playbook -i inventory.ini templates_cloudinit.yml
+#           ansible-playbook -i inventory.ini templates_cloudinit.yml \
+#             -e pve_ssh_public_key="ssh-ed25519 AAAA..."
+#
+# WHAT IT CREATES:
+#   VMID 9000 — debian-12-cloudinit   (Debian 12 Bookworm generic cloud image)
+#   VMID 9001 — ubuntu-2404-cloudinit (Ubuntu 24.04 LTS cloud image)
+#
+# RE-RUN SAFE: skips any template VMID that already exists.
+#
+# CLONE A VM FROM TEMPLATE:
+#   qm clone 9000 100 --name my-vm --full true
+#   qm set 100 --ipconfig0 ip=dhcp && qm start 100
+#
+# PREV    : prep_proxmox.yml
+# RELATED : templates_turnkey.yml (LXC appliance templates)
+# ============================================================
+#   qm start 100
+
+- name: Create cloud-init VM templates
+  hosts: proxmox_targets
+  become: true
+  gather_facts: true
+
+  vars:
+    pve_templates:
+      - id: 9000
+        name: debian-12-cloudinit
+        url: https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2
+      - id: 9001
+        name: ubuntu-2404-cloudinit
+        url: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
+
+    pve_template_storage: local-lvm   # where the disk images are imported
+    pve_template_tmpdir: /var/tmp/pve-templates
+    pve_template_cores: 2
+    pve_template_memory: 2048
+    pve_template_disk_size: 10G
+    pve_template_bridge: vmbr0
+
+    # Optional: set your SSH public key to bake into every template
+    # Pass via: -e pve_ssh_public_key="ssh-ed25519 AAAA..."
+    pve_ssh_public_key: ""
+
+  pre_tasks:
+    - name: Verify target is Debian-based
+      ansible.builtin.fail:
+        msg: "Debian-based host required. Detected: {{ ansible_distribution }}"
+      when: ansible_os_family != "Debian"
+
+    - name: Verify Proxmox VE is installed
+      ansible.builtin.command: pveversion
+      register: pve_version
+      changed_when: false
+      failed_when: pve_version.rc != 0
+
+    - name: Show PVE version
+      ansible.builtin.debug:
+        msg: "Targeting {{ pve_version.stdout }}"
+
+  tasks:
+
+    - name: Create temp directory for cloud images
+      ansible.builtin.file:
+        path: "{{ pve_template_tmpdir }}"
+        state: directory
+        mode: '0700'
+
+    # -------------------------------------------------------------------------
+    # Check which templates already exist — skip those
+    # -------------------------------------------------------------------------
+    - name: Check if template VMs already exist
+      ansible.builtin.command: qm status {{ item.id }}
+      register: qm_status_results
+      loop: "{{ pve_templates }}"
+      loop_control:
+        label: "{{ item.name }}"
+      failed_when: false
+      changed_when: false
+
+    - name: Report skipped templates
+      ansible.builtin.debug:
+        msg: "Skipping {{ item.item.name }} (VMID {{ item.item.id }}) — already exists"
+      loop: "{{ qm_status_results.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when: item.rc == 0
+
+    # -------------------------------------------------------------------------
+    # Download images only for templates that don't exist yet
+    # -------------------------------------------------------------------------
+    - name: Download cloud images (new templates only)
+      ansible.builtin.get_url:
+        url: "{{ item.item.url }}"
+        dest: "{{ pve_template_tmpdir }}/{{ item.item.name }}.qcow2"
+        mode: '0600'
+        timeout: 600
+      loop: "{{ qm_status_results.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when: item.rc != 0
+
+    # -------------------------------------------------------------------------
+    # Write SSH public key temp file if provided
+    # -------------------------------------------------------------------------
+    - name: Write SSH public key to temp file
+      ansible.builtin.copy:
+        content: "{{ pve_ssh_public_key }}"
+        dest: /tmp/pve_cloudinit_pubkey.tmp
+        mode: '0600'
+      when: pve_ssh_public_key | length > 0
+
+    # -------------------------------------------------------------------------
+    # Create VM, import disk, configure, convert to template
+    # -------------------------------------------------------------------------
+    - name: Create VM skeleton for new templates
+      ansible.builtin.command: >
+        qm create {{ item.item.id }}
+        --name {{ item.item.name }}
+        --memory {{ pve_template_memory }}
+        --cores {{ pve_template_cores }}
+        --net0 virtio,bridge={{ pve_template_bridge }}
+        --ostype l26
+        --agent enabled=1
+        --serial0 socket
+        --vga serial0
+      loop: "{{ qm_status_results.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when: item.rc != 0
+      changed_when: true
+
+    - name: Import cloud disk into storage
+      ansible.builtin.command: >
+        qm importdisk {{ item.item.id }}
+        {{ pve_template_tmpdir }}/{{ item.item.name }}.qcow2
+        {{ pve_template_storage }}
+      loop: "{{ qm_status_results.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when: item.rc != 0
+      changed_when: true
+
+    - name: Attach disk and set boot order
+      ansible.builtin.command: >
+        qm set {{ item.item.id }}
+        --scsihw virtio-scsi-pci
+        --scsi0 {{ pve_template_storage }}:vm-{{ item.item.id }}-disk-0
+        --ide2 {{ pve_template_storage }}:cloudinit
+        --boot c --bootdisk scsi0
+        --ipconfig0 ip=dhcp
+      loop: "{{ qm_status_results.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when: item.rc != 0
+      changed_when: true
+
+    - name: Inject SSH public key (if provided)
+      ansible.builtin.command: >
+        qm set {{ item.item.id }} --sshkeys /tmp/pve_cloudinit_pubkey.tmp
+      loop: "{{ qm_status_results.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when:
+        - item.rc != 0
+        - pve_ssh_public_key | length > 0
+      changed_when: true
+
+    - name: Resize disk to {{ pve_template_disk_size }}
+      ansible.builtin.command: >
+        qm resize {{ item.item.id }} scsi0 {{ pve_template_disk_size }}
+      loop: "{{ qm_status_results.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when: item.rc != 0
+      changed_when: true
+      failed_when: false
+
+    - name: Convert to template
+      ansible.builtin.command: qm template {{ item.item.id }}
+      loop: "{{ qm_status_results.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when: item.rc != 0
+      changed_when: true
+
+    # -------------------------------------------------------------------------
+    # Cleanup
+    # -------------------------------------------------------------------------
+    - name: Remove downloaded cloud images
+      ansible.builtin.file:
+        path: "{{ pve_template_tmpdir }}/{{ item.item.name }}.qcow2"
+        state: absent
+      loop: "{{ qm_status_results.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when: item.rc != 0
+
+    - name: Remove SSH key temp file
+      ansible.builtin.file:
+        path: /tmp/pve_cloudinit_pubkey.tmp
+        state: absent
+
+    # -------------------------------------------------------------------------
+    # Summary
+    # -------------------------------------------------------------------------
+    - name: Print template summary
+      ansible.builtin.debug:
+        msg:
+          - "===== Cloud-init VM Templates ====="
+          - "{% for r in qm_status_results.results %}"
+          - "VMID {{ r.item.id }} — {{ r.item.name }}: {{ 'already existed, skipped' if r.rc == 0 else 'created' }}"
+          - "{% endfor %}"
+          - ""
+          - "Clone a VM from a template:"
+          - "  qm clone 9000 100 --name my-debian-vm --full true"
+          - "  qm set 100 --ipconfig0 ip=dhcp && qm start 100"
+          - "==================================="
