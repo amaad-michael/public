@@ -107,7 +107,7 @@ reboot_needed_redhat() {
   # Fallback: compare running kernel to newest installed kernel package.
   local running newest
   running="$(uname -r | sed 's/\.[^.]*$//')"   # strip .x86_64 / .aarch64 suffix
-  newest="$(rpm -q --queryformat '%{VERSION}-%{RELEASE}\n' kernel 2>/dev/null | sort -V | tail -n 1 || true)"
+  newest="$(rpm -q --queryformat '%{VERSION}-%{RELEASE}\n' kernel 2>/dev/null | grep -v 'is not installed' | sort -V | tail -n 1 || true)"
   if [[ -n "$newest" && "$running" != "$newest" ]]; then
     log "reboot required: running kernel $running differs from newest installed $newest"
     return 0

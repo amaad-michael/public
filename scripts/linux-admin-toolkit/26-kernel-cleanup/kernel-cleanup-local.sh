@@ -80,7 +80,7 @@ cleanup_redhat() {
   else warn "neither dnf nor yum found"; exit 2; fi
 
   # Installed kernel versions, newest first (VERSION-RELEASE, no arch).
-  mapfile -t versions < <(rpm -q --queryformat '%{VERSION}-%{RELEASE}\n' kernel 2>/dev/null | sort -rV || true)
+  mapfile -t versions < <(rpm -q --queryformat '%{VERSION}-%{RELEASE}\n' kernel 2>/dev/null | grep -v 'is not installed' | sort -rV || true)
   [[ "${#versions[@]}" -gt 0 ]] || { log "no kernel packages installed; nothing to do"; return 0; }
 
   # Running kernel as VERSION-RELEASE (strip trailing .x86_64 / .aarch64).
