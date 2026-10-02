@@ -114,7 +114,7 @@ report_redhat() {
   else
     local running newest
     running="$(uname -r | sed 's/\.[^.]*$//')"
-    newest="$(rpm -q --queryformat '%{VERSION}-%{RELEASE}\n' kernel 2>/dev/null | sort -V | tail -n 1 || true)"
+    newest="$(rpm -q --queryformat '%{VERSION}-%{RELEASE}\n' kernel 2>/dev/null | grep -v 'is not installed' | sort -V | tail -n 1 || true)"
     log "needs-restarting not available; kernel comparison:"
     log "  running kernel:          $running"
     log "  newest installed kernel: ${newest:-unknown}"
