@@ -1,4 +1,19 @@
 #!/usr/bin/env bash
+#
+# NAME: common.sh
+# WHAT: Shared library for the ops-toolkit scripts — NOT a standalone script.
+#       Provides load_config (defaults + /etc/ops/ops.conf overrides),
+#       log (timestamped stdout), and assert_cmd (dependency check).
+# WHY:  Every ops-toolkit script sources this so paths, retentions, and
+#       thresholds live in one place instead of being copy-pasted.
+# HOW:  Do NOT run directly. Sibling scripts source it like this:
+#         SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+#         . "$SCRIPT_DIR/common.sh"
+#         load_config
+#       Override any default by setting the variable in /etc/ops/ops.conf
+#       (sourced after the defaults, so it wins). Full variable list is in
+#       the load_config body below.
+#
 set -euo pipefail
 export LC_ALL=C
 

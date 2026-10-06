@@ -1,4 +1,14 @@
 #!/bin/bash
+#
+# NAME: send_keys.sh
+# WHAT: Copies this machine's SSH public key to every homelab host via
+#       ssh-copy-id, so future SSH logins are key-based (no password prompts).
+# WHY:  Bootstrapping step for a new workstation or after rotating keys —
+#       run once per host fleet instead of ssh-copy-id'ing each host by hand.
+# HOW:  ./send_keys.sh
+#       Prompts for the 'michael' password on each host (unless already keyed).
+#       Safe to re-run; hosts already carrying the key are skipped by ssh-copy-id.
+#
 
 # Define the list of IP addresses
 declare -a IPs=(

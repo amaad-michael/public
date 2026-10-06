@@ -1,4 +1,17 @@
 #!/usr/bin/env bash
+#
+# NAME: sys-health.sh
+# WHAT: Samples host health once and appends a row to $HEALTH_CSV (default
+#       /var/log/ops/sys-health.csv), plus a dated top-CPU/top-MEM process
+#       snapshot in ${LOG_DIR}/top-procs-YYYYMMDD.log.
+# WHY:  Cheap time-series for spotting slow degradation (creeping memory use,
+#       disk filling, rising iowait) before it becomes an outage.
+# HOW:  ./sys-health.sh   (run from cron, e.g. every 5-15 minutes)
+#       CSV schema (header is written on first run):
+#         timestamp,host,load1,load5,load15,mem_used_mb,mem_free_mb,disk_pct_root,io_wait
+#       Top-process log keeps the top $TOP_PROC_COUNT (default 10) by CPU and
+#       by MEM per run.
+#
 set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 # shellcheck disable=SC1091 # common.sh ships alongside; resolved via $SCRIPT_DIR at runtime

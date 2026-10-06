@@ -1,4 +1,20 @@
 #!/usr/bin/env bash
+#
+# NAME: backup-verify.sh
+# WHAT: Two checks in one: (1) scans the backup log for failure/error lines;
+#       (2) on the configured weekday, extracts a sample archive and confirms
+#       a known file restores from it (proves the backups are actually
+#       readable, not just "completed").
+# WHY:  A backup job that "succeeds" but writes corrupt archives is worse
+#       than no backup — this catches both job failures and unreadable data.
+# HOW:  ./backup-verify.sh   (exits non-zero on any failure)
+#       Backup log: $BACKUP_LOG (default /var/log/backup/last.log) — any line
+#       matching fail|error (case-insensitive) counts as a failure.
+#       Restore test (runs when `date +%u` == $RESTORE_TEST_WEEKDAY, default 7
+#       = Sunday): extracts $BACKUP_SAMPLE_ARCHIVE to a temp dir and checks
+#       $BACKUP_SAMPLE_VERIFY_PATH exists inside it. All three are settable
+#       in /etc/ops/ops.conf.
+#
 set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 # shellcheck disable=SC1091 # common.sh ships alongside; resolved via $SCRIPT_DIR at runtime

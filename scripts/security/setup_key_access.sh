@@ -1,4 +1,14 @@
 #!/bin/bash
+#
+# NAME: setup_key_access.sh
+# WHAT: Installs this machine's SSH public key into a single remote host's
+#       authorized_keys (creating ~/.ssh with correct perms if needed).
+# WHY:  One-off version of send_keys.sh for a host outside the homelab fleet
+#       — e.g. a new VPS or a rebuilt box — where you don't want to loop the
+#       whole IP list.
+# HOW:  ./setup_key_access.sh <remote_ip>
+#       Logs in as 'michael'; idempotent-ish (re-running appends a duplicate
+#       key line, harmless but untidy).
 
 # Variables
 USER="michael"
