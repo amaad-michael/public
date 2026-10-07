@@ -18,6 +18,7 @@ public/
 ├── ansible/      # provisioning & maintenance playbooks
 ├── containers/   # Docker Compose setups (Pi-hole + Unbound DNS)
 ├── scripts/      # network, monitoring & provisioning utilities
+├── templates/    # hardened reusable CI/lint templates (secure-ci)
 └── deprecated/   # retired/_OLD files, kept for git history
 ```
 

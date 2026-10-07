@@ -134,9 +134,18 @@ fi
 log ""
 log ">>> Step 3: Updating Ollama..."
 if [[ "$DRY_RUN" == "true" ]]; then
-    log "[DRY-RUN] curl -fsSL https://ollama.com/install.sh | sh"
+    log "[DRY-RUN] download ollama install.sh, verify sha256 if OLLAMA_INSTALL_SHA256 is set, then run"
 else
-    run_cmd bash -c "curl -fsSL https://ollama.com/install.sh | sh"
+    _ollama_installer="$(mktemp)"
+    run_cmd curl -fsSL -o "$_ollama_installer" https://ollama.com/install.sh
+    if [[ -n "${OLLAMA_INSTALL_SHA256:-}" ]]; then
+        echo "${OLLAMA_INSTALL_SHA256}  $_ollama_installer" | sha256sum -c - \
+            || error "Ollama installer checksum mismatch — refusing to run"
+    else
+        warn "OLLAMA_INSTALL_SHA256 not set — running ollama.com/install.sh without checksum verification"
+    fi
+    run_cmd bash "$_ollama_installer"
+    rm -f "$_ollama_installer"
     run_cmd systemctl restart ollama
     log "Ollama restarted."
 fi
@@ -161,7 +170,11 @@ LAN_IP=$(ip -4 addr show | awk '/inet / && !/127\.0\.0\.1/ && !/172\./ {print $2
 
 # Ensure config directory exists
 if [[ ! -d "/etc/searxng" ]]; then
-    error "SearXNG config directory /etc/searxng not found. Run setup script first."
+    if [[ "$DRY_RUN" == "true" ]]; then
+        warn "[DRY-RUN] /etc/searxng not found; APPLY mode would fail here."
+    else
+        error "SearXNG config directory /etc/searxng not found. Run setup script first."
+    fi
 fi
 
 # Ensure volumes exist
