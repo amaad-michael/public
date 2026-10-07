@@ -33,6 +33,9 @@ getenforce
 
 echo "== php-fpm via httpd =="
 TEST=/var/www/html/__lamp_check.php
+# Always remove the probe file, even if the curl check fails (set -e would
+# otherwise skip the cleanup and leave it in the docroot).
+trap 'rm -f "$TEST"' EXIT
 printf '%s\n' '<?php echo "PHP ".PHP_VERSION." OK\n";' > "$TEST"
 restorecon "$TEST"
 curl -fsS http://127.0.0.1/__lamp_check.php

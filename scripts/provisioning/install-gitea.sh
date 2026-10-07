@@ -39,7 +39,7 @@ esac
 
 echo "==> Installing dependencies..."
 if [ "$OS" = "debian" ]; then
-    DEBIAN_FRONTEND=noninteractive apt-get update
+    DEBIAN_FRONTEND=noninteractive timeout 120 apt-get update
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         git wget sqlite3 ca-certificates
 elif [ "$OS" = "rhel" ]; then
