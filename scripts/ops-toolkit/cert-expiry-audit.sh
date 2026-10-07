@@ -1,4 +1,21 @@
 #!/usr/bin/env bash
+#
+# NAME: cert-expiry-audit.sh
+# WHAT: Connects to each TLS endpoint in the endpoints file, reads the cert's
+#       notAfter date via openssl, and appends one row per endpoint to
+#       ${LOG_DIR}/cert-expiry.csv. Exits 1 if any cert is expiring soon,
+#       unfetchable, or unparsable (cron-friendly alerting).
+# WHY:  Catches expiring certs before they break services — a cert that
+#       lapses on a homelab box tends to be discovered at the worst moment.
+# HOW:  ./cert-expiry-audit.sh
+#       Endpoints file: /etc/ops/ssl_endpoints.txt (override:
+#       SSL_ENDPOINTS_FILE in /etc/ops/ops.conf). One host:port per line;
+#       '#' starts a comment; blank lines ignored. Example:
+#         pi1.lan:443
+#         192.168.0.101:8006   # Proxmox web UI
+#       Threshold: SSL_EXPIRY_THRESHOLD_DAYS (default 60) — certs expiring
+#       sooner than this are flagged "expiring soon".
+#
 set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 # shellcheck disable=SC1091 # common.sh ships alongside; resolved via $SCRIPT_DIR at runtime
