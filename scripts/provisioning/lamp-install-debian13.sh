@@ -7,7 +7,7 @@ set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 
-apt-get update
+timeout 120 apt-get update
 apt-get install -y apache2 mariadb-server php-fpm php-mysql
 
 # Detect installed PHP version for the fpm conf name (e.g. 8.4)
@@ -37,6 +37,9 @@ systemctl is-active apache2 "php${PHPV}-fpm" mariadb
 
 echo "== php-fpm via apache =="
 TEST=/var/www/html/__lamp_check.php
+# Always remove the probe file, even if the curl check fails (set -e would
+# otherwise skip the cleanup and leave it in the docroot).
+trap 'rm -f "$TEST"' EXIT
 printf '%s\n' '<?php echo "PHP ".PHP_VERSION." OK\n";' > "$TEST"
 curl -fsS http://127.0.0.1/__lamp_check.php
 rm -f "$TEST"
