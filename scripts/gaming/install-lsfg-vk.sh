@@ -219,6 +219,17 @@ info "Downloading: $RPM_URL"
 curl -fsSL -o "/tmp/${RPM_FILE}" "$RPM_URL" || die "Download failed."
 success "Downloaded: /tmp/${RPM_FILE}"
 
+# Integrity check: embedded RPM digests first (catches corrupt downloads),
+# then an optional pinned SHA256 for authenticity (export LSFG_VK_SHA256).
+rpm -K --nosignature "/tmp/${RPM_FILE}" >/dev/null 2>&1 \
+    || die "RPM digest verification failed for ${RPM_FILE} (corrupt download?)"
+if [[ -n "${LSFG_VK_SHA256:-}" ]]; then
+    echo "${LSFG_VK_SHA256}  /tmp/${RPM_FILE}" | sha256sum -c - \
+        || die "lsfg-vk RPM checksum mismatch — refusing to install"
+else
+    warn "LSFG_VK_SHA256 not set — installing RPM without checksum verification"
+fi
+
 # ── Install RPM ───────────────────────────────────────────────────────────────
 section "Installing lsfg-vk"
 
