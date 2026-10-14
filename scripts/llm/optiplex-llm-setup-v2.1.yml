@@ -1,0 +1,262 @@
+---
+- name: OptiPlex llama.cpp deployment v2.1.0
+  hosts: optiplex
+  become: true
+  gather_facts: true
+
+  vars:
+    llama_dir: /opt/llama.cpp
+    src_dir: /usr/local/src/llama.cpp
+    models_dir: /var/lib/llm/models
+    conf_dir: /etc/llm
+    llm_user: llm
+    server_port: 8080
+    bind_addr: "127.0.0.1"
+    require_api_key: true
+    enable_blas: false
+    llama_cpp_ref: master            # TODO(RISK-1): pin to a release tag
+    model_preset: llama3.2-3b
+    # OPEN-1: no upstream checksum manifest exists; capture from a known-good
+    # download and paste the hash here to enable verification.
+    model_sha256: ""
+    model_presets:
+      llama3.2-3b:
+        name: Llama-3.2-3B-Instruct-Q4_K_M
+        url: "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf"
+        ctx_size: 4096
+        mlock: true          # ~2.6 GiB resident against ~6.3 GiB free
+      llama3.1-8b:
+        name: Meta-Llama-3.1-8B-Instruct-Q4_K_M
+        url: "https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
+        ctx_size: 2048
+        mlock: false         # ~5.1 GiB resident: locking starves everything else
+
+  pre_tasks:
+    - name: Resolve model preset
+      set_fact:
+        model: "{{ model_presets[model_preset] }}"
+
+    - name: Assert apt-based x86-64 host
+      assert:
+        that:
+          - ansible_os_family == "Debian"
+          - ansible_architecture == "x86_64"
+        fail_msg: "Requires an apt-based x86-64 host"
+
+    # ansible_processor / ansible_processor_vcpus / ansible_processor_flags are
+    # gathered facts and are not guaranteed on every platform — the flag checks
+    # below fall back to [] rather than failing.
+    - name: Report CPU SIMD support
+      debug:
+        msg: >-
+          CPU={{ ansible_processor[2] if ansible_processor | length > 2 else 'unknown' }}
+          cores={{ ansible_processor_vcpus }}
+          avx={{ 'avx' in ansible_processor_flags | default([]) }}
+          avx2={{ 'avx2' in ansible_processor_flags | default([]) }}
+
+  tasks:
+    # libcurl4-openssl-dev: current upstream CMakeLists.txt marks LLAMA_CURL as
+    # deprecated-and-ignored — no longer a hard build requirement on master.
+    # Kept for pinned older refs that still honour the option.
+    - name: Install build dependencies
+      apt:
+        name: "{{ base_pkgs + (blas_pkgs if enable_blas else []) }}"
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+      vars:
+        base_pkgs: [git, cmake, build-essential, pkg-config, libcurl4-openssl-dev, curl, ca-certificates]
+        blas_pkgs: [libopenblas-dev]
+
+    - name: Create service user
+      user:
+        name: "{{ llm_user }}"
+        system: true
+        create_home: false
+        shell: /usr/sbin/nologin
+        state: present
+
+    - name: Create directories
+      file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: root
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: "{{ llama_dir }}", group: root, mode: '0755' }
+        - { path: "{{ models_dir }}", group: "{{ llm_user }}", mode: '0755' }
+        - { path: "{{ conf_dir }}", group: "{{ llm_user }}", mode: '0750' }
+
+    - name: Clone or update llama.cpp
+      git:
+        repo: https://github.com/ggml-org/llama.cpp
+        dest: "{{ src_dir }}"
+        version: "{{ llama_cpp_ref }}"
+        force: true
+      register: llama_src
+
+    - name: Read previously built commit
+      slurp:
+        src: "{{ llama_dir }}/.build-commit"
+      register: build_stamp
+      failed_when: false
+
+    - name: Decide whether a rebuild is required
+      set_fact:
+        need_build: >-
+          {{ (build_stamp.content is not defined)
+             or ((build_stamp.content | b64decode | trim) != llama_src.after) }}
+
+    - name: Configure, build and install llama.cpp
+      when: need_build | bool
+      block:
+        - name: Configure CMake
+          command:
+            argv: >-
+              {{ ['cmake', '-B', src_dir + '/build', '-S', src_dir,
+                  '-DCMAKE_BUILD_TYPE=Release',
+                  '-DCMAKE_INSTALL_PREFIX=' + llama_dir,
+                  '-DGGML_NATIVE=ON']
+                 + (['-DGGML_BLAS=ON', '-DGGML_BLAS_VENDOR=OpenBLAS'] if enable_blas else []) }}
+
+        - name: Compile
+          command: "cmake --build {{ src_dir }}/build --config Release -j{{ ansible_processor_vcpus }}"
+
+        - name: Install
+          command: "cmake --install {{ src_dir }}/build"
+
+        # The install manifest does not necessarily cover every tool.
+        - name: Reconcile binaries from the build tree
+          copy:
+            src: "{{ src_dir }}/build/bin/{{ item }}"
+            dest: "{{ llama_dir }}/bin/{{ item }}"
+            remote_src: true
+            mode: '0755'
+            force: false
+          loop: [llama-server, llama-cli, llama-bench]
+          failed_when: false
+
+        - name: Record built commit
+          copy:
+            dest: "{{ llama_dir }}/.build-commit"
+            content: "{{ llama_src.after }}\n"
+            owner: root
+            group: root
+            mode: '0644'
+
+    # OPEN-1: set model_sha256 to enable verification. get_url will delete a
+    # file that fails the checksum, so a corrupt download cannot be left behind.
+    - name: Download model
+      get_url:
+        url: "{{ model.url }}"
+        dest: "{{ models_dir }}/{{ model.name }}.gguf"
+        checksum: "{{ ('sha256:' + model_sha256) if model_sha256 | length > 0 else omit }}"
+        owner: root
+        group: "{{ llm_user }}"
+        mode: '0640'
+        timeout: 60
+      register: model_dl
+      retries: 3
+      delay: 10
+      until: model_dl is succeeded
+
+    # KNOWN DIVERGENCE: get_url does not resume a partial transfer the way the
+    # bash path's `curl -C -` does. An interrupted multi-GB download restarts.
+    - name: Warn when the model is unverified
+      debug:
+        msg: "MODEL CHECKSUM NOT VERIFIED — set model_sha256 (see OPEN-1)"
+      when: model_sha256 | length == 0
+
+    - name: Generate API key
+      when: require_api_key | bool
+      block:
+        - name: Check for an existing key
+          stat:
+            path: "{{ conf_dir }}/api-key"
+          register: api_key_stat
+
+        - name: Create API key
+          when: not api_key_stat.stat.exists
+          copy:
+            dest: "{{ conf_dir }}/api-key"
+            content: "{{ lookup('community.general.random_string', length=64, chars=['ascii_letters','digits']) }}\n"
+            owner: root
+            group: "{{ llm_user }}"
+            mode: '0640'
+
+    # NOTE: ansible_default_ipv4.prefix is not a documented gathered fact, so
+    # the CIDR is derived from the documented address/netmask via python3
+    # rather than trusting an undocumented field.
+    - name: Derive LAN CIDR from address and netmask
+      when: bind_addr != '127.0.0.1'
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "import ipaddress,sys; print(ipaddress.ip_network(sys.argv[1] + '/' + sys.argv[2], strict=False))"
+          - "{{ ansible_default_ipv4.address }}"
+          - "{{ ansible_default_ipv4.netmask }}"
+      register: lan_cidr
+      changed_when: false
+
+    - name: Allow LAN access when the API is not loopback-only
+      when: bind_addr != '127.0.0.1'
+      community.general.ufw:
+        rule: allow
+        port: "{{ server_port }}"
+        proto: tcp
+        src: "{{ lan_cidr.stdout }}"
+
+    - name: Deploy systemd unit
+      # the ExecStart line in the unit content below cannot be split without altering the generated unit file
+      # yamllint disable rule:line-length
+      copy:
+        dest: /etc/systemd/system/llama-server.service
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          [Unit]
+          Description=llama.cpp inference server
+          After=network-online.target
+          Wants=network-online.target
+
+          [Service]
+          Type=simple
+          User={{ llm_user }}
+          Group={{ llm_user }}
+          ExecStart={{ llama_dir }}/bin/llama-server --model {{ models_dir }}/{{ model.name }}.gguf --host {{ bind_addr }} --port {{ server_port }} --threads {{ ansible_processor_vcpus }} --threads-batch {{ ansible_processor_vcpus }} --ctx-size {{ model.ctx_size }} --temp 0.2 --top-p 0.95 --min-p 0.01{{ ' --mlock' if model.mlock else '' }}{{ ' --api-key-file ' + conf_dir + '/api-key' if require_api_key else '' }}{{ ' --cors-origins localhost' if bind_addr != '127.0.0.1' else '' }}
+          Restart=on-failure
+          RestartSec=10
+          LimitMEMLOCK=infinity
+          NoNewPrivileges=true
+          PrivateTmp=true
+          ProtectSystem=strict
+          ProtectHome=true
+          ProtectKernelTunables=true
+          ProtectControlGroups=true
+          RestrictSUIDSGID=true
+          StandardOutput=journal
+          StandardError=journal
+
+          [Install]
+          WantedBy=multi-user.target
+      # yamllint enable rule:line-length
+      register: unit_file
+
+    - name: Enable and (re)start llama-server
+      systemd:
+        name: llama-server
+        state: "{{ 'restarted' if (unit_file is changed or need_build | bool) else 'started' }}"
+        enabled: true
+        daemon_reload: true
+
+    - name: Wait for the model to load
+      uri:
+        url: "http://127.0.0.1:{{ server_port }}/health"
+        status_code: [200]
+      register: health
+      retries: 60
+      delay: 10
+      until: health is succeeded
