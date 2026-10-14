@@ -1,0 +1,367 @@
+---
+- name: GPU Box Ollama + Open WebUI Deployment v1.9 (AMD/ROCm)
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    webui_port: 8080
+    searxng_port: 8888
+    searxng_listen_addr: "127.0.0.1"
+    searxng_config_dir: "/etc/searxng"
+    ollama_keep_alive: "30m"
+    hsa_override_gfx_version: ""
+    # TODO(RISK-1): floating tags, accepted as a temporary placeholder.
+    openwebui_image: "ghcr.io/open-webui/open-webui:latest"
+    searxng_image: "docker.io/searxng/searxng:latest"
+    ollama_dropin_dir: "/etc/systemd/system/ollama.service.d"
+    required_models:
+      - "qwen2.5-coder:14b"
+      - "qwen2.5-coder:7b"
+      - "deepseek-r1:14b"
+      - "nomic-embed-text:latest"
+      - "llava:13b"
+
+  pre_tasks:
+    - name: Validate OS is Fedora-based
+      assert:
+        that:
+          - ansible_os_family == "RedHat"
+        fail_msg: "This playbook requires a Fedora-based distro"
+
+    - name: Check for AMD KFD compute device
+      stat:
+        path: /dev/kfd
+      register: kfd_dev
+
+    - name: Fail if no AMD compute device
+      assert:
+        that:
+          - kfd_dev.stat.exists
+        fail_msg: "/dev/kfd absent — amdgpu/KFD not loaded or GPU unsupported"
+
+    # gather_facts does NOT populate ansible_facts.services. Without this task
+    # the firewalld gate below is never true and the play silently skips
+    # firewall configuration, diverging from the bash path.
+    - name: Gather service facts
+      service_facts:
+
+  tasks:
+    - name: Install base system dependencies
+      dnf:
+        name:
+          - git
+          - curl
+          - wget
+          - pciutils
+          - python3
+          - python3-docker
+          - moby-engine
+        state: present
+
+    - name: Enable Docker service
+      systemd:
+        name: docker
+        enabled: true
+        state: started
+
+    - name: Get LAN IPv4 address and prefix
+      shell: |
+        set -o pipefail
+        ip -4 -o addr show scope global \
+          | awk '$2 !~ /^(docker|br-|veth|virbr|tun|tap|cni|flannel)/ && addr == "" { addr = $4 }
+                 END { print addr }'
+      args:
+        executable: /bin/bash
+      register: lan_addr
+      changed_when: false
+      failed_when: lan_addr.stdout | length == 0
+
+    - name: Derive LAN network CIDR
+      command: >-
+        python3 -c "import ipaddress,sys; print(ipaddress.ip_network(sys.argv[1], strict=False))"
+        {{ lan_addr.stdout }}
+      register: lan_net
+      changed_when: false
+
+    - name: Set address facts
+      set_fact:
+        lan_ip: "{{ lan_addr.stdout.split('/')[0] }}"
+        lan_cidr: "{{ lan_net.stdout }}"
+
+    - name: Open LAN-scoped firewall ports
+      ansible.posix.firewalld:
+        rich_rule: "rule family=ipv4 source address={{ lan_cidr }} port port={{ item }} protocol=tcp accept"
+        permanent: true
+        immediate: true
+        state: enabled
+      loop: "{{ [11434, webui_port] + ([searxng_port] if searxng_listen_addr == '0.0.0.0' else []) }}"
+      when:
+        - "'firewalld.service' in ansible_facts.services"
+        - ansible_facts.services['firewalld.service'].state == 'running'
+
+    - name: Install Ollama via official install script (ROCm build)
+      shell: curl -fsSL https://ollama.com/install.sh | sh
+      args:
+        executable: /bin/bash
+        creates: /usr/local/bin/ollama
+
+    - name: Create Ollama systemd drop-in directory
+      file:
+        path: "{{ ollama_dropin_dir }}"
+        state: directory
+        mode: '0755'
+
+    # A drop-in survives the installer rewriting ollama.service on upgrade.
+    - name: Write Ollama systemd drop-in
+      copy:
+        dest: "{{ ollama_dropin_dir }}/10-gpu-box.conf"
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          [Service]
+          Environment="OLLAMA_HOST={{ lan_ip }}:11434"
+          Environment="OLLAMA_KEEP_ALIVE={{ ollama_keep_alive }}"
+          {% if hsa_override_gfx_version | length > 0 %}
+          Environment="HSA_OVERRIDE_GFX_VERSION={{ hsa_override_gfx_version }}"
+          {% endif %}
+      register: ollama_dropin
+
+    - name: Reload systemd and (re)start Ollama
+      systemd:
+        name: ollama
+        state: "{{ 'restarted' if ollama_dropin is changed else 'started' }}"
+        enabled: true
+        daemon_reload: true
+
+    - name: Wait for Ollama API
+      uri:
+        url: "http://{{ lan_ip }}:11434/api/tags"
+        method: GET
+        status_code: [200]
+      register: ollama_wait
+      retries: 12
+      delay: 5
+      until: ollama_wait is succeeded
+
+    - name: Get list of installed models
+      shell: |
+        set -o pipefail
+        /usr/local/bin/ollama list | awk 'NR>1 {sub(/:latest$/,"",$1); print $1}'
+      args:
+        executable: /bin/bash
+      environment:
+        OLLAMA_HOST: "{{ lan_ip }}:11434"
+      register: ollama_list_output
+      changed_when: false
+
+    - name: Pull required models
+      command: "/usr/local/bin/ollama pull {{ item }}"
+      environment:
+        OLLAMA_HOST: "{{ lan_ip }}:11434"
+      loop: "{{ required_models }}"
+      when: item | regex_replace(':latest$', '') not in ollama_list_output.stdout_lines
+      register: model_pull_jobs
+      async: 3600
+      poll: 0
+
+    - name: Wait for model pulls to complete
+      async_status:
+        jid: "{{ item.ansible_job_id }}"
+      loop: "{{ model_pull_jobs.results }}"
+      when: item.ansible_job_id is defined
+      register: model_pull_results
+      until: model_pull_results.finished
+      retries: 120
+      delay: 30
+
+    - name: Create SearXNG config directory
+      file:
+        path: "{{ searxng_config_dir }}"
+        state: directory
+        mode: '0755'
+
+    # server.port / bind_address omitted deliberately: inert in the container.
+    # KNOWN DIVERGENCE: force:false means a pre-existing settings.yml is never
+    # touched, so unlike the bash path this play will not repair a file that is
+    # missing the `json` format. On a clean box the two paths are equivalent.
+    - name: Write SearXNG settings.yml
+      copy:
+        dest: "{{ searxng_config_dir }}/settings.yml"
+        force: false
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          use_default_settings:
+            engines:
+              keep_only:
+                - google
+                - duckduckgo
+                - bing
+                - wikipedia
+
+          server:
+            secret_key: "{{ lookup('community.general.random_string', length=64, chars=['ascii_letters', 'digits']) }}"
+            limiter: false
+            image_proxy: false
+
+          ui:
+            static_use_hash: true
+
+          search:
+            safe_search: 0
+            autocomplete: ""
+            default_lang: "en"
+            formats:
+              - html
+              - json
+
+          outgoing:
+            request_timeout: 10.0
+            max_request_timeout: 20.0
+            pool_connections: 100
+            pool_maxsize: 20
+      register: searxng_settings
+
+    - name: Create SearXNG data volume
+      community.docker.docker_volume:
+        name: searxng-data
+        state: present
+
+    - name: Deploy SearXNG container
+      community.docker.docker_container:
+        name: searxng
+        image: "{{ searxng_image }}"
+        state: started
+        restart_policy: always
+        # RISK-1: the tag floats. Pull only when the image is absent locally,
+        # so a re-run can never silently swap the image underneath a working
+        # deployment. First run on a clean box still pulls normally.
+        pull: false
+        recreate: "{{ searxng_settings is changed }}"
+        published_ports:
+          - "{{ searxng_listen_addr }}:{{ searxng_port }}:8080"
+        volumes:
+          - "{{ searxng_config_dir }}:/etc/searxng:rw"
+          - "searxng-data:/var/cache/searxng:rw"
+        env:
+          SEARXNG_BASE_URL: "http://{{ lan_ip if searxng_listen_addr == '0.0.0.0' else searxng_listen_addr }}:{{ searxng_port }}/"
+        cap_drop:
+          - ALL
+        capabilities:
+          - CHOWN
+          - SETGID
+          - SETUID
+          - DAC_OVERRIDE
+        log_driver: json-file
+        log_options:
+          max-size: "1m"
+          max-file: "1"
+
+    - name: Create Docker volume for Open WebUI
+      community.docker.docker_volume:
+        name: open-webui-storage
+        state: present
+
+    - name: Deploy Open WebUI container
+      community.docker.docker_container:
+        name: open-webui
+        image: "{{ openwebui_image }}"
+        state: started
+        restart_policy: always
+        network_mode: host
+        # RISK-1: see above. Also guards the storage volume against an
+        # unintended major-version jump and its irreversible DB migration.
+        # Pulls on first run (image absent); never re-pulls afterwards.
+        pull: false
+        comparisons:
+          env: strict
+          image: strict
+        volumes:
+          - "open-webui-storage:/app/backend/data"
+        env:
+          OLLAMA_BASE_URL: "http://{{ lan_ip }}:11434"
+          ENABLE_PERSISTENT_CONFIG: "False"
+          ENABLE_WEB_SEARCH: "True"
+          WEB_SEARCH_ENGINE: "searxng"
+          SEARXNG_QUERY_URL: "http://127.0.0.1:{{ searxng_port }}/search?q=<query>"
+          WEB_SEARCH_RESULT_COUNT: "5"
+          # Search-engine request concurrency (repurposed from the old RAG-era
+          # page-fetch variable of the same name). 10 is still a sane value.
+          WEB_SEARCH_CONCURRENT_REQUESTS: "10"
+
+    # ────────────────────────────────────────────────────────────────────────
+    # Verification
+    # ────────────────────────────────────────────────────────────────────────
+
+    - name: Wait for Open WebUI HTTP endpoint
+      uri:
+        url: "http://127.0.0.1:{{ webui_port }}/"
+        method: GET
+        status_code: [200, 302, 401]
+      register: webui_wait
+      retries: 18
+      delay: 5
+      until: webui_wait is succeeded
+      ignore_errors: true
+
+    - name: Test SearXNG JSON API
+      uri:
+        url: "http://127.0.0.1:{{ searxng_port }}/search?q=test&format=json"
+        method: GET
+        status_code: [200]
+        return_content: true
+      register: searxng_api_test
+      retries: 12
+      delay: 5
+      until: searxng_api_test is succeeded
+      ignore_errors: true
+
+    - name: Test Ollama API
+      uri:
+        url: "http://{{ lan_ip }}:11434/api/tags"
+        method: GET
+        status_code: [200]
+        timeout: 30
+      register: ollama_api_test
+      ignore_errors: true
+
+    # RISK-1 mitigation: tags float, so record exactly which image is in service.
+    - name: Inspect running containers
+      community.docker.docker_container_info:
+        name: "{{ item }}"
+      loop:
+        - open-webui
+        - searxng
+      register: ctr_info
+
+    - name: Resolve image digests
+      community.docker.docker_image_info:
+        name: "{{ item.container.Image }}"
+      loop: "{{ ctr_info.results | selectattr('exists') | list }}"
+      loop_control:
+        label: "{{ item.item }}"
+      register: image_digests
+
+    - name: Display final status
+      debug:
+        msg: |
+          ════════════════════════════════════════════════════════════════
+          GPU Box Ollama + Open WebUI Deployment v1.9 — Complete
+          ════════════════════════════════════════════════════════════════
+          Ollama API:       http://{{ lan_ip }}:11434
+          Open WebUI:       http://{{ lan_ip }}:{{ webui_port }}
+          SearXNG:          http://{{ searxng_listen_addr }}:{{ searxng_port }}
+          LAN scope:        {{ lan_cidr }}
+          Models:           {{ required_models | length }} configured
+          Ollama API test:  {{ 'responding' if (ollama_api_test.status | default(0)) == 200 else 'NOT responding' }}
+          SearXNG JSON:     {{ 'responding' if (searxng_api_test.status | default(0)) == 200 else 'NOT responding' }}
+          Open WebUI HTTP:  {{ 'responding' if (webui_wait.status | default(0)) in [200, 302, 401] else 'NOT responding' }}
+          ────────────────────────────────────────────────────────────────
+          Images in service (tags float — record these):
+          {% for r in image_digests.results %}
+          {{ r.item.item }}: {{ (r.images | first).RepoDigests | default(['no-digest']) | first }}
+          {% endfor %}
+          ════════════════════════════════════════════════════════════════
