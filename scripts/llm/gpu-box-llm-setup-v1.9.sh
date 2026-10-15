@@ -212,8 +212,18 @@ if command -v ollama &>/dev/null && [[ -f /etc/systemd/system/ollama.service ]];
     log "Ollama already installed"
 else
     log "Installing Ollama via official install script (ROCm build)..."
-    curl -fsSL https://ollama.com/install.sh | sh >> /tmp/ollama-install.log 2>&1 \
+    _ollama_installer="$(mktemp)"
+    curl -fsSL -o "$_ollama_installer" https://ollama.com/install.sh >> /tmp/ollama-install.log 2>&1 \
+        || error "Ollama installer download failed. See /tmp/ollama-install.log"
+    if [[ -n "${OLLAMA_INSTALL_SHA256:-}" ]]; then
+        echo "${OLLAMA_INSTALL_SHA256}  $_ollama_installer" | sha256sum -c - >> /tmp/ollama-install.log 2>&1 \
+            || error "Ollama installer checksum mismatch — refusing to run"
+    else
+        log "⚠ OLLAMA_INSTALL_SHA256 not set — running ollama.com/install.sh without checksum verification"
+    fi
+    sh "$_ollama_installer" >> /tmp/ollama-install.log 2>&1 \
         || error "Ollama install script failed. See /tmp/ollama-install.log"
+    rm -f "$_ollama_installer"
     log "✓ Ollama installed"
 fi
 

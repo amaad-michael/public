@@ -15,6 +15,11 @@
     openwebui_image: "ghcr.io/open-webui/open-webui:latest"
     searxng_image: "docker.io/searxng/searxng:latest"
     ollama_dropin_dir: "/etc/systemd/system/ollama.service.d"
+    # Optional pin for the Ollama installer (same pattern as F2 in
+    # scripts/workstation/update-gpu-box.sh): when set, the downloaded
+    # installer is verified against this SHA-256 before it runs; when
+    # empty, the install task warns that it is running unverified.
+    ollama_install_sha256: ""
     required_models:
       - "qwen2.5-coder:14b"
       - "qwen2.5-coder:7b"
@@ -101,7 +106,17 @@
         - ansible_facts.services['firewalld.service'].state == 'running'
 
     - name: Install Ollama via official install script (ROCm build)
-      shell: curl -fsSL https://ollama.com/install.sh | sh
+      shell: |
+        set -o pipefail
+        tmp_installer=$(mktemp)
+        trap 'rm -f "$tmp_installer"' EXIT
+        curl -fsSL -o "$tmp_installer" https://ollama.com/install.sh
+        {% if ollama_install_sha256 | length > 0 %}
+        echo "{{ ollama_install_sha256 }}  $tmp_installer" | sha256sum -c -
+        {% else %}
+        echo "WARNING: ollama_install_sha256 is not set — running ollama.com/install.sh without checksum verification" >&2
+        {% endif %}
+        sh "$tmp_installer"
       args:
         executable: /bin/bash
         creates: /usr/local/bin/ollama
