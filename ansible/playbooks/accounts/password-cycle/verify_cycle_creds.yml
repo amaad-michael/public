@@ -1,0 +1,56 @@
+---
+- name: Verify fleet password and sshd state after a cycle
+  hosts: pi_all
+  become: true
+  gather_facts: false
+
+  vars:
+    cycle_accounts:
+      - root
+      - michael
+      - ansible
+
+  tasks:
+    - name: Fleet ping as the ansible service account
+      ansible.builtin.ping:
+
+    - name: Become exercise - root via passwordless sudo
+      ansible.builtin.command: whoami
+      register: become_whoami
+      changed_when: false
+
+    - name: Assert the become exercise landed as root
+      ansible.builtin.assert:
+        that:
+          - become_whoami.stdout == "root"
+        fail_msg: "Become exercise on {{ inventory_hostname }} returned '{{ become_whoami.stdout }}', not 'root'."
+
+    - name: Read the shadow entries for the three accounts
+      ansible.builtin.command: "awk -F: '$1 == \"{{ item }}\" { print $2 }' /etc/shadow"
+      loop: "{{ cycle_accounts }}"
+      register: shadow_fields
+      changed_when: false
+
+    - name: Assert every account has a set (hashed) password
+      ansible.builtin.assert:
+        that:
+          - item.stdout.startswith('$')
+        fail_msg: "Account {{ item.item }} on {{ inventory_hostname }} has no set password in /etc/shadow."
+      loop: "{{ shadow_fields.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Read the effective sshd configuration
+      ansible.builtin.command: sshd -T
+      register: sshd_effective
+      changed_when: false
+
+    - name: Assert the sshd hardening is in effect
+      ansible.builtin.assert:
+        that:
+          - "'permitrootlogin prohibit-password' in sshd_effective.stdout_lines"
+          - "'passwordauthentication no' in sshd_effective.stdout_lines"
+        fail_msg: >-
+          sshd on {{ inventory_hostname }} is not in the hardened state:
+          PermitRootLogin must be prohibit-password and PasswordAuthentication
+          must be no. Apply the hardening step on this host before signing it off.
