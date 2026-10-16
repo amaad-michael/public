@@ -1,0 +1,69 @@
+---
+- name: Cycle homelab passwords per homelab-password-plan (root, michael, ansible)
+  hosts: pi_all
+  become: true
+  gather_facts: false
+
+  vars:
+    cycle_accounts:
+      - root
+      - michael
+      - ansible
+    sudo_accounts:
+      - michael
+      - ansible
+
+  tasks:
+    - name: Pre-flight - read the host account database
+      ansible.builtin.getent:
+        database: passwd
+
+    - name: Create any missing cycle account (existing accounts are not modified)
+      ansible.builtin.user:
+        name: "{{ item }}"
+        state: present
+        create_home: true
+        shell: /bin/bash
+      loop: "{{ cycle_accounts }}"
+      when: item not in ansible_facts.getent_passwd
+
+    - name: Ensure the sudoers drop-in directory exists
+      ansible.builtin.file:
+        path: /etc/sudoers.d
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Ensure the passwordless sudo drop-in for the admin and service accounts
+      ansible.builtin.copy:
+        dest: "/etc/sudoers.d/{{ item }}"
+        content: "{{ item }} ALL=(ALL) NOPASSWD:ALL\n"
+        owner: root
+        group: root
+        mode: "0440"
+        validate: "visudo -cf %s"
+      loop: "{{ sudo_accounts }}"
+
+    - name: Pre-flight - every account on this host has a real 32-character value injected
+      ansible.builtin.assert:
+        that:
+          - cycle_passwords is defined
+          - cycle_passwords[inventory_hostname] is defined
+          - cycle_passwords[inventory_hostname][item] is defined
+          - cycle_passwords[inventory_hostname][item] | string | length == 32
+          - cycle_passwords[inventory_hostname][item] != "CHANGE_ME_CHANGE_ME_CHANGE_ME_12"
+        fail_msg: >-
+          Pre-flight failed for {{ item }} on {{ inventory_hostname }}: the injected
+          vars file has no real 32-character value for this account. Because this
+          task runs on every host before any password task starts, a failure here
+          means no password has been changed anywhere yet by this run.
+      loop: "{{ cycle_accounts }}"
+
+    - name: Set account passwords from the injected values
+      ansible.builtin.user:
+        name: "{{ item }}"
+        password: "{{ cycle_passwords[inventory_hostname][item] | password_hash('sha512') }}"
+        update_password: always
+      loop: "{{ cycle_accounts }}"
+      no_log: true
