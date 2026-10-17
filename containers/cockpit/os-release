@@ -1,0 +1,3 @@
+NAME="Cockpit Bastion"
+ID=cockpit-bastion
+PRETTY_NAME="Cockpit Bastion (container)"
