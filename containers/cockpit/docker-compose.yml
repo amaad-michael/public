@@ -1,0 +1,65 @@
+---
+networks:
+  cockpit-net:
+    driver: bridge
+
+volumes:
+  cockpit_machines:
+  cockpit_certs:
+
+services:
+  # Cockpit - web console (bastion mode)
+  # Container form of ansible/playbooks/cockpit/: the playbooks install
+  # the cockpit metapackage on each host and enable cockpit.socket;
+  # this stack runs the same web service (cockpit-ws) from the official
+  # image instead. Without the /host mount the image runs in its
+  # unprivileged "bastion" mode (upstream's own term): the console
+  # serves the login page and connects to hosts over SSH, which is the
+  # central-instance model cockpit_pcp.yml already assumes. Host-side
+  # pieces (cockpit-bridge, PCP collection) stay on the hosts via the
+  # playbooks — see README.md for exactly what this does not replace.
+  # Host port is 9091 because the monitoring stack already publishes
+  # 9090 (Prometheus) when both stacks share a host; the in-container
+  # port stays Cockpit's native 9090.
+  cockpit:
+    image: quay.io/cockpit/ws:368
+    container_name: cockpit
+    networks:
+      - cockpit-net
+    ports:
+      - "9091:9090"
+    volumes:
+      # Bastion configuration, shipped in the repo (same settings as
+      # the image's built-in default-bastion.conf). Mounting it also
+      # stops the entrypoint from symlinking its own default in.
+      - ./cockpit.conf:/etc/cockpit/cockpit.conf:ro
+      # Branding identity. Mounting a file here stops the entrypoint
+      # from rewriting /etc/os-release on the read-only rootfs
+      # (upstream documents this file as the branding override).
+      - ./os-release:/etc/os-release:ro
+      # UI machine list and operator TLS certificates survive
+      # container recreation; everything else is stateless.
+      - cockpit_machines:/etc/cockpit/machines.d
+      - cockpit_certs:/etc/cockpit/ws-certs.d
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import ssl, urllib.request; urllib.request.urlopen('https://localhost:9090/login', context=ssl._create_unverified_context())"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
