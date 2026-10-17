@@ -1,3 +1,8 @@
+# Bash Template
+
+A minimal starter for new Bash scripts: banner header, `set -euo pipefail`, start/finish timestamps with elapsed time, and a `main "$@"` entry point. Copy the script block into a new `.sh` file.
+
+```bash
 #!/bin/bash
 ########################################
 ##  ▄▀▄     █▄ ▄█ █ ▄▀▀ █▄█ ▄▀▄ ██▀ █     ▀█▀ ▄▀▄ ▀█▀ █ █ █▄ ▄█
@@ -12,30 +17,15 @@ set -euo pipefail  # Safe scripting: exit on error, unset variables, or pipeline
 date
 uptime
 
-# Usage function
-usage() {
-    echo "Usage: $0 [-h]"
-    exit 1
-}
-
-# Argument parsing
-while getopts ":h" opt; do
-    case "${opt}" in
-        h) usage ;;
-        *) usage ;;
-    esac
-done
-
-# Main function
 main() {
-    echo "Script running..."
-    # Add your logic here
-    echo "Done."
+  # Your main script logic here.
 }
 
-main  # Run the script
+# Execute main function
+main "$@"
 
 date
 uptime
 
 echo "It took $SECONDS seconds for this script to execute."
+```
