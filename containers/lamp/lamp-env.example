@@ -1,0 +1,9 @@
+# cp lamp-env.example .env && chmod 600 .env && fill values. NEVER commit .env.
+# Generate both passwords at 32 characters (Proton Pass, or locally:
+#   openssl rand -hex 16
+# ). The root password is break-glass for the database only; the app
+# connects as MYSQL_USER.
+MYSQL_ROOT_PASSWORD=
+MYSQL_DATABASE=lamp
+MYSQL_USER=lamp
+MYSQL_PASSWORD=
