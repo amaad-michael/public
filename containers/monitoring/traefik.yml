@@ -57,7 +57,7 @@ http:
     BasicAuth:
       basicAuth:
         users:
-          - "admin:${TRAEFIK_AUTH_HASH:-$apr1$changeme}"
+          - "admin:${TRAEFIK_AUTH_HASH}"
 
   routers:
     api-router:
@@ -84,10 +84,8 @@ http:
 
 log:
   level: INFO
-  filePath: /var/log/traefik/traefik.log
 
 accessLog:
-  filePath: /var/log/traefik/access.log
   format: json
 
 metrics:
