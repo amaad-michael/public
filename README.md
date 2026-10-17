@@ -15,16 +15,22 @@ scripts for my Raspberry Pi cluster and home network.*
 
 ```
 public/
-├── ansible/      # provisioning & maintenance playbooks
-├── containers/   # Docker Compose setups (Pi-hole + Unbound DNS)
-├── scripts/      # network, monitoring & provisioning utilities
-├── templates/    # hardened reusable CI/lint templates (secure-ci)
-└── deprecated/   # retired/_OLD files, kept for git history
+├── ansible/      # playbook groups: accounts, cleanup, cockpit, firewall,
+│                 # healthchecks, LLM, monthly, motd, Pi-hole, Proxmox,
+│                 # reboots, vuln, workstation
+├── containers/   # nine Docker Compose stacks: monitoring, Pi-hole + Unbound,
+│                 # Gitea, LAMP, Cockpit, LLM inference, scanner,
+│                 # OptiPlex LLM, GPU LLM
+├── scripts/      # Linux Admin Toolkit, ops toolkit, and backup, gaming,
+│                 # git, LLM, monitoring, network, Pi-hole, provisioning,
+│                 # security, and workstation scripts
+├── templates/    # bash script templates and the secure-ci CI template
+└── deprecated/   # retired files, kept for git history
 ```
 
 ## ⚠️ Note
 
-IP addresses and hostnames are examples from my lab — replace them with
+IP addresses and hostnames are examples from my lab. Replace them with
 your own before running anything.
 
-## Maintained by A. Michael Tatum — Cloud Linux Engineer
+Maintained by A. Michael Tatum, Cloud Linux Engineer

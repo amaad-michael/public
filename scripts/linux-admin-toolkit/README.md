@@ -75,7 +75,7 @@
   chrony vs systemd-timesyncd, journalctl vs `/var/log/syslog|messages`,
   `/var/log/auth.log` vs `/var/log/secure`.
 
-## Quick start
+## 🚀 Quick start
 
 Bash (single server):
 

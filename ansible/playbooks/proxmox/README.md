@@ -10,7 +10,7 @@ cloud-init VM templates and Turnkey LXC appliances ready to deploy.
 
 ---
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 proxmox-homelab/
@@ -26,14 +26,13 @@ proxmox-homelab/
 ├── templates/
 │   └── interfaces.j2             # Jinja2 — vmbr0 network bridge config
 │
-├── LXC_MANUAL.md                 # Full LXC container reference manual
 └── README.md                     # This file
 
 ```
 
 ---
 
-## Prerequisites
+## 📋 Prerequisites
 
 **Control node (machine you run Ansible from):**
 
@@ -67,7 +66,7 @@ nmcli con up "Wired connection 1"
 
 ---
 
-## Playbook Reference
+## 🔗 Playbook Reference
 
 ### Step 1 — `install_proxmox.yml`
 
@@ -264,7 +263,7 @@ ansible-playbook -i inventory.ini templates_turnkey.yml
 
 ---
 
-## After Install
+## 🛠️ After Install
 
 | Item | Value |
 |---|---|
@@ -276,12 +275,7 @@ ansible-playbook -i inventory.ini templates_turnkey.yml
 
 ---
 
-## Documentation
-
-- **`LXC_MANUAL.md`** — Full 16-section LXC container reference:
-  what LXC is, finding and using Turnkey appliances, `pct` commands,
-  networking, storage, snapshots, backups, security, troubleshooting,
-  and how container services are exposed on your local network
+## 🔗 Documentation
 
 - [Proxmox VE Docs](https://pve.proxmox.com/pve-docs/)
 - [Turnkey Linux Appliance Catalog](https://www.turnkeylinux.org/all)

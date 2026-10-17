@@ -14,6 +14,9 @@ Shipped in this folder:
 - alertmanager.yml
 - alert_rules.yml
 - .env.example (template for the host-side .env)
+- grafana/provisioning/ and grafana/dashboards/ (the Prometheus
+  datasource and the Homelab Nodes dashboard, provisioned
+  automatically on first start)
 
 Created on the host, mounted by the compose, and git-ignored
 (never committed):

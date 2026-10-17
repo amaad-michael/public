@@ -2,7 +2,7 @@
 
 This toolkit provides ready-to-use Bash scripts and systemd timers for routine Linux administration tasks that lend themselves well to shell automation.
 
-## Included jobs
+## 📦 Included jobs
 
 - Weekly System Resource Health Check (`sys-health.sh`)
 - Daily Backup Verification (weekly restore test) (`backup-verify.sh`)
@@ -11,20 +11,22 @@ This toolkit provides ready-to-use Bash scripts and systemd timers for routine L
 - Weekly Service Uptime Review (`service-uptime.sh`)
 - Weekly Temp & Junk File Cleanup (`tmp-clean.sh`)
 
-## Requirements
+## 📋 Requirements
 
 - systemd (timers and services)
 - Common utilities: `bash`, `awk`, `grep`, `sed`, `find`, `gzip`, `logrotate`, `openssl`, `vmstat` (from `procps`), `timeout` (from GNU coreutils)
 - Network access from the server to SSL endpoints for certificate checks
 
-## Install (as root)
+## 🛠️ Install (as root)
+
+Run from this folder (scripts/ops-toolkit/):
 
 ```bash
 
 # Copy scripts
 
 install -d /usr/local/sbin
-install -m 0755 scripts/*.sh /usr/local/sbin/
+install -m 0755 *.sh /usr/local/sbin/
 
 # Config and lists
 
@@ -55,20 +57,20 @@ systemctl enable --now tmp-clean.timer
 
 ```
 
-## Uninstall (as root)
+## 🛠️ Uninstall (as root)
 
 ```bash
 systemctl disable --now sys-health.timer backup-verify.timer log-clean.timer \
   cert-expiry-audit.timer service-uptime.timer tmp-clean.timer
 systemctl daemon-reload
 rm -f /etc/systemd/system/{sys-health,backup-verify,log-clean,cert-expiry-audit,service-uptime,tmp-clean}.{service,timer}
-rm -f /usr/local/sbin/{sys-health.sh,backup-verify.sh,log-clean.sh,cert-expiry-audit.sh,service-uptime.sh,tmp-clean.sh}
+rm -f /usr/local/sbin/{sys-health.sh,backup-verify.sh,log-clean.sh,cert-expiry-audit.sh,service-uptime.sh,tmp-clean.sh,common.sh}
 
 # Optional: keep /etc/ops for your customizations
 
 ```
 
-## Configuration
+## ⚙️ Configuration
 
 Main config file: `/etc/ops/ops.conf`. Defaults are sensible; override as needed.
 

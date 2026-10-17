@@ -39,7 +39,7 @@ The playbooks stay the way hosts get their side of Cockpit:
   performance graphs for a host appear in this console when that host
   runs the PCP pieces from the playbook.
 
-## Setup
+## 🛠️ Setup
 
 There is no `.env` and there are no secrets to configure: this stack
 holds no credentials. Authentication happens at login, with each
@@ -56,7 +56,7 @@ user's own account on the target host, over SSH.
    that host. Confirm the SSH host key fingerprint the login page
    shows before accepting it, the same as any first SSH connection.
 
-## Verification (canary)
+## ✅ Verification (canary)
 
 1. `curl -k https://<host>:9091/login` returns 200 and the login
    page (titled "Cockpit Bastion").

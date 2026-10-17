@@ -7,7 +7,7 @@
 
 ---
 
-## Table of Contents
+## 📋 Table of Contents
 
 1. [Quick Start](#quick-start)
 1. [Architecture Overview](#architecture-overview)
@@ -22,7 +22,7 @@
 
 ---
 
-## Quick Start
+## 🚀 Quick Start
 
 ### Prerequisites
 
@@ -60,7 +60,7 @@ docker compose ps | grep -c "healthy"  # Should show 9
 
 ---
 
-## Architecture Overview
+## 📖 Architecture Overview
 
 ### Services (9 Total)
 
@@ -68,7 +68,7 @@ docker compose ps | grep -c "healthy"  # Should show 9
 |---------|------|---------|----------|
 | **Prometheus** | 9090 | Metrics collection | Read-only, 512M limit |
 | **Grafana** | 3000 | Dashboards | Auth required, CSRF protected |
-| **Alertmanager** | 9093 | Alert routing | Internal only, Ntfy webhook |
+| **Alertmanager** | 9093 | Alert routing | Ntfy webhook |
 | **Traefik** | 80/443/8080 | Reverse proxy | Rate limiting, BasicAuth |
 | **Ntfy** | 8081 | Push notifications | deny-all auth |
 | **step-ca** | 9000 | Certificate authority | Self-signed, encrypted |
@@ -80,7 +80,7 @@ docker compose ps | grep -c "healthy"  # Should show 9
 
 - **Dedicated bridge:** `standby-net` (isolated from LLM stack)
 - **Inter-service DNS:** All services communicate via container names
-- **No external exposure:** All ports map to localhost only
+- **Exposure:** service ports are published on the host (not localhost-only); inter-service traffic stays on `standby-net`. Keep the host on a trusted LAN
 
 ### Storage
 
@@ -90,7 +90,7 @@ docker compose ps | grep -c "healthy"  # Should show 9
 
 ---
 
-## File Manifest
+## 📦 File Manifest
 
 ### Configuration Files (5 shipped, 3 host-local)
 
@@ -101,17 +101,17 @@ docker compose ps | grep -c "healthy"  # Should show 9
 - Health checks for all services
 - Network isolation enforced
 
-**traefik.yml** (96 lines)
+**traefik.yml** (94 lines)
 
 - Reverse proxy configuration
 - Security headers (CSP, HSTS, X-Frame-Options)
 - Rate limiting (100 req/min avg, 200 burst)
 - BasicAuth for dashboard/API
 
-**prometheus.yml** (38 lines)
+**prometheus.yml** (59 lines)
 
 - Metrics scraping configuration
-- Service targets (Prometheus, Grafana, Alertmanager, Traefik, Headscale, Uptime Kuma)
+- Service targets (Prometheus, Grafana, Alertmanager, Traefik, Headscale, Uptime Kuma, plus the six fleet node exporters)
 - Alert rules file reference
 - Alertmanager routing
 
@@ -140,7 +140,7 @@ docker compose ps | grep -c "healthy"  # Should show 9
 - Tag ownership rules
 - SSH access policies
 
-**alert_rules.yml** (58 lines)
+**alert_rules.yml** (88 lines)
 
 - Prometheus alerting rules
 - Service up/down detection
@@ -161,7 +161,7 @@ docker compose ps | grep -c "healthy"  # Should show 9
 
 ---
 
-## Configuration Files
+## 📦 Configuration Files
 
 ### 1. docker-compose.yml
 
@@ -951,7 +951,7 @@ groups:
 
 ---
 
-## Deployment Steps
+## 🚀 Deployment Steps
 
 ### Step 1: Extract & Organize Files
 
@@ -1037,7 +1037,7 @@ docker compose exec uptime-kuma curl -f http://localhost:3001/ && echo "✓ Upti
 
 ---
 
-## Post-Deployment Setup
+## 🚀 Post-Deployment Setup
 
 ### 1. Vaultwarden Master Account (FIRST PRIORITY)
 
@@ -1066,16 +1066,15 @@ sed -i "s/GRAFANA_ADMIN_PASSWORD=.*/GRAFANA_ADMIN_PASSWORD=$NEW_PASS/" .env
 docker compose up -d grafana
 ```
 
-### 3. Configure Grafana Datasource
+### 3. Verify the Grafana Datasource
 
-```bash
-# 1. Navigate to http://localhost:3000
-# 2. Log in: admin / the GRAFANA_ADMIN_PASSWORD value from .env
-# 3. Configuration > Data Sources > Add Prometheus
-# 4. URL: http://standby-prometheus:9090
-# 5. Click "Save & Test"
-# 6. Should show "Data source is working"
-```
+The Prometheus datasource is provisioned automatically from
+`grafana/provisioning` (URL: `http://standby-prometheus:9090`), and the
+Homelab Nodes dashboard ships in `grafana/dashboards`. Log in to
+Grafana at <http://localhost:3000> (admin / the GRAFANA_ADMIN_PASSWORD
+value from .env), open Configuration > Data Sources, and confirm the
+Prometheus datasource is present and tests OK. The datasource is
+provisioned read-only, so it cannot be edited in the UI.
 
 ### 4. Test Traefik Dashboard
 
@@ -1122,7 +1121,7 @@ docker compose exec headscale headscale preauthkeys create --user admin
 
 ---
 
-## Security Hardening
+## 🔒 Security Hardening
 
 ### Applied Security Measures
 
@@ -1136,7 +1135,7 @@ docker compose exec headscale headscale preauthkeys create --user admin
 **Network-Level:**
 
 - ✓ Isolated bridge network (`standby-net`)
-- ✓ Zero exposure outside docker network
+- ✓ Inter-service traffic confined to `standby-net`; service ports published on the host for LAN access
 - ✓ Rate limiting (100 req/min avg, 200 burst)
 - ✓ Security headers (CSP, HSTS, X-Frame-Options, etc.)
 
@@ -1163,14 +1162,14 @@ docker compose exec headscale headscale preauthkeys create --user admin
 | Default passwords | ✓ None (Grafana password set in .env before first start) |
 | Privilege escalation | ✓ Mitigated (no-new-privileges) |
 | Container escape | ✓ Mitigated (cap drop, read-only) |
-| Network exposure | ✓ Isolated (standby-net only) |
+| Network exposure | ✓ Inter-service traffic isolated on standby-net; host ports on a trusted LAN |
 | DDoS protection | ✓ Rate limiting enabled |
 | Encryption at rest | ✓ Headscale DB encrypted |
 | Encryption in transit | ✓ HTTPS ready (Traefik) |
 
 ---
 
-## Monitoring & Alerts
+## 📊 Monitoring & Alerts
 
 ### Prometheus Metrics
 
@@ -1202,7 +1201,9 @@ docker compose exec headscale headscale preauthkeys create --user admin
 
 ### Grafana Dashboards
 
-**After adding Prometheus datasource:**
+The Homelab Nodes dashboard ships with the stack (grafana/dashboards,
+provisioned into the Homelab folder on first start). To add custom
+dashboards:
 
 1. Create dashboard for system metrics
 1. Add panels for service health
@@ -1212,7 +1213,7 @@ docker compose exec headscale headscale preauthkeys create --user admin
 
 ---
 
-## Troubleshooting
+## 🔍 Troubleshooting
 
 ### Service Won't Start
 
@@ -1299,7 +1300,7 @@ chmod 600 .env
 
 ---
 
-## Backup & Recovery
+## 💾 Backup & Recovery
 
 ### Backup Strategy
 
@@ -1369,7 +1370,7 @@ docker compose up -d
 
 ---
 
-## Usage Guidelines
+## 🔧 Usage Guidelines
 
 ### Daily Operations
 
@@ -1433,7 +1434,7 @@ docker system df
 
 ---
 
-## Support & Documentation
+## 🔗 Support & Documentation
 
 For detailed information, see separate documentation files:
 
@@ -1466,7 +1467,7 @@ Post-Deployment:
 - [ ] Vaultwarden master account created
 - [ ] Vaultwarden 2FA enabled
 - [ ] Grafana admin password set in .env (no default)
-- [ ] Grafana Prometheus datasource added
+- [ ] Grafana Prometheus datasource verified (provisioned automatically)
 - [ ] Traefik dashboard tested
 - [ ] Headscale user created
 - [ ] Uptime Kuma configured
@@ -1474,7 +1475,7 @@ Post-Deployment:
 
 ---
 
-## Deploying to New Environments
+## 🚀 Deploying to New Environments
 
 ### Minimal Requirements
 
@@ -1604,7 +1605,7 @@ done
 
 - [ ] Vaultwarden master account + 2FA
 - [ ] Grafana admin password set in .env (no default)
-- [ ] Prometheus datasource added
+- [ ] Prometheus datasource verified (provisioned automatically)
 - [ ] First backup completed
 
 ---

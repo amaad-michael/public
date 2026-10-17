@@ -27,7 +27,7 @@
 
 ---
 
-## Pre-Deployment Checklist
+## 📋 Pre-Deployment Checklist
 
 **⚠️ SECURITY CRITICAL:**
 
@@ -58,7 +58,7 @@
 
 ---
 
-## Deployment
+## 🚀 Deployment
 
 ```bash
 # Start all services
@@ -72,7 +72,7 @@ docker compose ps
 
 ---
 
-## Health Checks
+## ✅ Health Checks
 
 ```bash
 # Check individual service health
@@ -110,7 +110,7 @@ docker compose logs -f headscale
 
 ---
 
-## Critical Post-Deployment Steps
+## 🚀 Critical Post-Deployment Steps
 
 1. **Grafana admin password:**
    The admin password is the GRAFANA_ADMIN_PASSWORD value in .env, set
@@ -121,11 +121,13 @@ docker compose logs -f headscale
    docker compose up -d grafana
    ```
 
-1. **Add Prometheus as Grafana datasource:**
-   - Log in to Grafana (<http://localhost:3000>)
-   - Configuration > Data Sources > Add Prometheus
-   - URL: `http://standby-prometheus:9090`
-   - Save & Test
+1. **Verify the Grafana datasource:**
+   - The Prometheus datasource is provisioned automatically from
+     grafana/provisioning (URL: `http://standby-prometheus:9090`),
+     along with the Homelab Nodes dashboard from grafana/dashboards.
+   - Log in to Grafana (<http://localhost:3000>), open Configuration >
+     Data Sources, and confirm the Prometheus datasource tests OK. It
+     is provisioned read-only, so it cannot be edited in the UI.
 
 1. **Vaultwarden first-time setup:**
    - Navigate to <http://localhost:8000>
@@ -198,7 +200,7 @@ sudo netstat -tlnp | grep -E ':(80|443|9090|3000|8080|8081|8000|3001)'
 
 ---
 
-## Backup Strategy (cold standby)
+## 💾 Backup Strategy (cold standby)
 
 Volumes persist data if container is removed:
 

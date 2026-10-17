@@ -1,6 +1,50 @@
 # ansible
 
-Scripts for use with ansible servers
+Ansible content for the homelab fleet: pi0 to pi4 plus neo1, in the
+`hosts` inventory (groups `pi_all`, `pi_debian`, `pi_rhel`, `pi_dns`,
+`pi_monitoring`, `pi_lamp`; `ansible_user` is michael). `ansible.cfg`
+points at that inventory by default. Collection requirements are in
+`requirements.yml` (community.docker, community.general, ansible.posix):
+
+```bash
+ansible-galaxy collection install -r ansible/requirements.yml
+```
+
+Playbooks are grouped by job under `playbooks/`. Each group README is
+the usage guide for its playbooks:
+
+- [accounts](playbooks/accounts/README.md): credential cycling and
+  account removal. The fleet password-cycle kit has its own guide at
+  [password-cycle](playbooks/accounts/password-cycle/README.md).
+- [cleanup](playbooks/cleanup/README.md): log cleanup, update
+  disabling, and the uninstall playbooks (Jenkins, Pi-hole). These
+  remove things; read the guide first.
+- [cockpit](playbooks/cockpit/README.md): Cockpit install and the PCP
+  performance collection setup.
+- [firewall](playbooks/firewall/README.md): the firewalld playbooks
+  and which hosts each one targets.
+- [healthchecks](playbooks/healthchecks/README.md): the fleet health
+  checks and the SMART harvest.
+- [llm](playbooks/llm/README.md): the NanoPi inference fleet (server
+  and load balancer), plus the two full deployment guides,
+  [gpu-box-llm-setup-v2.1.md](playbooks/llm/gpu-box-llm-setup-v2.1.md)
+  and [optiplex-llm-v2.3.md](playbooks/llm/optiplex-llm-v2.3.md).
+- [monthly](playbooks/monthly/README.md): monthly patching for the
+  fleet, Nobara, and the Pi-hole hosts, driven by
+  `scripts/run_monthly_maintenance.sh`.
+- [motd](playbooks/motd/): login banners, fastfetch or neofetch on
+  login, plus the hosts file and MOTD updater. Small enough to read
+  directly; no group guide.
+- [pihole](playbooks/pihole/README.md): Pi-hole + Unbound, attended
+  and automated variants.
+- [proxmox](playbooks/proxmox/README.md): Proxmox VE install,
+  hardening, and template builds on a bare Debian host.
+- [reboots](playbooks/reboots/README.md): simple and complex fleet
+  reboot playbooks.
+- [vuln](playbooks/vuln/README.md): the scanner node setup and the
+  Nmap scan playbook.
+- [workstation](playbooks/workstation/): the single Nobara patching
+  playbook (`nobara_patch.yml`); its usage header is the guide.
 
 ---
 Copyright (c) Michael Tatum.
