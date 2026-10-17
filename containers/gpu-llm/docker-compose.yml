@@ -1,0 +1,247 @@
+---
+# gpu-llm — Ollama (AMD ROCm) + Open WebUI + SearXNG inference stack.
+# Container mirror of the Ansible GPU-box deployment:
+#   ansible/playbooks/llm/gpu-box-llm-setup-v1.9.yml
+#
+# The playbook installs Ollama bare-metal on a Fedora box (official
+# installer, ROCm build, systemd drop-in) and runs Open WebUI and
+# SearXNG as containers beside it. This stack runs the same three
+# pieces as one compose project on any Docker host with an AMD GPU:
+# the official Ollama ROCm image replaces the bare-metal install, and
+# the two containers keep the playbook's images, wiring, and ports —
+# with the floating :latest tags replaced by version pins.
+#
+# Pinned images (index digests recorded in README.md):
+#   ollama/ollama:0.40.6-rocm
+#   ghcr.io/open-webui/open-webui:v0.12.3
+#   searxng/searxng:2026.10.16-8252c0bf6
+#
+# A .env is REQUIRED (unlike the CPU stacks): two secrets and the
+# host's GPU group IDs have no safe defaults. Copy .env.example to
+# .env and fill it in — compose refuses to start while any of them
+# is unset. First start is slow: the model-init service pulls the
+# default model list (~30 GB) into the ollama_data volume.
+#
+# GPU access: the ollama service passes /dev/kfd and /dev/dri through
+# and joins the host's render/video groups (RENDER_GID / VIDEO_GID
+# in .env). If those GIDs are wrong the container cannot open the
+# GPU and Ollama silently falls back to CPU — see README.md for the
+# getent commands and how to verify real GPU offload.
+
+networks:
+  gpu-llm:
+    driver: bridge
+
+volumes:
+  # Named as in the playbook deployment (docker volume create).
+  ollama_data:
+    name: ollama_data
+  open_webui_data:
+    name: open-webui-storage
+  searxng_data:
+    name: searxng-data
+
+services:
+  # Inference server — replaces the playbook's bare-metal Ollama.
+  # The systemd drop-in's OLLAMA_HOST pointed at the LAN IP; inside
+  # the compose network the server binds all interfaces and the API
+  # is published on the host below.
+  ollama:
+    image: ollama/ollama:0.40.6-rocm@sha256:e31d0bc9436bba21098c3cd078767c48303f854059f2ae3ce3698ac2fb2d5ba1
+    container_name: ollama
+    networks:
+      - gpu-llm
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "${RENDER_GID:?set RENDER_GID in .env - see .env.example}"
+      - "${VIDEO_GID:?set VIDEO_GID in .env - see .env.example}"
+    environment:
+      OLLAMA_HOST: "0.0.0.0:11434"
+      # The drop-in's keep-alive, so a loaded model stays resident
+      # for 30 minutes instead of the 5-minute Ollama default.
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-30m}
+      # ROCm gfx override, empty = autodetect (the drop-in only sets
+      # it when non-empty; 11.0.0 = RDNA3, 10.3.0 = RDNA2).
+      HSA_OVERRIDE_GFX_VERSION: ${HSA_OVERRIDE_GFX_VERSION:-}
+    ports:
+      # LAN-facing, exactly as the playbook exposes it: the Ollama
+      # API has NO authentication. The playbook scopes it with
+      # LAN-only firewalld rich rules — do the same on the host
+      # firewall, and never forward this port from the internet.
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    deploy:
+      resources:
+        limits:
+          # Deliberately loose: this box is a dedicated GPU server.
+          # The limit is a blast-radius guard, not a sizing target —
+          # a 14B model spilled to CPU layers plus its KV cache must
+          # never OOM-kill the server mid-inference. Model weights
+          # live in VRAM and in the ollama_data volume, not in RAM.
+          cpus: '8'
+          memory: 32G
+    healthcheck:
+      # The image ships no curl/wget; its own CLI is the probe. The
+      # client address is pinned to loopback because OLLAMA_HOST is
+      # a bind address (0.0.0.0), not a connect address.
+      test: ["CMD-SHELL", "OLLAMA_HOST=127.0.0.1:11434 ollama list"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    restart: unless-stopped
+
+  # One-shot model puller. Runs the ollama image's own CLI against
+  # the ollama service until every model in OLLAMA_MODELS is present,
+  # then exits. Pulls are idempotent, so re-running compose up (or
+  # this service alone) after changing the list is safe. The
+  # playbook pulls the same list through the same CLI.
+  model-init:
+    image: ollama/ollama:0.40.6-rocm@sha256:e31d0bc9436bba21098c3cd078767c48303f854059f2ae3ce3698ac2fb2d5ba1
+    container_name: ollama-model-init
+    networks:
+      - gpu-llm
+    entrypoint: ["/bin/sh", "/gpu-llm/model-init.sh"]
+    environment:
+      OLLAMA_HOST: "ollama:11434"
+      OLLAMA_MODELS: ${OLLAMA_MODELS:-qwen2.5-coder:14b,qwen2.5-coder:7b,deepseek-r1:14b,nomic-embed-text:latest,llava:13b}
+    volumes:
+      - ./model-init.sh:/gpu-llm/model-init.sh:ro
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /root:size=16m,mode=0700
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
+
+  # Chat UI — the playbook's Open WebUI container, same environment.
+  # The playbook runs it on the host network so it can reach Ollama
+  # on the LAN IP and SearXNG on loopback; on the compose network
+  # the same wiring uses the service names instead.
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:v0.12.3@sha256:a537bbe1e6b428820f52ed4a029d7fff97062e24d5cf32c365fba36fd0542def
+    container_name: open-webui
+    networks:
+      - gpu-llm
+    environment:
+      OLLAMA_BASE_URL: "http://ollama:11434"
+      ENABLE_PERSISTENT_CONFIG: "False"
+      ENABLE_WEB_SEARCH: "True"
+      WEB_SEARCH_ENGINE: "searxng"
+      SEARXNG_QUERY_URL: "http://searxng:8080/search?q=<query>"
+      WEB_SEARCH_RESULT_COUNT: "5"
+      WEB_SEARCH_CONCURRENT_REQUESTS: "10"
+      # Signs the UI's sessions. The playbook leaves the image
+      # default (a fresh random value per container build); a stack
+      # that recreates the container must pin it or every UI login
+      # is invalidated on recreate. Generate with openssl rand -hex 32.
+      WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:?set WEBUI_SECRET_KEY in .env - see .env.example}
+    ports:
+      # Also LAN-facing, like the playbook (firewalld opens this
+      # port LAN-scoped there; keep the same posture on the host).
+      - "${WEBUI_PORT:-8080}:8080"
+    volumes:
+      - open_webui_data:/app/backend/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          memory: 1G
+    healthcheck:
+      # The image's own baked-in healthcheck, run explicitly so the
+      # stack does not depend on the image keeping it.
+      test: ["CMD-SHELL", "curl --silent --fail http://localhost:8080/health | jq -ne 'input.status == true'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Metasearch for the WebUI's web-search feature — the playbook's
+  # SearXNG container, same caps, volumes, and loopback posture.
+  # settings.yml is the playbook's own file (see README.md for the
+  # one-line secret divergence); the real secret arrives via
+  # SEARXNG_SECRET, which SearXNG maps onto server.secret_key.
+  searxng:
+    image: searxng/searxng:2026.10.16-8252c0bf6@sha256:3619192d55f19eaec4b01892bdf10f80c67e8592fafd14b26ca504e52229210f
+    container_name: searxng
+    networks:
+      - gpu-llm
+    environment:
+      SEARXNG_BASE_URL: "http://127.0.0.1:${SEARXNG_PORT:-8888}/"
+      SEARXNG_SECRET: ${SEARXNG_SECRET:?set SEARXNG_SECRET in .env - see .env.example}
+    ports:
+      # Loopback only, as in the playbook: the unauthenticated
+      # metasearch proxy stays off the LAN. Open WebUI reaches it
+      # over the compose network, not through this port.
+      - "127.0.0.1:${SEARXNG_PORT:-8888}:8080"
+    volumes:
+      - ./settings.yml:/etc/searxng/settings.yml:ro
+      - searxng_data:/var/cache/searxng
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # The image entrypoint chowns the config and cache dirs to the
+      # searxng user before starting; the playbook grants the same
+      # four capabilities for the same reason.
+      - CHOWN
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    logging:
+      driver: json-file
+      options:
+        max-size: "1m"
+        max-file: "1"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+    healthcheck:
+      # Busybox wget ships in the image; /healthz is the app's own
+      # unauthenticated health route.
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
