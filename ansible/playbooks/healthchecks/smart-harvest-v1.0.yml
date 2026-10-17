@@ -1,0 +1,120 @@
+---
+# NAME: smart-harvest-v1.0.yml
+# WHAT: Idempotent Ansible playbook that harvests SMART data from every
+#       physical disk on the target hosts and stores one JSON report per host
+#       on the controller.
+# WHY:  Scheduled drive-health harvesting for the homelab. Collection is
+#       read-only; re-running never duplicates data and never fails on
+#       drives without SMART support (SD cards, some USB enclosures).
+# HOW:  ansible-playbook -i inventory.ini smart-harvest-v1.0.yml
+#       Override the target group:  -l pi_rhel
+#       Keep dated history copies:   -e smart_keep_history=true
+#       Force a device type (e.g. USB enclosures): -e smart_extra_args="-d sat"
+#       Pin drives instead of auto-discover: -e '{"smart_drives":["/dev/sda"]}'
+#
+# Idempotency notes:
+#   - smartmontools install uses the package module (no-op when present).
+#   - lsblk and smartctl run with changed_when: false (read-only probes).
+#   - smartctl failures (no SMART support, timeout) are captured, not fatal.
+#   - The per-host report file is overwritten, never appended, so reruns
+#     cannot duplicate data. The copy task reports "changed" on every run
+#     because collected_at is fresh -- that is the harvest working, not drift.
+
+- name: Harvest SMART data from physical drives
+  hosts: pi_all
+  become: true
+  gather_facts: true
+
+  vars:
+    smart_output_dir: "{{ playbook_dir }}/smart-data"
+    smart_keep_history: false
+    smart_extra_args: ""
+    smart_drives: []
+
+  tasks:
+    - name: Ensure smartmontools is installed
+      ansible.builtin.package:
+        name: smartmontools
+        state: present
+
+    - name: Discover disk devices with lsblk
+      ansible.builtin.command: lsblk -J -o NAME,TYPE
+      register: smart_lsblk
+      changed_when: false
+      when: smart_drives | length == 0
+
+    - name: Build drive list from discovered disks
+      ansible.builtin.set_fact:
+        smart_targets: >-
+          {{ (smart_lsblk.stdout | from_json).blockdevices
+             | selectattr('type', 'equalto', 'disk')
+             | map(attribute='name') | map('regex_replace', '^', '/dev/') | list }}
+      when: smart_drives | length == 0
+
+    - name: Use pinned drive list when provided
+      ansible.builtin.set_fact:
+        smart_targets: "{{ smart_drives }}"
+      when: smart_drives | length > 0
+
+    - name: Collect SMART JSON per drive
+      ansible.builtin.command: timeout 60 smartctl --json --all {{ smart_extra_args }} {{ item }}
+      loop: "{{ smart_targets }}"
+      register: smart_raw
+      changed_when: false
+      failed_when: false
+
+    - name: Parse each drive result
+      ansible.builtin.set_fact:
+        smart_parsed: "{{ smart_parsed | default([]) + [parsed] }}"
+      loop: "{{ smart_raw.results }}"
+      vars:
+        raw_text: "{{ item.stdout | default('') | trim }}"
+        raw_json: "{{ (raw_text | from_json) if raw_text.startswith('{') else {} }}"
+        dev_info: "{{ raw_json.device | default({}) }}"
+        parsed:
+          device: "{{ item.item }}"
+          rc: "{{ item.rc }}"
+          supported: "{{ raw_json.smart_support.available | default(false) }}"
+          health_passed: "{{ raw_json.smart_status.passed | default('n/a') }}"
+          model: "{{ raw_json.model_name | default(dev_info.name | default('unknown')) }}"
+          serial: "{{ dev_info.serial_number | default('unknown') }}"
+          temperature_c: "{{ raw_json.temperature.current | default('n/a') }}"
+          power_on_hours: "{{ raw_json.power_on_time.hours | default('n/a') }}"
+          full: "{{ raw_json }}"
+
+    - name: Ensure output directory exists on controller
+      ansible.builtin.file:
+        path: "{{ smart_output_dir }}"
+        state: directory
+        mode: "0755"
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: Write per-host SMART report on controller
+      ansible.builtin.copy:
+        content: "{{ {'host': inventory_hostname, 'collected_at': ansible_facts.date_time.iso8601, 'drives': smart_parsed} | to_nice_json }}"
+        dest: "{{ smart_output_dir }}/{{ inventory_hostname }}.json"
+        mode: "0644"
+      delegate_to: localhost
+      become: false
+
+    - name: Ensure history directory exists on controller
+      ansible.builtin.file:
+        path: "{{ smart_output_dir }}/history"
+        state: directory
+        mode: "0755"
+      delegate_to: localhost
+      become: false
+      run_once: true
+      when: smart_keep_history | bool
+
+    - name: Archive dated copy of this run
+      ansible.builtin.copy:
+        src: "{{ smart_output_dir }}/{{ inventory_hostname }}.json"
+        dest: "{{ smart_output_dir }}/history/{{ inventory_hostname }}-{{ ansible_facts.date_time.epoch }}.json"
+        remote_src: true
+        mode: "0644"
+      delegate_to: localhost
+      become: false
+      when: smart_keep_history | bool

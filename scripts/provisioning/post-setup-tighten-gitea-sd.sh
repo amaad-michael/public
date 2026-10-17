@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #===============================================================================
-# post-setup-tighten.sh v2.0-sd — Gitea lockdown + canary + backup cycle
+# post-setup-tighten-gitea-sd.sh v2.0-sd — Gitea lockdown + canary + backup cycle
 #
 # PURPOSE
 #   Run ONCE per node, AFTER the first-run web installer at

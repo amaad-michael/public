@@ -1,0 +1,75 @@
+---
+# Converted from the ansible-defulat-firewalld.txt export for the
+# public repo (2026-10-17), with two corrections to the original:
+# the firewalld module lives in the ansible.posix collection (the
+# community.general name does not resolve), and the module has no
+# set_default_zone parameter, so the default zone is set with
+# firewall-cmd instead.
+- name: Configure default firewalld firewall
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Ensure firewalld is installed and enabled
+      ansible.builtin.package:
+        name: firewalld
+        state: present
+      notify: Start and enable firewalld
+
+    - name: Set default zone to public
+      ansible.builtin.command: firewall-cmd --set-default-zone=public
+      notify: Reload firewalld
+
+    - name: Enable SSH service in the public zone permanently
+      ansible.posix.firewalld:
+        service: ssh
+        permanent: true
+        state: enabled
+      notify: Reload firewalld
+
+    - name: Enable HTTP service in the public zone permanently
+      ansible.posix.firewalld:
+        service: http
+        permanent: true
+        state: enabled
+      notify: Reload firewalld
+
+    - name: Enable HTTPS service in the public zone permanently
+      ansible.posix.firewalld:
+        service: https
+        permanent: true
+        state: enabled
+      notify: Reload firewalld
+
+    - name: Enable specific port (e.g., 8080/tcp) in the public zone permanently
+      ansible.posix.firewalld:
+        port: 8080/tcp
+        permanent: true
+        state: enabled
+      notify: Reload firewalld
+
+    - name: Enable a range of ports (e.g., 5000-5010/udp) in the public zone permanently
+      ansible.posix.firewalld:
+        port: 5000-5010/udp
+        permanent: true
+        state: enabled
+      notify: Reload firewalld
+
+    - name: Remove a service (e.g., cockpit) from the public zone permanently
+      ansible.posix.firewalld:
+        service: cockpit
+        permanent: true
+        state: disabled
+      notify: Reload firewalld
+
+  handlers:
+    - name: Start and enable firewalld
+      ansible.builtin.service:
+        name: firewalld
+        state: started
+        enabled: true
+
+    - name: Reload firewalld
+      ansible.builtin.service:
+        name: firewalld
+        state: reloaded

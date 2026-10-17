@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #===============================================================================
-# install-gitea.sh v2.0-sd — hardened Gitea deployment, SD-endurance edition
+# install-gitea-sd.sh v2.0-sd — hardened Gitea deployment, SD-endurance edition
 #
 # TARGETS
 #   Debian-family (Armbian/RaspiOS/Debian/Ubuntu) and RHEL-family

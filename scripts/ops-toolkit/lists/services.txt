@@ -1,0 +1,7 @@
+
+# One systemd service per line, comments ok
+sshd
+cron
+rsyslog
+# nginx
+# postgresql
