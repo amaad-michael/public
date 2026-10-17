@@ -1,0 +1,20 @@
+# Reboot playbooks
+
+Two ways to reboot Debian and RedHat family hosts with Ansible's `reboot` module. Both target `hosts: all` (scope with `--limit`), and both wait up to 600 seconds (`reboot_timeout`) for a host to come back. Neither sets a reboot message or pre- or post-reboot delays, so the module defaults apply there.
+
+| Playbook | Pre-check | Post-reboot confirmation |
+|---|---|---|
+| `reboot_simple.yml` | None | Handler prints that the host has been rebooted |
+| `reboot_complex.yml` | Fails the host if an `uptime` command errors before the reboot | The reboot module runs `whoami` as its test command; a handler reports the host rebooted and accessible |
+
+## reboot_simple.yml
+
+The plain reboot. One task reboots the host when its OS family is Debian or RedHat, and a handler posts a short notification afterwards. Nothing is checked before or after beyond the reboot module's own wait for the host to return.
+
+This is the playbook the monthly maintenance wrapper (`scripts/run_monthly_maintenance.sh`) uses for its reboot step, against pi0, pi2, pi3, and pi4.
+
+## reboot_complex.yml
+
+The guarded reboot. Before rebooting, a pre-task runs `uptime` on the host: if the command returns a non-zero exit code, the play fails for that host and no reboot is attempted. The uptime output is printed so the run log shows the pre-reboot state. The reboot itself passes `test_command: whoami`, so the module confirms the host is genuinely back and accepting commands, and a handler logs that the host rebooted successfully and is accessible.
+
+Pick `reboot_complex.yml` when a host might already be unhealthy and you want the run to stop instead of rebooting a sick machine blind. Pick `reboot_simple.yml` for routine, scheduled reboots of hosts you have just patched and verified.
