@@ -1,0 +1,152 @@
+---
+# llm — llama.cpp inference pool behind an nginx load balancer.
+# Container mirror of the Ansible LLM stack:
+#   ansible/playbooks/llm/llm-server-setup.yml  (llama-server nodes)
+#   ansible/playbooks/llm/llm-lb-setup.yml      (nginx LB)
+#   ansible/playbooks/llm/llm-lb.conf.j2        (LB config design)
+#
+# Two inference backends mirror his two NanoPi boards: llm-heavy is the
+# 4GB board's role (7B model), llm-light the 2GB board's role (1.5B
+# model). Models are host files, mounted read-only — the stack never
+# bakes a model into an image. Only the LB publishes a host port.
+#
+# Copy llm-env.example to .env and set the model filenames first;
+# compose refuses to render or start while they are unset.
+
+networks:
+  llm-net:
+    driver: bridge
+
+services:
+  # Inference backend — heavy node (4GB board role: 7B model)
+  llm-heavy:
+    image: ghcr.io/ggml-org/llama.cpp:server-b11681
+    container_name: llm-heavy
+    networks:
+      - llm-net
+    expose:
+      - "8080"
+    environment:
+      - LLAMA_ARG_HOST=0.0.0.0
+      - LLAMA_ARG_PORT=8080
+    command:
+      - --model
+      - /models/${LLM_HEAVY_MODEL:?set LLM_HEAVY_MODEL in .env (see llm-env.example)}
+      - --ctx-size
+      - ${LLM_CTX_SIZE:-2048}
+      - --n-predict
+      - ${LLM_N_PREDICT:-512}
+      - --threads
+      - ${LLM_HEAVY_THREADS:-4}
+    volumes:
+      - ${LLM_MODELS_DIR:-./models}:/models:ro
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  # Inference backend — light node (2GB board role: 1.5B model)
+  llm-light:
+    image: ghcr.io/ggml-org/llama.cpp:server-b11681
+    container_name: llm-light
+    networks:
+      - llm-net
+    expose:
+      - "8080"
+    environment:
+      - LLAMA_ARG_HOST=0.0.0.0
+      - LLAMA_ARG_PORT=8080
+    command:
+      - --model
+      - /models/${LLM_LIGHT_MODEL:?set LLM_LIGHT_MODEL in .env (see llm-env.example)}
+      - --ctx-size
+      - ${LLM_CTX_SIZE:-2048}
+      - --n-predict
+      - ${LLM_N_PREDICT:-512}
+      - --threads
+      - ${LLM_LIGHT_THREADS:-4}
+    volumes:
+      - ${LLM_MODELS_DIR:-./models}:/models:ro
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  # nginx load balancer — the pool's only published port
+  llm-lb:
+    image: nginx:1.30.6-alpine
+    container_name: llm-lb
+    networks:
+      - llm-net
+    ports:
+      - "${LLM_LB_PORT:-8090}:8080"
+    volumes:
+      - ./llm-lb.conf:/etc/nginx/conf.d/llm-lb.conf:ro
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/lb-health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      llm-heavy:
+        condition: service_healthy
+      llm-light:
+        condition: service_healthy
