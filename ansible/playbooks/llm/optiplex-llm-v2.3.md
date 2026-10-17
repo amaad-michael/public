@@ -41,6 +41,8 @@
 
 The two source documents were built on five hardware assumptions that do not hold for an OptiPlex 790. Every performance figure in them followed from those assumptions, so the figures were wrong too.
 
+<!-- MD056 disabled for the table below: mdl 0.13.0 counts escaped pipes in cells as column delimiters, so rows documenting shell pipelines report phantom columns. The rows render correctly on GitHub. -->
+<!-- markdownlint-disable MD056 -->
 | Claim in v1.5 / v1.0 | Actual | Consequence |
 |---|---|---|
 | "AVX2 optimization" build | **Verified on-host:** `grep -o -w -E 'avx\|avx2\|f16c\|fma' /proc/cpuinfo \| sort -u` returns `avx` and nothing else. AVX shipped with Sandy Bridge in 2011; AVX2 with Haswell in 2013; F16C with Ivy Bridge; FMA with Haswell | Every AVX2 build flag and every "AVX2: ✓" expected-output block is unreachable. The v1.5 script never crashed on this only because `-DLLAMA_AVX2=ON` is a renamed, ignored option — nothing ever tried to emit an AVX2 instruction — `-DLLAMA_AVX2=ON` is not a recognised CMake option (upstream sets `CMAKE_WARN_UNUSED_CLI`, so it warns and is ignored) |
@@ -160,6 +162,8 @@ Everything in the old optimization guide's Section 12 added up to a claimed 10�
 
 ### Corrections to verified defects
 
+<!-- MD056 disabled for the table below: mdl 0.13.0 counts escaped pipes in cells as column delimiters, so rows documenting shell pipelines report phantom columns. The rows render correctly on GitHub. -->
+<!-- markdownlint-disable MD056 -->
 | # | Change | Reason |
 |---|---|---|
 | 1 | `-DLLAMA_NATIVE=ON -DLLAMA_AVX2=ON` → `-DGGML_NATIVE=ON` | Some legacy `LLAMA_*` build options were remapped to `GGML_*` — `LLAMA_NATIVE` → `GGML_NATIVE` emits a deprecation warning and is honoured through the new name, not ignored. The rename was not blanket: many legitimate `LLAMA_*` options remain (e.g. `LLAMA_BUILD_SERVER`, `LLAMA_BUILD_EXAMPLES`). `-DLLAMA_AVX2=ON` was never a recognised option at all — upstream sets `CMAKE_WARN_UNUSED_CLI`, so it warns and is ignored. Either way, the v1.5 build was never configured the way its comments claimed |
@@ -1262,6 +1266,8 @@ sudo rm -f /var/log/optiplex-llm-setup.log
 - **v2.3 (2026-10-17):** OPEN-1 updated for the 3B preset: the model's SHA-256 was captured from the verified download used for the OptiPlex container stack (see Open items). No deployment changes; scripts and procedures unchanged.
 - **v2.2 (2026-10-07):** Added table of contents. No deployment changes; scripts and procedures unchanged.
 
+<!-- MD056 disabled for the table below: mdl 0.13.0 counts escaped pipes in cells as column delimiters, so rows documenting shell pipelines report phantom columns. The rows render correctly on GitHub. -->
+<!-- markdownlint-disable MD056 -->
 | Version | Date | Summary |
 |---|---|---|
 | 2.1.0 | 2026-09 | Nine verification corrections: kernel 6.17 → 6.14 HWE (verify with `uname -r`); `LLAMA_CURL` deprecated-and-ignored upstream, hard-dependency claim removed; `LLAMA_*`→`GGML_*` rename claim narrowed (remap is not blanket; `-DLLAMA_AVX2=ON` was never a recognised option); upstream `examples/`+`tools/`+`app/` trees and their build toggles confirmed still gating; `--cors-origins` verified in the current server README; auth checklist fixed (`/v1/models` is public by design — 401 check moved to `/v1/chat/completions`); Ansible CIDR derived from documented `address`/`netmask` via python3 instead of undocumented `prefix`; memory rank column attributed to on-host dmidecode, electrical-asymmetry claim hedged; OptiPlex 790 slot/capacity qualified by form factor (USFF: 2 slots / 8GB) |

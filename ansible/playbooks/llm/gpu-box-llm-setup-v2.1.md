@@ -31,6 +31,8 @@ Corrections from an independent verification pass (2026-09-16) against primary s
 
 Every change below is a correction to a verified defect or a deliberate behaviour change. Behaviour changes are marked **[DECISION]** and require sign-off.
 
+<!-- MD056 disabled for the table below: mdl 0.13.0 counts escaped pipes in cells as column delimiters, so rows documenting shell pipelines report phantom columns. The rows render correctly on GitHub. -->
+<!-- markdownlint-disable MD056 -->
 | # | Change | Reason |
 |---|--------|--------|
 | 1 | SearXNG moved from `--network host` + `SEARXNG_PORT` to bridge networking with `-p 127.0.0.1:8888:8080` | `SEARXNG_BIND_ADDRESS` and `settings.yml server.port` / `server.bind_address` are inert on the current image (Granian replaced uWSGI in container build 2025.7.4). Note: `SEARXNG_PORT` itself **is** honoured — the entrypoint aliases it to `GRANIAN_PORT` (upstream issue #5934) — so the defect was the unscoped bind address under `--network host`, not the port override. Bridge + explicit `-p` removes the question entirely |
