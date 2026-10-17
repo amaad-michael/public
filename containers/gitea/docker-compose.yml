@@ -1,0 +1,56 @@
+---
+networks:
+  gitea-net:
+    driver: bridge
+
+volumes:
+  gitea_data:
+
+services:
+  # Gitea - self-hosted git mirror of the GitHub repos
+  # Container form of scripts/provisioning/install-gitea.sh: same version
+  # pin (1.26.4), same in-container ports (3000 web, 2222 built-in SSH),
+  # same SQLite posture. Role: pull-mirror the GitHub repos so the code
+  # survives a GitHub outage or account problem. Host web port is 3003
+  # because the monitoring stack already publishes 3000 (Grafana) and
+  # 3001 (Uptime Kuma) when the two stacks share a host.
+  gitea:
+    image: gitea/gitea:1.26.4
+    container_name: gitea
+    networks:
+      - gitea-net
+    ports:
+      - "3003:3000"
+      - "2222:2222"
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - GITEA__security__SECRET_KEY=${GITEA_SECRET_KEY:?set GITEA_SECRET_KEY in .env}
+      - GITEA__security__INTERNAL_TOKEN=${GITEA_INTERNAL_TOKEN:?set GITEA_INTERNAL_TOKEN in .env}
+      - GITEA__server__DOMAIN=${GITEA_DOMAIN:-localhost}
+      - GITEA__server__ROOT_URL=${GITEA_ROOT_URL:-http://localhost:3003/}
+    volumes:
+      - gitea_data:/data
+      - ./app.ini:/data/gitea/conf/app.ini:ro
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

@@ -1,0 +1,10 @@
+# cp gitea-env.example .env && chmod 600 .env && fill values. NEVER commit .env.
+# Generate the two secrets with any Gitea 1.26.4 binary (or the container):
+#   gitea generate secret SECRET_KEY
+#   gitea generate secret INTERNAL_TOKEN
+GITEA_SECRET_KEY=
+GITEA_INTERNAL_TOKEN=
+# The name and URL this instance answers to; they land in clone URLs.
+# LAN example: GITEA_DOMAIN=pi1.local and GITEA_ROOT_URL=http://pi1.local:3003/
+GITEA_DOMAIN=localhost
+GITEA_ROOT_URL=http://localhost:3003/
