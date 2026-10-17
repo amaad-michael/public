@@ -21,12 +21,12 @@ the vault at run time, and a pre-flight gate before anything changes.
 Passwords live in the vault (Proton Pass), never in this repo. Each host
 gets a unique 32-character password per account, generated in the vault.
 
-At run time, copy passwords.example.yml to a file outside the repo, fill
-every value from the vault, and inject it as extra vars. Commands are
-written from the repo root:
+At run time, copy passwords.example.yml to ~/passwords.yml (outside the
+repo) and fill every value from the vault, then inject it as extra vars.
+Commands are written from the repo root:
 
 ```bash
-ansible-playbook -i ansible/hosts ansible/playbooks/accounts/password-cycle/cycle_creds.yml -e @passwords.yml -e ansible_user=root --limit neo1
+ansible-playbook -i ansible/hosts ansible/playbooks/accounts/password-cycle/cycle_creds.yml -e "@$HOME/passwords.yml" -e ansible_user=root --limit neo1
 ```
 
 The cycle runs as root, not as the inventory's usual michael user: the
@@ -52,7 +52,7 @@ After the cycle and hardening, verify the fleet, then shred the vars file:
 
 ```bash
 ansible-playbook -i ansible/hosts ansible/playbooks/accounts/password-cycle/verify_cycle_creds.yml
-shred -u passwords.yml
+shred -u ~/passwords.yml
 ```
 
 Keep the vars file until the whole fleet verifies. Re-running the cycle

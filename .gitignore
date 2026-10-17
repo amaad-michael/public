@@ -18,6 +18,10 @@ desktop.ini
 id_rsa
 id_ed25519
 *.secret
+# Runtime password-cycle vars file: a filled copy holds real passwords
+# and must never be committed (the kit keeps it outside the repo; this
+# entry is the backstop if a copy lands in the tree anyway).
+passwords.yml
 
 # --- IDE & Editor Artifacts ---
 # Clean up project-specific configuration folders
