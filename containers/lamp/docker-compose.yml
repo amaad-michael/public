@@ -1,0 +1,137 @@
+---
+networks:
+  lamp-net:
+    driver: bridge
+
+volumes:
+  lamp_db:
+
+services:
+  # httpd 2.4 - web front end
+  # Container form of scripts/provisioning/lamp-install-*.sh: same
+  # stack (httpd 2.4 + PHP-FPM 8.3 + MariaDB 10.11), same posture.
+  # Only this service is published: host port 8083, because the
+  # monitoring stack already publishes 8080/8081/8082 and the pihole
+  # stack 80/443 when stacks share a host. PHP-FPM and MariaDB are
+  # reachable only on lamp-net, never published.
+  web:
+    image: httpd:2.4
+    container_name: lamp-web
+    networks:
+      - lamp-net
+    ports:
+      - "8083:80"
+    volumes:
+      - ./httpd/httpd.conf:/usr/local/apache2/conf/httpd.conf:ro
+      - ./httpd/lamp.conf:/usr/local/apache2/conf/extra/lamp.conf:ro
+      - ./html:/var/www/html:ro
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /usr/local/apache2/logs
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/80; printf \"GET / HTTP/1.0\\r\\n\\r\\n\" >&3; grep -a -m 1 -q \"200 OK\" <&3'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      php:
+        condition: service_healthy
+
+  # PHP-FPM 8.3 - application runtime
+  # Built from ./php/Dockerfile (official php:8.3-fpm + mysqli and
+  # pdo_mysql, mirroring the installers' php-mysqlnd package).
+  php:
+    build:
+      context: ./php
+    image: lamp-php:8.3-fpm
+    container_name: lamp-php
+    networks:
+      - lamp-net
+    environment:
+      - MYSQL_HOST=db
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-lamp}
+      - MYSQL_USER=${MYSQL_USER:?set MYSQL_USER in .env}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}
+    volumes:
+      - ./html:/var/www/html:ro
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /usr/local/var/run
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@fsockopen('127.0.0.1', 9000) ? 0 : 1);"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # MariaDB 10.11 - database (full-life stream, as the installers pin)
+  db:
+    image: mariadb:10.11
+    container_name: lamp-db
+    networks:
+      - lamp-net
+    environment:
+      - MARIADB_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+      - MARIADB_DATABASE=${MYSQL_DATABASE:-lamp}
+      - MARIADB_USER=${MYSQL_USER:?set MYSQL_USER in .env}
+      - MARIADB_PASSWORD=${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}
+    volumes:
+      - lamp_db:/var/lib/mysql
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run/mysqld
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
