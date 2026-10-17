@@ -9,6 +9,7 @@
 #       Prompts for the 'michael' password on each host (unless already keyed).
 #       Safe to re-run; hosts already carrying the key are skipped by ssh-copy-id.
 #
+set -euo pipefail
 
 # Define the list of IP addresses
 declare -a IPs=(

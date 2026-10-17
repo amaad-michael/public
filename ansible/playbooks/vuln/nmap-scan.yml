@@ -1,0 +1,62 @@
+---
+# Converted from the ansible-nmap.txt export for the public repo
+# (2026-10-17). The original referenced a custom NSE script
+# (files/nmap-scripts/my-custom-script.nse) that is not available,
+# so the custom-script copy and cleanup tasks were removed and the
+# scan runs on built-in NSE scripts only.
+- name: Advanced Nmap Scan with Built-in NSE Scripts and Output Handling
+  hosts: all
+  gather_facts: false
+  vars:
+    # Ports to scan
+    scan_ports: "80,443,22"
+
+    # Built-in NSE scripts to run (can be empty)
+    builtin_scripts: "http-title,vuln"
+
+    # Directory on the control node to store results
+    results_dir: "./nmap_results"
+
+  tasks:
+
+    - name: Ensure results directory exists on control node
+      delegate_to: localhost
+      run_once: true
+      file:
+        path: "{{ results_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Check if Nmap is installed
+      command: which nmap
+      register: nmap_check
+      ignore_errors: true
+
+    - name: Fail if Nmap is not installed
+      fail:
+        msg: "Nmap is not installed on the host!"
+      when: nmap_check.rc != 0
+
+    - name: Run Nmap with built-in scripts
+      shell: >
+        nmap -p {{ scan_ports }}
+        --script "{{ builtin_scripts }}"
+        -oN /tmp/nmap_scan_{{ inventory_hostname }}.txt
+        {{ inventory_hostname }}
+      register: nmap_result
+      changed_when: false
+
+    - name: Fetch scan result from remote host to control node
+      fetch:
+        src: "/tmp/nmap_scan_{{ inventory_hostname }}.txt"
+        dest: "{{ results_dir }}/"
+        flat: true
+
+    - name: Clean up scan file from remote host
+      file:
+        path: "/tmp/nmap_scan_{{ inventory_hostname }}.txt"
+        state: absent
+
+    - name: Show brief Nmap output in console
+      debug:
+        var: nmap_result.stdout
