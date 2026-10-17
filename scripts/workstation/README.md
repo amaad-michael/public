@@ -1,0 +1,115 @@
+# scripts/workstation
+
+First-boot setup and recurring update scripts for the two workstation
+hosts: the Nobara GPU box and the Linux Mint OptiPlex. The Ansible
+patching counterpart for Nobara lives in
+`ansible/playbooks/workstation/nobara_patch.yml`.
+
+## 🛠️ New Nobara setup
+
+Two variants of the same first-boot job. Both run as root on a fresh
+Nobara install, and both:
+
+- Find the discrete AMD GPU (amdgpu driver, device class 0x030000,
+  so the iGPU is skipped) and lock it to high performance by writing
+  `high` to its `power_dpm_force_performance_level`. Both exit with
+  an error if no discrete AMD GPU is found.
+- Install the Cinnamon desktop group and download a placeholder
+  wallpaper to `/usr/share/backgrounds/nobara-cinnamon`.
+
+The GPU lock is a runtime sysfs setting and does not persist across
+a reboot. Revert it by writing `auto` to the same file; the main
+script prints the exact path.
+
+### new-nobara-setup-v1.1.sh
+
+A single linear, interactive run: GPU tuning first, then a press
+Enter prompt, then the desktop part. It updates with `nobara-sync
+cli`, falling back to `dnf update -y` if nobara-sync is missing. The
+wallpaper downloads at 3840x2160, and a failed download only warns.
+It ends with post-setup instructions: log out, pick Cinnamon from
+the gear menu on the login screen, then set themes and wallpaper.
+
+### new-nobara-setup-alt-v1.1.sh
+
+A modular variant that takes a subcommand:
+
+```bash
+sudo ./new-nobara-setup-alt-v1.1.sh setup     # full setup
+sudo ./new-nobara-setup-alt-v1.1.sh gpu-high  # GPU tuning only
+```
+
+`setup` runs nobara-sync if present, then `dnf update -y` and
+`dnf autoremove -y`, the Cinnamon install, and a 1920x1080
+wallpaper. `gpu-high` runs only the GPU tuning and verifies the
+level reads back as `high`. There is no prompt and no closing
+instructions block; the script recommends a reboot at the end.
+
+## update-gpu-box.sh
+
+Recurring update pass for the Nobara GPU box. Run as root: it writes
+`/var/log/gpu-box-update.log` and drives dnf, systemctl, and Docker.
+
+1. OS update with `nobara-sync --no-reboot -y`. On a
+   dependency-conflict exit it falls back to
+   `dnf distro-sync --refresh`; other failures abort the run.
+1. Repository key packages (`nobara-repos`, `nobara-gpg-keys`,
+   `fedora-repos`).
+1. Ollama reinstall through the official installer, with the same
+   optional `OLLAMA_INSTALL_SHA256` checksum pin as the setup
+   script, then an Ollama service restart.
+1. Image pulls: SearXNG `:latest` and Open WebUI `v0.5.20`.
+1. Recreation of the SearXNG and Open WebUI containers.
+1. Pulls of the five models.
+1. Port and API verification.
+
+Set `DRY_RUN=true` to log every action without executing it. The
+script requires the GPU box setup to have run first; it aborts if
+`/etc/searxng` does not exist. One divergence to know about: the
+recreated containers use this script's older conventions (host
+networking for SearXNG, the `RAG_WEB_SEARCH_*` environment names for
+Open WebUI), while `scripts/llm/gpu-box-llm-setup-v1.9.sh` now uses
+bridge networking with a loopback publish for SearXNG and the
+`ENABLE_WEB_SEARCH` / `WEB_SEARCH_*` names.
+
+## update-optiplex.sh
+
+Recurring update pass for the OptiPlex, in the older home-directory
+layout. Run as root (log: `/var/log/optiplex-update.log`).
+
+1. `apt-get update` and `apt-get upgrade`.
+1. A clean rebuild of the llama.cpp checkout at `~/projects/llama.cpp`
+   (under the invoking user's home; `PROJECTS_DIR` and `MODELS_DIR`
+   override the roots): pull, delete the build directory, rebuild,
+   restart the `llama-server` service, and wait for it to be active.
+1. Model status. The model (a Meta-Llama-3.1-8B GGUF in `~/models`)
+   is not updated by the script; it prints that a model change is a
+   manual step.
+1. Port 8080 and chat API verification.
+
+`DRY_RUN=true` logs the actions without executing them. Note the
+scope limit: this script's paths and build flags match the older
+home-directory setup, not `scripts/llm/optiplex-llm-setup-v2.1.sh`,
+which installs to `/opt/llama.cpp` and builds with `GGML_NATIVE`.
+Use this updater only on a host set up the home-directory way.
+
+## Ansible counterpart
+
+`ansible/playbooks/workstation/nobara_patch.yml` patches Nobara
+desktops through Ansible instead of by hand (target group `nobara`,
+`become: true`):
+
+```bash
+ansible-playbook -i inventory.ini nobara_patch.yml
+ansible-playbook -i inventory.ini nobara_patch.yml --tags flatpak
+```
+
+It runs `nobara-sync --no-reboot`, a full dnf upgrade and
+autoremove, system and per-user Flatpak updates, and a snap refresh.
+Firmware is check-only: it prints a notification if updates are
+available rather than applying them. It never reboots; if the
+running kernel differs from the installed one it prints a
+reboot-required notice. Tags (`nobara_sync`, `dnf`, `flatpak`,
+`snap`, `firmware`, `reboot_check`) run individual parts. Each run
+logs to `/var/log/ansible-patch/nobara_patch_<date>.log` on the
+target.
