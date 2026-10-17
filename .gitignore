@@ -60,3 +60,8 @@ yarn-error.log*
 *.tmp
 *.bak
 *.old
+
+# --- Host-local container configs (created on the host, never committed) ---
+containers/monitoring/ntfy.conf
+containers/monitoring/headscale.conf
+containers/monitoring/policy.hujson

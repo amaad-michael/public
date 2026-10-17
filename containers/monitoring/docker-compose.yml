@@ -67,7 +67,7 @@ services:
       - "3000:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-changeme}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
       - GF_INSTALL_PLUGINS=grafana-piechart-panel
       - GF_SECURITY_DISABLE_BRUTE_FORCE_LOGIN_PROTECTION=false
       - GF_SECURITY_COOKIE_SAMESITE=Strict
@@ -231,7 +231,7 @@ services:
 
   # step-ca - certificate authority
   step-ca:
-    image: smallstep/step-ca:0.24.4
+    image: smallstep/step-ca:0.24.2
     container_name: standby-step-ca
     networks:
       - standby-net
@@ -304,7 +304,7 @@ services:
 
   # Vaultwarden - password manager
   vaultwarden:
-    image: vaultwarden/server:1.0.0
+    image: vaultwarden/server:1.37.4
     container_name: standby-vaultwarden
     networks:
       - standby-net
@@ -350,7 +350,7 @@ services:
 
   # Uptime Kuma - status monitoring
   uptime-kuma:
-    image: louislam/uptime-kuma:1.23.11
+    image: louislam/uptime-kuma:1.23.11-alpine
     container_name: standby-uptime-kuma
     networks:
       - standby-net
