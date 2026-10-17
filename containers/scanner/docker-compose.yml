@@ -1,0 +1,52 @@
+---
+# Scanner node — run-on-demand container equivalent of
+# ansible/playbooks/vuln/setup_scanner.yml. This is a tool you run
+# for a scan, not a daemon: there are no published ports, no
+# restart policy, and no healthcheck. Usage:
+#   docker compose build
+#   docker compose run --rm scanner nmap -sV 127.0.0.1
+# Full usage, the network-mode tradeoff, and the capability notes
+# are in README.md.
+volumes:
+  scanner_workspace:
+
+services:
+  scanner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: scanner-node:bookworm
+    container_name: scanner-node
+    # Host networking is the deployment choice for LAN scanning:
+    # bridged NAT hides the container behind the docker bridge, so
+    # ARP ping sweeps and broadcast discovery see the bridge, not
+    # the LAN, and source addresses are rewritten. Host mode puts
+    # the scanner on the host's interfaces directly. The tradeoff
+    # (the container shares the host network namespace) is spelled
+    # out in README.md; drop this line for single-target connect
+    # scans if you prefer the bridge.
+    network_mode: host
+    volumes:
+      # The playbook's /opt/tatum_audit workspace, persisted across
+      # one-shot runs so scan output survives the container.
+      - scanner_workspace:/opt/tatum_audit
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # Raw sockets for SYN, UDP, and OS-detection scans. Plain
+      # connect scans (-sT) work without it; see README.md.
+      - NET_RAW
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
