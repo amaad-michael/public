@@ -10,7 +10,7 @@
 
 ---
 
-## Table of Contents
+## 📋 Table of Contents
 
 - [Hardware Reality — read this first](#hardware-reality--read-this-first)
    - [What actually bounds throughput](#what-actually-bounds-throughput)
@@ -206,7 +206,7 @@ Everything in the old optimization guide's Section 12 added up to a claimed 10�
 
 ---
 
-## Security posture
+## 🔒 Security posture
 
 `llama-server` defaults to binding `127.0.0.1`, and with no API key configured it responds to every request. Both source documents overrode the safe default with `--host 0.0.0.0` while adding neither an API key nor a firewall rule — an unauthenticated inference endpoint reachable by anything on the LAN, with CORS defaulting to `*`.
 
@@ -214,7 +214,7 @@ v2.0 defaults to loopback **and** generates a required API key on every deployme
 
 ---
 
-## Prerequisites
+## 📋 Prerequisites
 
 - Dell OptiPlex 790 (or any Sandy-Bridge-era x86-64 box), Linux Mint 22.2 / Ubuntu 24.04
 - Root or passwordless sudo
@@ -227,7 +227,7 @@ v2.0 defaults to loopback **and** generates a required API key on every deployme
 
 ---
 
-## Deployment Script
+## 🚀 Deployment Script
 
 Save as `optiplex-llm-setup-v2.1.sh`:
 
@@ -990,6 +990,8 @@ ansible-galaxy collection install community.general
         src: "{{ lan_cidr.stdout }}"
 
     - name: Deploy systemd unit
+      # the ExecStart line in the unit content below cannot be split without altering the generated unit file
+      # yamllint disable rule:line-length
       copy:
         dest: /etc/systemd/system/llama-server.service
         owner: root
@@ -1021,6 +1023,7 @@ ansible-galaxy collection install community.general
 
           [Install]
           WantedBy=multi-user.target
+      # yamllint enable rule:line-length
       register: unit_file
 
     - name: Enable and (re)start llama-server
@@ -1159,7 +1162,7 @@ time curl -s -X POST http://127.0.0.1:8080/v1/chat/completions \
 
 ---
 
-## Verification Checklist
+## ✅ Verification Checklist
 
 - [ ] Service active: `systemctl status llama-server` → `active (running)`
 - [ ] Running as `llm`, not root: `ps -o user= -C llama-server`
@@ -1177,7 +1180,7 @@ time curl -s -X POST http://127.0.0.1:8080/v1/chat/completions \
 
 ---
 
-## Troubleshooting
+## 🔍 Troubleshooting
 
 ```bash
 # Service won't start
@@ -1222,7 +1225,7 @@ sudo lsof -i :8080
 
 ---
 
-## Uninstall
+## 🛠️ Uninstall
 
 ```bash
 sudo systemctl stop llama-server

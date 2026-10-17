@@ -2,7 +2,7 @@
 
 **Version:** v1.0 · **Last Updated:** October 7, 2026
 
-## Table of Contents
+## 📋 Table of Contents
 
 - [Overview](#overview)
 - [1. Container-Level Hardening](#1-container-level-hardening)
@@ -42,13 +42,13 @@
 - [Quick Reference: Security by Service](#quick-reference-security-by-service)
 - [Incident Response Template](#incident-response-template)
 
-## Overview
+## 📖 Overview
 
 All 9 services are hardened across 4 layers: **container-level**, **network-level**, **application-level**, and **operational**.
 
 ---
 
-## 1. Container-Level Hardening
+## 🔒 1. Container-Level Hardening
 
 ### Applied to ALL services
 
@@ -114,7 +114,7 @@ deploy:
 
 ---
 
-## 2. Network-Level Hardening
+## 🔒 2. Network-Level Hardening
 
 ### Traefik Security Headers (middleware)
 
@@ -166,13 +166,13 @@ Only expose necessary ports; all inter-service communication via container DNS (
 ```
 Prometheus (9090)    → Metrics API only, not for scraping config changes
 Grafana (3000)       → UI only, requires login
-Alertmanager (9093)  → Internal only (not exposed by default)
+Alertmanager (9093)  → Published on the host; routes alerts to the Ntfy webhook
 Traefik (8080)       → Protected by BasicAuth
 ```
 
 ---
 
-## 3. Application-Level Hardening
+## 🔒 3. Application-Level Hardening
 
 ### Prometheus
 
@@ -204,7 +204,7 @@ GF_AUTH_ANONYMOUS_ENABLED=false
 ### Vaultwarden
 
 ```
-DOMAIN=https://vaultwarden.localhost
+DOMAIN=https://vaultwarden.localhost:8000
 SHOW_PASSWORD_HINT=false
 INVITATION_ORG_NAME=Standby
 ORG_CREATION_USERS=          # Empty = only admins create orgs
@@ -252,7 +252,7 @@ oidc:
 
 ---
 
-## 4. Operational Hardening
+## 🔒 4. Operational Hardening
 
 ### Image Pinning
 
@@ -348,7 +348,7 @@ accessLog:
 
 ---
 
-## 6. Monitoring & Response
+## 📊 6. Monitoring & Response
 
 ### What to Monitor
 
@@ -388,7 +388,7 @@ docker compose up -d standby-prometheus  # Rebuild
 
 ---
 
-## 7. Deployment Verification Checklist
+## ✅ 7. Deployment Verification Checklist
 
 Before production:
 
@@ -474,12 +474,12 @@ docker compose logs --tail 100 prometheus | grep -i error
 
 ---
 
-## Quick Reference: Security by Service
+## 🔒 Quick Reference: Security by Service
 
 ```
 Prometheus:    No admin API, read-only root, 512M max
 Grafana:       Auth required, sign-up disabled, secure cookies
-Alertmanager:  Webhook notifications, no API exposure
+Alertmanager:  Webhook notifications to Ntfy, UI on 9093
 Traefik:       Rate limiting, BasicAuth, security headers
 Ntfy:          Deny-all auth, 256M max
 step-ca:       Self-signed (homelab OK), 256M max

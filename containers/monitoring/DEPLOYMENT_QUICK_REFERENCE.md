@@ -1,6 +1,6 @@
 # Deployment Quick Reference
 
-## Pre-Deployment
+## 🚀 Pre-Deployment
 
 ```bash
 # 1. Verify all files present
@@ -20,7 +20,7 @@ docker compose config > /dev/null && echo "✓ Syntax OK"
 sudo netstat -tlnp | grep -E ":80|:443|:9090|:3000|:8080|:8081|:9000|:8082|:8000|:3001"
 ```
 
-## Deployment
+## 🚀 Deployment
 
 ```bash
 # Start stack
@@ -32,7 +32,7 @@ docker compose ps
 # Expected: 9/9 containers "Up"
 ```
 
-## Post-Deployment (First Run)
+## 🚀 Post-Deployment (First Run)
 
 ```bash
 # 1. Wait for services to initialize (30-60 seconds)
@@ -50,17 +50,17 @@ docker compose ps | grep -E "healthy|unhealthy"
 # (there is no default). To rotate: update .env, then run:
 # docker compose up -d grafana
 
-# 5. Add Prometheus datasource to Grafana
-# Navigate to http://localhost:3000
-# Admin > Data Sources > Add Prometheus
-# URL: http://standby-prometheus:9090
-# Save & Test
+# 5. Verify the Grafana datasource
+# The Prometheus datasource and the Homelab Nodes dashboard are
+# provisioned automatically from grafana/provisioning and
+# grafana/dashboards; the datasource is read-only in the UI.
+# Navigate to http://localhost:3000 and confirm it tests OK.
 
 # 6. Test Traefik dashboard (password whose hash is TRAEFIK_AUTH_HASH in .env)
 curl -u admin:<password> http://localhost:8080/api/version
 ```
 
-## Health Check (All Services)
+## ✅ Health Check (All Services)
 
 ```bash
 docker compose exec prometheus wget --quiet --tries=1 --spider http://localhost:9090/-/healthy && echo "✓ Prometheus"
@@ -88,7 +88,7 @@ docker compose exec uptime-kuma curl -f http://localhost:3001/ 2>/dev/null && ec
 | Vaultwarden | http://localhost:8000 | Create master account |
 | Uptime Kuma | http://localhost:3001 | Configure after init |
 
-## Verify Isolation from LLM Stack
+## ✅ Verify Isolation from LLM Stack
 
 ```bash
 # Check networks
@@ -102,7 +102,7 @@ sudo netstat -tlnp | grep -E "11434|8501" # LLM ports (should NOT be in standby 
 sudo netstat -tlnp | grep -E "9090|3000|8080" # Standby ports
 ```
 
-## Monitoring
+## 📊 Monitoring
 
 ```bash
 # Watch logs in real-time
@@ -166,7 +166,7 @@ docker stats --no-stream
 docker stats --no-stream standby-prometheus
 ```
 
-## Troubleshooting
+## 🔍 Troubleshooting
 
 ### Service not starting
 
@@ -209,7 +209,7 @@ docker inspect standby-prometheus | grep -A 10 Resources
 docker compose restart prometheus
 ```
 
-## Security Verification
+## 🔒 Security Verification
 
 ```bash
 # Verify no containers running as root
@@ -278,7 +278,7 @@ docker system events --since 10m  # Recent events
 
 ---
 
-## Key Files
+## 📦 Key Files
 
 | File | Purpose | Location |
 |------|---------|----------|

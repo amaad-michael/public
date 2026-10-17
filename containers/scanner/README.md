@@ -21,7 +21,7 @@ externally managed (PEP 668), so the pip packages live in a venv at
 `/opt/scanner-venv`, first on `PATH`. The packages are the same; on
 the node they sit in the system environment instead.
 
-## Build and verify
+## ✅ Build and verify
 
 ```bash
 cd containers/scanner
@@ -30,7 +30,7 @@ docker compose run --rm scanner nmap --version
 docker compose run --rm scanner python3 -c "import requests, dns; print(requests.__version__, dns.__version__)"
 ```
 
-## Usage
+## 🔧 Usage
 
 Version and service scan of a single host:
 
@@ -52,7 +52,7 @@ see below):
 docker compose run --rm scanner nmap -sn 192.168.0.0/24
 ```
 
-## Network mode: host, and the tradeoff
+## 🌐 Network mode: host, and the tradeoff
 
 The compose file sets `network_mode: host`. That is a deliberate
 choice for a LAN scanner, not a shortcut:

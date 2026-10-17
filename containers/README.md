@@ -1,19 +1,43 @@
 # containers
 
-code for docker and podman
+Docker Compose stacks, one folder per project. Each project README
+covers its own setup and verification; this page collects the one
+pattern they share: files that live only on the deployment host.
 
-## Host-local files (never committed)
+## 📦 Host-side files (never committed)
 
-Three files the monitoring compose mounts are created on the host and are
-git-ignored by name — a fresh clone will not have them, and those services
-will not start until they exist:
+Some stacks read configuration or secrets from files that exist only
+on the host. A fresh clone will not have them, and the affected
+services will not start until they exist. Keep every `.env` at
+chmod 600. The pattern per project:
 
-- containers/monitoring/ntfy.conf — ntfy server config
-- containers/monitoring/headscale.conf — headscale config
-- containers/monitoring/policy.hujson — headscale ACL policy
-
-The Grafana admin password is likewise host-side: copy
-containers/monitoring/.env.example to containers/monitoring/.env, set
-GRAFANA_ADMIN_PASSWORD there, and chmod 600 the .env. Compose refuses to
-start Grafana until the variable is set. The pihole project follows the
-same pattern (see containers/pihole/pi-dns-env.example).
+- **monitoring**: three configs the compose mounts, created on the
+  host and git-ignored by name (ntfy.conf, headscale.conf,
+  policy.hujson), plus a `.env` copied from `.env.example` holding
+  GRAFANA_ADMIN_PASSWORD and the TRAEFIK_AUTH_HASH line. Compose
+  refuses to start Grafana until the password variable is set.
+- **pihole**: a `.env` copied from `pi-dns-env.example`, holding the
+  image pins (PIHOLE_TAG, UNBOUND_TAG) and PIHOLE_API_PASSWORD.
+  Compose refuses to render until both tags are pinned.
+- **gitea**: a `.env` copied from `gitea-env.example`, holding
+  GITEA_SECRET_KEY and GITEA_INTERNAL_TOKEN, plus GITEA_DOMAIN and
+  GITEA_ROOT_URL. Compose refuses to start until both secrets are set.
+- **lamp**: a `.env` copied from `lamp-env.example`, holding
+  MYSQL_ROOT_PASSWORD, MYSQL_DATABASE, MYSQL_USER, and
+  MYSQL_PASSWORD. Compose refuses to start until the credentials are
+  set.
+- **llm**: a `.env` copied from `llm-env.example`, holding
+  LLM_MODELS_DIR and the two model filenames (LLM_HEAVY_MODEL,
+  LLM_LIGHT_MODEL), plus sizing and port options. Compose refuses to
+  render while a model filename is unset.
+- **gpu-llm**: a `.env` copied from `.env.example`. Four values are
+  required (RENDER_GID, VIDEO_GID, WEBUI_SECRET_KEY, SEARXNG_SECRET)
+  and compose refuses to render without them; the model list, ports,
+  and keep-alive are optional overrides in the same file.
+- **optiplex-llm**: no `.env` required. Every setting has a shipped
+  default; `.env.example` documents the optional overrides.
+- **cockpit**: no `.env` and no secrets by design. The stack holds no
+  credentials; authentication happens at login, with each user's own
+  account on the target host.
+- **scanner**: no `.env`. The image is built locally from the
+  Dockerfile and run on demand.

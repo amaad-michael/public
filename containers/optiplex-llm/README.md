@@ -16,7 +16,7 @@ x86_64 Docker host.
 | `LimitMEMLOCK=infinity` | `ulimits: memlock: -1` |
 | `bind_addr: 127.0.0.1`, API key required | Loopback-only publish; API key via env (below) |
 
-## Quickstart
+## 🚀 Quickstart
 
 ```bash
 cd containers/optiplex-llm
@@ -38,7 +38,7 @@ curl http://127.0.0.1:8080/v1/chat/completions \
   -d '{"messages": [{"role": "user", "content": "Hello"}]}'
 ```
 
-## How it works
+## 🔧 How it works
 
 One image only: `ghcr.io/ggml-org/llama.cpp:server-b11681`, the
 same pin the `containers/llm` stack uses. The compose file replaces
@@ -69,7 +69,7 @@ flag's exact semantics (memory-map the model, then lock its
 pages). `MLOCK=0` omits it and the server uses its default plain
 mmap load.
 
-## Configuration
+## ⚙️ Configuration
 
 Every knob lives in `.env` (see `.env.example` for the annotated
 list); every one has the default below shipped in
@@ -103,7 +103,7 @@ not pinned here: capture it from a known-good download of the file
 (the playbook's OPEN-1 note — no upstream checksum manifest exists)
 and set it before first start.
 
-## The checksum story
+## ✅ The checksum story
 
 The playbook leaves its `model_sha256` empty (its OPEN-1 note): the
 model downloads unverified and a warning is all you get. This stack
@@ -140,7 +140,7 @@ the bare-metal install may benchmark faster; the container trades
 that margin for running anywhere. `llama-bench` ships in the same
 image if you want the number.
 
-## Hardening and limits
+## 🔒 Hardening and limits
 
 - `cap_drop: ALL`, `read_only` root filesystem, `no-new-privileges`;
   the model volume and a small `/tmp` tmpfs are the only writable

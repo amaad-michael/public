@@ -1,6 +1,6 @@
 # Secure CI template
 
-A hardened, reusable `ci.yml` for any new repo. Two files, drop-in:
+A hardened, reusable `ci.yml` for any new repo. Four files, drop-in:
 
 - `.github/workflows/ci.yml` — lint (pre-commit) + Trivy security scan
 - `.github/dependabot.yml` — weekly bumps for the SHA-pinned actions
@@ -24,9 +24,9 @@ A hardened, reusable `ci.yml` for any new repo. Two files, drop-in:
 1. **`persist-credentials: false`** on checkout — no token lingering in git config.
 1. **Concurrency** — stale runs cancelled on force-push.
 
-## Use
+## 🔧 Use
 
-1. Copy both files into the new repo (`ci.yml` → `.github/workflows/`, `dependabot.yml` → `.github/`).
+1. Copy the four files into the new repo (`ci.yml` → `.github/workflows/`, `dependabot.yml` → `.github/`, `.yamllint` and `.mdlrc` → the repo root).
 1. Make sure the repo has a `.pre-commit-config.yaml` (the lint job runs it — your enterprise template already includes one).
 1. Add the repo's real test job where the commented example sits, following the `env:`-not-interpolation pattern.
 1. Dependabot will keep the SHA pins fresh via weekly PRs — review and merge those like any other.

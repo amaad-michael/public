@@ -36,7 +36,7 @@ Configuration shipped with the stack:
 - Database credentials live only in the host-side `.env` (see
   Setup); compose refuses to start until they are set.
 
-## Setup
+## 🛠️ Setup
 
 1. Copy `lamp-env.example` to `.env`, generate both passwords at 32
    characters (Proton Pass, or `openssl rand -hex 16`), and
@@ -50,7 +50,7 @@ Configuration shipped with the stack:
 1. Verify before trusting it: run the canary in the Verification
    section.
 
-## Verification (canary)
+## ✅ Verification (canary)
 
 The installers end by proving PHP through httpd and MariaDB over its
 socket; the shipped `html/index.php` is the same proof as a page. It
@@ -65,7 +65,7 @@ version, MariaDB 10.11.x version, LAMP OK). Any failure prints
 web healthcheck requests the same page, so `docker compose ps`
 shows the whole chain's health, not just httpd's.
 
-## Backups
+## 💾 Backups
 
 Everything stateful lives in the `lamp_db` volume. For a portable
 logical backup:

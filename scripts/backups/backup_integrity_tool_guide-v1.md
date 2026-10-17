@@ -1,4 +1,4 @@
-# Backup Integrity CLI (backup-integrity-cli.sh)
+# Backup Integrity CLI (backup_integrity_tool_v1.sh)
 
 A cryptographic integrity tool designed to lock and validate the state of backup directories. It provides a deterministic method to detect silent data corruption, bit rot, or delta drift on storage media over time.
 
@@ -12,17 +12,17 @@ This script is designed to operate distinctly from your synchronization engine (
 
 ---
 
-## Installation
+## 🛠️ Installation
 
 Save the script to a secure execution path (e.g., /usr/local/bin/ or /opt/scripts/) and make it executable:
 
-chmod +x backup-integrity-cli.sh
+chmod +x backup_integrity_tool_v1.sh
 
 ---
 
-## Usage
+## 🔧 Usage
 
-./backup-integrity-cli.sh [COMMAND] [TARGET_DIRECTORY]
+./backup_integrity_tool_v1.sh [COMMAND] [TARGET_DIRECTORY]
 
 ### Commands
 
@@ -37,7 +37,7 @@ chmod +x backup-integrity-cli.sh
 
 Execute this against a newly synced drive to lock in its state:
 
-/opt/scripts/backup-integrity-cli.sh generate /mnt/offsite-drive
+/opt/scripts/backup_integrity_tool_v1.sh generate /mnt/offsite-drive
 
 Result: Creates /mnt/offsite-drive/manifest-YYYYMM.sha256 containing the hashes of all files.
 
@@ -45,7 +45,7 @@ Result: Creates /mnt/offsite-drive/manifest-YYYYMM.sha256 containing the hashes 
 
 Execute this during your semiannual rotation to audit a drive:
 
-/opt/scripts/backup-integrity-cli.sh verify /mnt/offsite-drive
+/opt/scripts/backup_integrity_tool_v1.sh verify /mnt/offsite-drive
 
 Result: Silently checks all files. Prints a success message if perfect, or a fatal error if even a single bit has flipped.
 

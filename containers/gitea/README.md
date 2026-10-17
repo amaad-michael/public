@@ -7,7 +7,7 @@ version pin (1.26.4), same in-container ports (3000 web, 2222 built-in
 SSH), same SQLite posture, hardened the same way (cap_drop ALL,
 read_only, no-new-privileges, resource limits).
 
-## Setup
+## 🛠️ Setup
 
 1. Copy `gitea-env.example` to `.env`, generate the two secrets with
    the commands in that file, set `GITEA_DOMAIN` / `GITEA_ROOT_URL` to
@@ -39,7 +39,7 @@ file here. Set the mirror sync interval to 1 hour on the repos that
 change often; the default is fine for the rest. Mirrors are read-only
 copies — day-to-day work still happens on GitHub.
 
-## Verification (canary)
+## ✅ Verification (canary)
 
 Mirror the tighten scripts' canary discipline:
 
@@ -52,7 +52,7 @@ Mirror the tighten scripts' canary discipline:
 If all four steps pass under the hardened profile, the stack is ready
 to hold mirrors.
 
-## Backups
+## 💾 Backups
 
 Everything lives in the `gitea_data` volume (repositories, SQLite
 database, avatars). For a portable snapshot:

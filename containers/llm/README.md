@@ -58,7 +58,7 @@ curl -LO https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/ma
 Any GGUF files work — set the filenames in `.env` to whatever you
 placed in the models directory.
 
-## Setup
+## 🛠️ Setup
 
 1. Copy `llm-env.example` to `.env`, set `LLM_MODELS_DIR` to the
    models directory, confirm the two model filenames, and
@@ -70,7 +70,7 @@ placed in the models directory.
    before it starts.
 1. Verify with the canary below before trusting it.
 
-## Verification (canary)
+## ✅ Verification (canary)
 
 The LB health endpoint answers without touching a backend:
 
@@ -101,7 +101,7 @@ first run before the Qwen models are downloaded, the tiny
 Hugging Face repo (about 19 MB) proves the whole path — point both
 model variables at it, run the same three checks, then switch back.
 
-## Operations
+## 🔧 Operations
 
 - One backend only: delete or comment the other backend service and
   its `llm-lb.conf` upstream line, and drop the matching `depends_on`

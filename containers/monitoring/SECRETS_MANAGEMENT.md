@@ -41,7 +41,7 @@ echo "Traefik BasicAuth (TRAEFIK_AUTH_HASH): ${TRAEFIK_USER}:${TRAEFIK_HASH}"
 
 ---
 
-## 2. Create .env from .env.example (NOT TRACKED BY GIT)
+## ⚙️ 2. Create .env from .env.example (NOT TRACKED BY GIT)
 
 ```bash
 cp .env.example .env
@@ -53,18 +53,20 @@ cat >> .env << 'EOF'
 # Traefik BasicAuth (format: user:bcrypt-hash)
 TRAEFIK_AUTH_HASH=admin:<htpasswd-hash>
 
-# Optional: SMTP for notifications
-ALERTMANAGER_SMTP_SMARTHOST=smtp.example.com:587
-ALERTMANAGER_SMTP_AUTH_USERNAME=alerts@example.com
+# Optional: SMTP password, used only by the section 5 alertmanager.yml variant
 ALERTMANAGER_SMTP_AUTH_PASSWORD=<app-password>
 EOF
 
 chmod 600 .env
 ```
 
+The shipped alertmanager.yml routes alerts to the Ntfy webhook and
+reads no environment values; the SMTP password above is only consumed
+if you replace it with the SMTP variant in section 5.
+
 ---
 
-## 3. How Compose Uses .env
+## ⚙️ 3. How Compose Uses .env
 
 **Before (legacy inline default):**
 
@@ -140,7 +142,7 @@ receivers:
 
 ---
 
-## 6. First-Time Setup (Post-Deployment)
+## 🚀 6. First-Time Setup (Post-Deployment)
 
 ### Vaultwarden Master Password
 
@@ -177,7 +179,7 @@ curl -u admin:${TRAEFIK_PASS} http://localhost:8080/api/version
 
 ---
 
-## 7. Backup Secrets
+## 💾 7. Backup Secrets
 
 **Before scaling to production:**
 
@@ -239,7 +241,7 @@ docker compose restart grafana
 - [ ] .env created from .env.example with strong passwords
 - [ ] .env confirmed git-ignored
 - [ ] Compose fail-closed guards verified (stack will not start with .env values unset)
-- [ ] traefik.yml updated with real BasicAuth hash
+- [ ] TRAEFIK_AUTH_HASH set in .env (traefik.yml reads the hash from the environment; the file itself holds no hash)
 - [ ] All default passwords removed from files
 - [ ] alertmanager.yml configured (if using email)
 - [ ] Vaultwarden master account set with 2FA
@@ -252,7 +254,7 @@ docker compose restart grafana
 
 ---
 
-## 10. Disaster Recovery
+## 💾 10. Disaster Recovery
 
 **If secrets are leaked:**
 
@@ -305,7 +307,7 @@ git log -p | grep -i "password\|secret\|token" | head -20  # Find any leaked sec
 
 ---
 
-## References
+## 🔗 References
 
 - [OWASP: Secrets Management](https://owasp.org/www-community/Sensitive_Data_Exposure)
 - [Docker: Manage Sensitive Data](https://docs.docker.com/compose/use-secrets/)

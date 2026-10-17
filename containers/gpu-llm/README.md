@@ -25,7 +25,7 @@ Pinned digests:
 - `searxng/searxng:2026.10.16-8252c0bf6` at
   `sha256:3619192d55f19eaec4b01892bdf10f80c67e8592fafd14b26ca504e52229210f`
 
-## Requirements
+## 📋 Requirements
 
 - A host with an AMD GPU supported by ROCm, with `/dev/kfd` and `/dev/dri`
   present (the playbook targets Fedora; any Docker host with the AMD
@@ -34,7 +34,7 @@ Pinned digests:
 - About 31 GB of free disk for the default model list, plus the images
   (about 8 GB).
 
-## Setup
+## 🛠️ Setup
 
 ```sh
 cd containers/gpu-llm
@@ -75,7 +75,7 @@ docker compose logs ollama | grep -i gpu
 split) for a loaded model, not `100% CPU`. The server log also prints the
 detected GPU and its VRAM at startup.
 
-## First start downloads about 31 GB of models
+## 🚀 First start downloads about 31 GB of models
 
 On first start, the one-shot `model-init` service waits for Ollama to be
 healthy, then pulls every model in `OLLAMA_MODELS` and exits. With the
@@ -109,7 +109,7 @@ generation (for example `11.0.0` for RDNA 3 / gfx1100, `10.3.0` for
 RDNA 2 / gfx1030) and restart the `ollama` service. Leave it empty
 otherwise; it is empty in the playbook by default too.
 
-## Ports and exposure
+## 🌐 Ports and exposure
 
 | Port | Published | Notes |
 | --- | --- | --- |
@@ -128,7 +128,7 @@ Port collision note: `containers/optiplex-llm` also defaults to host port
 8080 (on localhost). If both stacks run on the same host, set `WEBUI_PORT`
 here to something else, for example 8081.
 
-## SearXNG settings
+## ⚙️ SearXNG settings
 
 `settings.yml` is the SearXNG configuration from the playbook's settings
 task, extracted from the playbook rather than re-typed. It differs from the

@@ -2,7 +2,7 @@
 
 Version: v1.0
 Last Updated: October 16, 2026
-Status: Consolidated reference for open item [1cbd07] (Setup home Jenkins server)
+Status: Consolidated reference for the home Jenkins server (installer run on pi3, 2026-10-17)
 
 This file consolidates Michael's Jenkins build script and Jenkins notes
 into one reference. It keeps the working build path and the useful
@@ -27,11 +27,13 @@ Passing mentions in the Proxmox LXC manual, the containers notes, and
 the Proxmox README (a TurnKey Jenkins template row and LXC ID ranges)
 were not imported; they belong to those documents.
 
-## 1. Build path: the Rocky installer script
+## 🛠️ 1. Build path: the Rocky installer script
 
 The canonical way to stand up the home Jenkins server is the Bash
-installer. It has not been run on a server yet; it is built, syntax
-checked, and ShellCheck reviewed.
+installer. It was run on pi3 on October 17, 2026: Jenkins LTS 2.580.1
+installed from the Jenkins stable repository, enabled and started
+under systemd, answering at <http://192.168.0.103:8080>, and the
+first-login setup wizard was completed the same day.
 
 What the script does:
 
@@ -70,6 +72,13 @@ Guardrails worth keeping from the older notes:
 
 Embedded from `install-jenkins-rocky.sh` at consolidation time.
 SHA-256 of the source script: `fbaa192efa740061ac341941610a951bda2b25c9feff7e8240d805ec8ad587ad`
+
+Note: the copy of the installer shipped beside this guide in the repo
+(`scripts/provisioning/install-jenkins-rocky.sh`) carries one extra
+comment line, a ShellCheck SC1091 directive above the
+`. /etc/os-release` line in the OS sanity check, so its SHA-256
+differs: `1bd4818a22f4436029a7dedad1c3bb25d9af21f70aee21741aaf8fe471782970`.
+The two scripts are otherwise identical.
 
 ```bash
 #!/usr/bin/env bash
@@ -205,7 +214,7 @@ cat /var/lib/jenkins/secrets/initialAdminPassword
 printf '\n\nPaste the password into the "Unlock Jenkins" page to finish setup.\n'
 ```
 
-## 2. Ansible reference (alternative sketches, not the build path)
+## 🔗 2. Ansible reference (alternative sketches, not the build path)
 
 These playbook sketches come from the Ansible notes. They are kept as
 reference material for a possible future Ansible-managed deployment.
