@@ -1,0 +1,31 @@
+# cp llm-env.example .env && chmod 600 .env && fill values. NEVER commit .env.
+# Compose refuses to render or start until LLM_HEAVY_MODEL and
+# LLM_LIGHT_MODEL are set — a missing model name fails closed here
+# instead of letting llama-server start against the wrong file.
+
+# Host directory holding the GGUF model files. Mounted read-only at
+# /models in both inference containers. Download the models here first
+# (see README.md); the stack never bakes a model into an image. The
+# Ansible playbooks download them into ~/models on each board.
+LLM_MODELS_DIR=/path/to/models
+
+# Model filenames, relative to LLM_MODELS_DIR, per backend. These are
+# the Ansible stack's models (ansible/playbooks/llm/llm-server-setup.yml):
+# the heavy node serves the 7B coder model, the light node the 1.5B.
+LLM_HEAVY_MODEL=qwen2.5-coder-7b-instruct-q4_k_m.gguf
+LLM_LIGHT_MODEL=qwen2.5-coder-1.5b-instruct-q4_k_m.gguf
+
+# llama-server settings. The defaults mirror the Ansible systemd unit
+# (llama-server.service.j2): ctx-size 2048, n-predict 512. The unit set
+# threads from the board's core count; set these to the host's cores
+# per backend.
+LLM_CTX_SIZE=2048
+LLM_N_PREDICT=512
+LLM_HEAVY_THREADS=4
+LLM_LIGHT_THREADS=4
+
+# Host port the load balancer publishes. 8090 is free alongside the
+# monitoring stack (3000/3001/8000/8080/8081/8082/9000/9090), the
+# Pi-hole pair (53/80/443), and the Gitea stack (3003/2222). The
+# inference backends publish nothing — the LB is the only way in.
+LLM_LB_PORT=8090
