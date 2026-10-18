@@ -1,0 +1,35 @@
+[Unit]
+Description=Prometheus (neo1 observability core)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=prometheus
+Group=prometheus
+ExecStart=/usr/local/bin/prometheus \
+  --config.file=/etc/prometheus/prometheus.yml \
+  --storage.tsdb.path=/var/lib/prometheus \
+  --storage.tsdb.retention.time=7d \
+  --storage.tsdb.retention.size=1GB \
+  --web.listen-address=0.0.0.0:9091
+Restart=on-failure
+RestartSec=5
+
+# --- ARMv7 / 512MB constraints ---
+# 32-bit address space: retention.size=1GB is a hard requirement, not tuning.
+MemoryHigh=250M
+MemoryMax=320M
+
+# --- Hardening ---
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/prometheus
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,7 @@
+[Unit]
+Description=Pull Unbound config backup to neo1
+
+[Service]
+Type=oneshot
+User=backup
+ExecStart=/usr/local/sbin/unbound-backup.sh

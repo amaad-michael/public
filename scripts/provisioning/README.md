@@ -149,6 +149,23 @@ part of verification.
 
 For the container form of the same stack, see `containers/lamp/`.
 
+## 🔭 neo1 observability (native systemd)
+
+`neo1-observability-native/` is a kit, not a single installer: the
+bare-metal form of the neo1 observability node (512 MB ARMv7, Armbian)
+with its configs, hardened systemd units, and helper scripts in one
+folder. Prometheus, Alertmanager, blackbox_exporter, node_exporter,
+and ntfy run as checksum-pinned static binaries; Grafana is on-demand
+only (never enabled, auto-stops after 6h); two timers pull nightly
+Pi-hole and Unbound backups from pi4/pi0. `scripts/install.sh` in the
+kit refuses to run with any pin blanked, installs promtool/amtool
+beside their daemons, and ends by enabling the always-on set. The
+kit's own README carries the deploy order and the memory budget.
+
+The Docker form of the same design lives in
+`containers/neo1-observability-docker/`; the cluster's multi-service
+standby stack is `containers/monitoring/`.
+
 ## 🔒 LUKS Vault Guardian
 
 `luks_vault_guardian.sh` backs up LUKS2 headers for the configured
