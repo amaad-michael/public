@@ -1,0 +1,7 @@
+[Unit]
+Description=Pull Pi-hole config backup to neo1
+
+[Service]
+Type=oneshot
+User=backup
+ExecStart=/usr/local/sbin/pihole-backup.sh

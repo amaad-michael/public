@@ -1,0 +1,22 @@
+[Unit]
+Description=ntfy push server (neo1)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=ntfy
+Group=ntfy
+ExecStart=/usr/local/bin/ntfy serve --config /etc/ntfy/server.yml
+Restart=on-failure
+RestartSec=5
+MemoryMax=64M
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/ntfy /var/cache/ntfy
+ProtectHome=true
+PrivateTmp=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target
