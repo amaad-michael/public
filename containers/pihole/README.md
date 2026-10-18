@@ -5,6 +5,18 @@ service, Unbound as the recursive resolver behind it. The same compose
 file runs on both DNS hosts. Per the compose header, pi4 is the primary
 and pi0 the secondary.
 
+## 📦 Contents
+
+- [📦 Files](#-files)
+- [⚙️ The .env file (required)](#-the-env-file-required)
+- [🌐 Networking and ports](#-networking-and-ports)
+- [Volumes and persistence](#volumes-and-persistence)
+- [DNSSEC](#dnssec)
+- [First start and blocklists](#first-start-and-blocklists)
+- [✅ Verify](#-verify)
+- [🔄 Upgrade and rollback](#-upgrade-and-rollback)
+- [🔒 Hardening posture](#-hardening-posture)
+
 ## 📦 Files
 
 - `docker-compose.yml`: both services, the `pihole-backup` bridge

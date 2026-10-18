@@ -3,6 +3,19 @@
 Server hardening scripts, the SSH key toolkit, and the
 pre-publication repo scanner.
 
+## 📦 Contents
+
+- [secure-server-init family](#secure-server-init-family)
+   - [Pre-flight (read before running anything)](#pre-flight-read-before-running-anything)
+   - [What every variant does](#what-every-variant-does)
+   - [Variant selection](#variant-selection)
+   - [v1 versus v1.1](#v1-versus-v11)
+- [SSH access toolkit](#ssh-access-toolkit)
+   - [New workstation, in order](#new-workstation-in-order)
+   - [export_ssh.sh: host identity backup](#export_sshsh-host-identity-backup)
+- [⚠️ ssh-reset-defaults.sh: destructive, last resort only](#-ssh-reset-defaultssh-destructive-last-resort-only)
+- [repo-public-check.sh](#repo-public-checksh)
+
 ## secure-server-init family
 
 Six scripts, three variants in two versions each, that take a fresh

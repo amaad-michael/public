@@ -3,6 +3,19 @@
 Bare-metal installers. Everything here runs as root on the target
 host, and each installer ends with its own verification pass.
 
+## 📦 Contents
+
+- [🛠️ Gitea (bare metal)](#-gitea-bare-metal)
+   - [Which variant](#which-variant)
+   - [Required order](#required-order)
+   - [What the tighten scripts do](#what-the-tighten-scripts-do)
+- [🛠️ LAMP (bare metal)](#-lamp-bare-metal)
+- [🔒 LUKS Vault Guardian](#-luks-vault-guardian)
+   - [Before running](#before-running)
+   - [What one run does](#what-one-run-does)
+   - [Verifying and restoring](#verifying-and-restoring)
+- [🔗 Jenkins](#-jenkins)
+
 ## 🛠️ Gitea (bare metal)
 
 A hardened Gitea 1.26.4 deployment under systemd, using Gitea's

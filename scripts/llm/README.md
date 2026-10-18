@@ -5,6 +5,14 @@ host and runs as root on that host. The same stacks also exist as
 Ansible playbooks and as container stacks; the table at the end maps
 the three forms so you can pick the right one.
 
+## 📦 Contents
+
+- [gpu-box-llm-setup-v1.9.sh](#gpu-box-llm-setup-v19sh)
+- [optiplex-llm-setup-v2.1.sh](#optiplex-llm-setup-v21sh)
+- [deploy-llama-ui-raw.sh](#deploy-llama-ui-rawsh)
+- [setup_open_terminal-v1_2.sh](#setup_open_terminal-v1_2sh)
+- [Which form of each stack](#which-form-of-each-stack)
+
 ## gpu-box-llm-setup-v1.9.sh
 
 Target: the GPU box (Nobara) with an AMD GPU. The script checks for
