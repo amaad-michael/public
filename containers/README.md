@@ -39,5 +39,11 @@ chmod 600. The pattern per project:
 - **cockpit**: no `.env` and no secrets by design. The stack holds no
   credentials; authentication happens at login, with each user's own
   account on the target host.
+- **neo1-observability-docker**: a `.env` copied from `.env.example`
+  (image pins pre-filled with the verified tags; set
+  GRAFANA_ADMIN_PASSWORD), plus a `secrets/` directory created on the
+  host holding `ntfy.token` and the backup SSH keys under `secrets/ssh/`.
+  Compose refuses to start until the pins and the Grafana password are
+  set.
 - **scanner**: no `.env`. The image is built locally from the
   Dockerfile and run on demand.
