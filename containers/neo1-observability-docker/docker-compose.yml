@@ -1,0 +1,188 @@
+---
+# neo1 observability — v3.0 fully Dockerized (ARMv7 / 512MB / Armbian)
+#
+# DESIGN DECISIONS:
+# - network_mode: host on ALL services. Docker's published-port iptables
+#   chains BYPASS UFW; host networking keeps UFW authoritative and preserves
+#   the loopback-only binds for alertmanager/blackbox exactly as designed.
+#   (Consequence: no `ports:` blocks anywhere — listen addresses live in
+#   each service's config/flags, identical to the native v2.6 layout.)
+# - Grafana is profile-gated: NOT started by default.
+#     up:   docker compose --profile dashboard up -d grafana
+#     down: docker compose stop grafana   (no auto-kill; stop it when done)
+# - All tags pinned via .env with :? enforcement — refuses to start unpinned.
+# - Verify every image publishes linux/arm/v7 BEFORE pinning. Grafana in
+#   particular has wavered on 32-bit ARM; if current releases lack armv7,
+#   run Grafana on the workstation instead (datasource -> neo1:9091).
+
+services:
+  prometheus:
+    image: prom/prometheus:${PROM_TAG:?pin in .env}
+    container_name: neo1-prometheus
+    network_mode: host
+    user: "65534:65534"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --storage.tsdb.retention.size=1GB   # 32-bit address space: hard requirement
+      - --web.listen-address=0.0.0.0:9091   # host net; UFW gates to LAN
+    volumes:
+      - prometheus_data:/prometheus
+      - ./configs/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./configs/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs: [/tmp]
+    deploy:
+      resources:
+        limits: {cpus: '1', memory: 320M}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--tries=1", "--spider", "http://127.0.0.1:9091/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  alertmanager:
+    image: prom/alertmanager:${AM_TAG:?pin in .env}
+    container_name: neo1-alertmanager
+    network_mode: host
+    user: "65534:65534"
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --web.listen-address=127.0.0.1:9093   # loopback-only, real under host net
+    volumes:
+      - alertmanager_data:/alertmanager
+      - ./configs/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./secrets/ntfy.token:/etc/alertmanager/ntfy.token:ro
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs: [/tmp]
+    deploy:
+      resources:
+        limits: {cpus: '0.25', memory: 64M}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--tries=1", "--spider", "http://127.0.0.1:9093/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  blackbox:
+    image: prom/blackbox-exporter:${BB_TAG:?pin in .env}
+    container_name: neo1-blackbox
+    network_mode: host
+    command:
+      - --config.file=/etc/blackbox/blackbox.yml
+      - --web.listen-address=127.0.0.1:9115
+    volumes:
+      - ./configs/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    cap_add: [NET_RAW]        # ICMP probes only
+    read_only: true
+    deploy:
+      resources:
+        limits: {cpus: '0.25', memory: 48M}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--tries=1", "--spider", "http://127.0.0.1:9115/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # No healthcheck on node_exporter: the image is binary-only (no
+  # shell/wget). Liveness is covered by Prometheus's own up{job="node"}
+  # scrape + the NodeDown alert.
+  node_exporter:
+    image: prom/node-exporter:${NE_TAG:?pin in .env}
+    container_name: neo1-node-exporter
+    network_mode: host
+    pid: host
+    command:
+      - --path.rootfs=/host
+      - --web.listen-address=0.0.0.0:9100   # UFW gates to LAN
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run|host/(dev|proc|sys|run))($|/)
+    volumes:
+      - /:/host:ro,rslave
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    read_only: true
+    deploy:
+      resources:
+        limits: {cpus: '0.25', memory: 48M}
+
+  ntfy:
+    image: binwiederhier/ntfy:${NTFY_TAG:?pin in .env}
+    container_name: neo1-ntfy
+    network_mode: host
+    command: [serve, --config, /etc/ntfy/server.yml]
+    volumes:
+      - ntfy_data:/var/lib/ntfy
+      - ./configs/ntfy-server.yml:/etc/ntfy/server.yml:ro
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs: [/tmp]
+    deploy:
+      resources:
+        limits: {cpus: '0.25', memory: 64M}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--tries=1", "--spider", "http://127.0.0.1:8081/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  grafana:
+    profiles: [dashboard]     # ON-DEMAND ONLY — never runs on plain `up -d`
+    image: grafana/grafana:${GRAFANA_TAG:?pin in .env — VERIFY armv7 exists for this tag}
+    container_name: neo1-grafana
+    network_mode: host
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./configs/grafana.ini:/etc/grafana/grafana.ini:ro
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?set in .env}
+    restart: "no"             # a crashed dashboard session must not resurrect itself
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs: [/tmp]
+    deploy:
+      resources:
+        limits: {cpus: '0.5', memory: 240M}
+
+  # backup-runner deliberately gets NO docker.sock mount: it can ssh
+  # out and write backups — nothing else. (Cost: no automated
+  # `docker stop grafana`; stopping a dashboard session stays manual.)
+  backup-runner:
+    build: ./backup-runner
+    image: neo1/backup-runner:local
+    container_name: neo1-backup-runner
+    network_mode: host        # SSH out to pi4/pi0; no listener
+    volumes:
+      - ./scripts/pihole-backup.sh:/scripts/pihole-backup.sh:ro
+      - ./scripts/unbound-backup.sh:/scripts/unbound-backup.sh:ro
+      - ./secrets/ssh:/keys:ro          # pihole_backup + unbound_backup keys, chmod 600
+      - backups:/var/backups
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs: [/tmp]
+    deploy:
+      resources:
+        limits: {cpus: '0.1', memory: 32M}
+
+volumes:
+  prometheus_data:
+  alertmanager_data:
+  ntfy_data:
+  grafana_data:
+  backups:

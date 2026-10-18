@@ -1,0 +1,13 @@
+---
+# /etc/ntfy/server.yml — deny-all, token-auth, LAN-bound
+base-url: "http://192.168.0.105:8081"
+# Bind all interfaces: loopback consumers (alertmanager webhook, healthcheck)
+# AND LAN subscribers both need it. UFW gates 8081 to the LAN.
+listen-http: ":8081"
+auth-file: /var/lib/ntfy/user.db
+auth-default-access: deny-all
+cache-file: /var/lib/ntfy/cache.db
+cache-duration: 12h
+attachment-cache-dir: ""        # attachments disabled — not needed for alerts
+behind-proxy: false
+log-level: warn                 # zero-logging posture: no access log

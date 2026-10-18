@@ -69,3 +69,4 @@ yarn-error.log*
 containers/monitoring/ntfy.conf
 containers/monitoring/headscale.conf
 containers/monitoring/policy.hujson
+containers/neo1-observability-docker/secrets/

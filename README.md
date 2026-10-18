@@ -18,9 +18,9 @@ public/
 ├── ansible/      # playbook groups: accounts, cleanup, cockpit, firewall,
 │                 # healthchecks, LLM, monthly, motd, Pi-hole, Proxmox,
 │                 # reboots, vuln, workstation
-├── containers/   # nine Docker Compose stacks: monitoring, Pi-hole + Unbound,
+├── containers/   # ten Docker Compose stacks: monitoring, Pi-hole + Unbound,
 │                 # Gitea, LAMP, Cockpit, LLM inference, scanner,
-│                 # OptiPlex LLM, GPU LLM
+│                 # OptiPlex LLM, GPU LLM, neo1 observability (Docker)
 ├── scripts/      # Linux Admin Toolkit, ops toolkit, and backup, gaming,
 │                 # git, LLM, monitoring, network, Pi-hole, provisioning,
 │                 # security, and workstation scripts
