@@ -1,8 +1,9 @@
 # scripts/workstation
 
 First-boot setup and recurring update scripts for the two workstation
-hosts: the Nobara GPU box and the Linux Mint OptiPlex. The Ansible
-patching counterpart for Nobara lives in
+hosts: the Nobara GPU box and the Linux Mint OptiPlex, plus a
+role-prep checklist and setup script for a personal Linux laptop.
+The Ansible patching counterpart for Nobara lives in
 `ansible/playbooks/workstation/nobara_patch.yml`.
 
 ## 🛠️ New Nobara setup
@@ -44,6 +45,46 @@ sudo ./new-nobara-setup-alt-v1.1.sh gpu-high  # GPU tuning only
 wallpaper. `gpu-high` runs only the GPU tuning and verifies the
 level reads back as `high`. There is no prompt and no closing
 instructions block; the script recommends a reboot at the end.
+
+## Laptop role prep
+
+A checklist and its companion setup script for a personal Linux
+laptop that has to walk into either a classroom or a server
+environment ready. The checklist is the specification; the script
+produces every CLI-able part of it and prints the rest as a manual
+list.
+
+### linux-laptop-role-prep-checklist-v1.4.md
+
+The checklist itself: base system, separation of personal and work
+lives, the security core, the Linux administrator kit, the coding
+instructor kit, the developer environment, communications, the
+carry kit, a dry run before day one, and ongoing hygiene. Full-disk
+encryption, per-role accounts, SSH keys, and git identities, and a
+tested bare-metal restore are the load-bearing items. The setup
+script is embedded in section 11, byte-identical to the standalone
+file below.
+
+### laptop-role-prep-setup-v1.2.sh
+
+Run as root (`sudo ./laptop-role-prep-setup-v1.2.sh`). It creates
+the per-role user accounts, installs the admin and instructor
+tooling, wires the per-role SSH and git separation, sets the screen
+lock and the host firewall, and prints whatever still needs hands,
+hardware, or a sign-in as a manual list. The toolchain installs on
+both package families (apt and dnf) and includes the three vendor
+apps from the checklist: Proton Pass (no repository; the newest
+Stable release is taken from Proton's version feed and installed
+only after its SHA512 checksum verifies), Proton VPN (Proton's
+signed repository on the apt family and on Fedora; RHEL-family
+systems get the manual WireGuard path instead, since Proton
+supports Fedora only on the RPM side), and TickTick (the official
+download endpoint, with an `rpm --replacefiles` fallback for the
+Proton Pass / TickTick build-id collision on the RPM side). Docker
+on the Debian family, Podman on the RHEL family. Tested on Ubuntu
+24.04 and Rocky 10: both distro branches passed two consecutive
+live runs during the script's 2026-10-18 build, the second run
+converging.
 
 ## update-gpu-box.sh
 
