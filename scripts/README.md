@@ -30,8 +30,8 @@ the usage guide for the scripts in that folder.
   Vault Guardian.
 - [security](security/README.md): the secure-server-init hardening
   family, SSH access tooling, and repo-public-check.
-- [workstation](workstation/README.md): Nobara setup and the GPU box
-  and OptiPlex update scripts.
+- [workstation](workstation/README.md): Nobara setup, the GPU box
+  and OptiPlex update scripts, and the laptop role-prep pair.
 
 Also at this level: `run_monthly_maintenance.sh`, the wrapper that
 runs the monthly maintenance playbooks (see
