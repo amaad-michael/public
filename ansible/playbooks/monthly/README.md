@@ -5,7 +5,7 @@ Three patching playbooks, one per host class, plus a wrapper script that runs th
 | Playbook | Targets | Patching behaviour |
 |---|---|---|
 | `monthly_maint.yml` | `hosts: all` (RHEL and Debian families) | Full package update, reboot detection, summary printout |
-| `monthly_maint_pihole.yml` | `hosts: all`, tasks gated to the Debian family | apt dist-upgrade plus a Pi-hole update on hosts that run Pi-hole |
+| `monthly_maint_pihole.yml` | `hosts: all`, patching tasks gated to the Debian family | apt dist-upgrade plus a Pi-hole update on hosts that run Pi-hole |
 | `monthly_maint_nobara.yml` | `hosts: nobara` group | nobara-sync, dnf, Flatpak, snap; notifications only for firmware and reboots |
 
 ## monthly_maint.yml
@@ -19,7 +19,7 @@ The general fleet playbook.
 
 ## monthly_maint_pihole.yml
 
-Debian patching with Pi-hole awareness. Every task is gated on the Debian OS family, so RHEL hosts in the same run are skipped.
+Debian patching with Pi-hole awareness. The update, Pi-hole, and reboot tasks are gated on the Debian OS family, so RHEL hosts in the same run skip them; the timestamp task at the start and the summary printout at the end are not gated.
 
 - Refreshes the apt cache (with retries), runs a dist-upgrade keeping existing config files (`force-confdef,force-confold`), autoremoves only when the upgrade changed something, then autocleans.
 - Detects Pi-hole with `pihole status`. On a Pi-hole host it archives `/var/log/pihole/pihole.log` to a timestamped copy, runs `pihole -up` (core, web, and FTL) and `pihole -g` (Gravity), and restarts `pihole-FTL` through a handler.
@@ -31,10 +31,10 @@ Full patching for Nobara desktops. This is the only copy of the Nobara patching 
 
 - Primary mechanism is the native updater: `nobara-sync --no-reboot -y`. If `nobara-sync` is missing the playbook warns and falls back to dnf alone.
 - A dnf full upgrade plus autoremove runs regardless, to catch anything the sync missed.
-- Flatpaks are updated system-wide and per user, unused runtimes are removed, and snaps are refreshed when snapd is active. Each stage can be run alone with its tag (`nobara_sync`, `dnf`, `flatpak`, `snap`).
+- Flatpaks are updated system-wide and per user, unused runtimes are removed, and snaps are refreshed when snapd is active. Most stages can be run alone with their tag (dnf, flatpak, snap). The nobara_sync tag is the exception: only the sync task itself carries it and its availability check is untagged, so a nobara_sync-only run has no check result to test.
 - Firmware is check-only: fwupd metadata is refreshed and available updates are printed with instructions to run `fwupdmgr update` by hand. Nothing is applied automatically.
 - Reboots are notify-only: the playbook compares the running kernel with the newest installed kernel and tells you to schedule a reboot. It never reboots the desktop itself.
-- Everything is logged to `/var/log/ansible-patch/nobara_patch_<date>.log` on the target.
+- Patch runs write `/var/log/ansible-patch/nobara_patch_<date>.log` on the target: the start time, nobara-sync output, the dnf changed flag, the system Flatpak and snap results, and a summary. Firmware findings and per-user Flatpak output appear only in the play output, not in the log.
 
 ## 🔧 The wrapper script
 

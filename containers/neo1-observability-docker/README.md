@@ -18,6 +18,12 @@ node_exporter, ntfy, backup-runner
 **Profile-gated (1):** grafana — `docker compose --profile dashboard up -d grafana`; stop manually when done
 **Backups:** crond inside backup-runner (03:15 pihole, 03:30 unbound), SSH-only, NO docker.sock
 
+Shipped files not named elsewhere here: the service configs
+`configs/blackbox.yml`, `configs/grafana.ini`, and
+`configs/ntfy-server.yml`; the backup jobs `scripts/pihole-backup.sh`
+and `scripts/unbound-backup.sh`; and the backup-runner image
+definition, `backup-runner/Dockerfile` with `backup-runner/crontab`.
+
 ## 🌐 Why host networking everywhere
 
 Docker's published-port iptables chains bypass UFW. `network_mode: host`
@@ -73,7 +79,7 @@ enforces both properties.
    ```
 
 1. `sudo scripts/ufw.sh`
-1. `scripts/verify.sh` — 19 automated checks + 2 manual gates.
+1. `scripts/verify.sh` — 21 automated checks + 2 manual gates.
 
 ## 🔧 Ops
 

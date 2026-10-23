@@ -10,8 +10,7 @@ points at that inventory by default. Collection requirements are in
 ansible-galaxy collection install -r ansible/requirements.yml
 ```
 
-Playbooks are grouped by job under `playbooks/`. Each group README is
-the usage guide for its playbooks:
+Playbooks are grouped by job under `playbooks/`. Most groups have a README that is the usage guide for its playbooks (motd is the exception — see its entry below):
 
 - [accounts](playbooks/accounts/README.md): credential cycling and
   account removal. The fleet password-cycle kit has its own guide at

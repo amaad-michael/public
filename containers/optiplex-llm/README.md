@@ -89,9 +89,7 @@ list); every one has the default below shipped in
 | `API_KEY` | empty | Required for LAN exposure (below) |
 | `CORS_ORIGINS` | empty | Passed as `--cors-origins` when set |
 
-Extra llama-server flags can be appended after the defaults by
-setting `command:` in a compose override; the entrypoint appends
-them last so they win.
+Extra llama-server flags can be appended after the assembled defaults by setting `command:` in a compose override; the entrypoint places them after the base flags so they win over those, though the environment-derived `--threads`/`--load-mode`/`--api-key`/`--cors-origins` flags are appended after them.
 
 ### The 8B preset
 

@@ -1,7 +1,6 @@
 # scripts/llm
 
-Shell installers for the local LLM stacks. Each installer targets one
-host and runs as root on that host. The same stacks also exist as
+Shell installers for the local LLM stacks. Each targets one host. Three run as root on that host; `deploy-llama-ui-raw.sh` runs as your own user and uses sudo for its Docker commands. The same stacks also exist as
 Ansible playbooks and as container stacks; the table at the end maps
 the three forms so you can pick the right one.
 

@@ -14,7 +14,7 @@ This toolkit provides ready-to-use Bash scripts and systemd timers for routine L
 ## 📋 Requirements
 
 - systemd (timers and services)
-- Common utilities: `bash`, `awk`, `grep`, `sed`, `find`, `gzip`, `logrotate`, `openssl`, `vmstat` (from `procps`), `timeout` (from GNU coreutils)
+- Common utilities: `bash`, `awk`, `grep`, `sed`, `find`, `gzip`, `tar`, `logrotate`, `openssl`, `vmstat` (from `procps`), `timeout` (from GNU coreutils)
 - Network access from the server to SSL endpoints for certificate checks
 
 ## 🛠️ Install (as root)

@@ -1,13 +1,13 @@
 # scripts/monitoring
 
-Three standalone checkers, one deploy wrapper, and one SMART
-harvester. Two checkers collect cron configuration (one host at a
-time, or the whole fleet over SSH); the third verifies backup
-integrity with SHA-256 manifests. The harvester collects
-drive-health data. The checkers change nothing on the hosts they
-inspect; the harvester writes only its report files; the deploy
-wrapper is the one script here that changes state, and only on the
-host it runs on.
+Two standalone cron checkers, one deploy wrapper, and one SMART
+harvester. The checkers collect cron configuration (one host at a
+time, or the whole fleet over SSH) and change nothing on the hosts
+they inspect. The harvester collects drive-health data and writes
+only its report files; the deploy wrapper is the one script here
+that changes state, and only on the host it runs on. Backup
+manifest integrity lives in `scripts/backups` — see the last
+section.
 
 ## deploy-monitoring-stack.sh
 

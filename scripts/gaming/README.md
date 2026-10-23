@@ -78,22 +78,25 @@ That's it. The script handles everything from there.
 
 ## How the Script Works
 
-The installer runs these steps in order, stopping with a clear error message if anything fails:
+The installer runs these steps in order:
 
 ```
 [1] Root guard          — Refuses to run as root
-[2] Kernel check        — Validates 6.14+ for RDNA 4 support
-[3] Mesa check          — Validates 25.0+ via glxinfo
-[4] GPU check           — Confirms AMD GPU presence
-[5] Steam detection     — Scans standard Steam paths
-[6] Lossless.dll find   — Searches all Steam library folders
+[2] Steam detection     — Scans standard Steam paths
+[3] Lossless.dll find   — Searches all Steam library folders
+[4] Kernel check        — Validates 6.14+ for RDNA 4 support
+[5] Mesa check          — Validates 25.0+ via glxinfo (skipped with a warning if glxinfo is missing)
+[6] GPU check           — Checks for an AMD GPU (warns and continues if it cannot confirm one)
 [7] Qt6 deps            — Installs qt6-qtbase, qt6-qtdeclarative, qt6-qtwayland
 [8] RPM download        — Fetches latest lsfg-vk release from GitHub API
-[9] RPM install         — Installs via rpm -Uvh (upgrades if already installed)
-[10] Verify             — Confirms lsfg-vk-ui is accessible
-[11] Base config write  — Creates ~/.config/lsfg-vk/conf.toml with your DLL path
-[12] Launch UI prompt   — Optionally opens the config UI immediately
+[9] RPM integrity       — Verifies the RPM digest (rpm -K); also checks a pinned SHA-256 if LSFG_VK_SHA256 is set
+[10] RPM install        — Installs via rpm -Uvh (upgrades if already installed)
+[11] Verify             — Checks lsfg-vk-ui is accessible (warns if it is not found)
+[12] Base config write  — Creates ~/.config/lsfg-vk/conf.toml with your DLL path
+[13] Launch UI prompt   — Optionally opens the config UI immediately
 ```
+
+Most failures stop the script with a clear error message; the Mesa, GPU, and verify checks above warn and continue instead.
 
 > **The script will NOT overwrite an existing `conf.toml`.** If you've already configured lsfg-vk, your settings are safe.
 

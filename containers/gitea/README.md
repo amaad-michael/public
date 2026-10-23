@@ -27,6 +27,9 @@ read_only, no-new-privileges, resource limits).
 1. Verify before trusting it: open the web UI on port 3003, check
    `/api/healthz`, then run the canary in the Verification section.
 
+Gitea's own settings ship as `app.ini` in this folder, bind-mounted
+read-only into the container at `/data/gitea/conf/app.ini`.
+
 ## Mirrors
 
 In the web UI: **+ → New Migration**, paste a GitHub repo URL, and

@@ -18,7 +18,7 @@ A hardened, reusable `ci.yml` for any new repo. Four files, drop-in:
    - `step-security/harden-runner` v2.21.1
    - `aquasecurity/trivy-action` v0.36.0
 1. **Least-privilege tokens** — top-level `permissions: {}` (deny all); each job grants only `contents: read`.
-1. **Safe triggers** — `pull_request`, never `pull_request_target`.
+1. **Safe triggers** — `push` to `main`, `pull_request`, and manual `workflow_dispatch`, never `pull_request_target`.
 1. **No script injection** — no `${{ }}` inside `run:` blocks; values pass via `env:` (see the commented test-job example in the file).
 1. **Egress auditing** — harden-runner in `audit` mode on every job.
 1. **`persist-credentials: false`** on checkout — no token lingering in git config.

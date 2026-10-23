@@ -1,6 +1,6 @@
 # Cleanup and removal playbooks
 
-> **Warning: this folder deletes things.** Every playbook here removes packages, users, configuration, or logs. The removals are not reversible by re-running anything in this folder; recovery means reinstalling and restoring from whatever backup existed beforehand. Read the per-playbook notes before running one, and note which backups are opt-in.
+> **Warning: this folder deletes things.** Most playbooks here remove packages, users, configuration, or logs; disable_auto_updates.yml removes nothing — it only disables automatic updates. The removals are not reversible by re-running anything in this folder; recovery means reinstalling and restoring from whatever backup existed beforehand. Read the per-playbook notes before running one, and note which backups are opt-in.
 
 All four playbooks target `hosts: all` with privilege escalation, so always scope a run with `--limit`.
 
@@ -43,7 +43,7 @@ The installed Jenkins is not recoverable from the playbook; the archive in `/var
 
 ## uninstall_pihole2.yml
 
-The Pi-hole and Unbound uninstaller: removes both completely, returning the host to a clean slate for reinstallation. It stops pihole-FTL, lighttpd, nginx, unbound, and dnsmasq; runs the official `pihole uninstall --unattended` when the binary exists; purges the package set (unbound, pihole-FTL, lighttpd, nginx-common, php-common, php-cgi, php-sqlite3, dnsmasq-base) with autoremove; deletes the configuration directories and the `pihole.log`/`FTL.log` files; removes the `pihole` user (including its home) and group; restores `/etc/resolv.conf` to Cloudflare (1.1.1.1 and 1.0.0.1); and finishes with an explicit autoremove and autoclean.
+The Pi-hole and Unbound uninstaller: removes both completely, returning the host to a clean slate for reinstallation. It stops pihole-FTL, lighttpd, nginx, unbound, and dnsmasq; runs the official `pihole uninstall --unattended` when the binary exists; purges the package set (unbound, pihole-FTL, lighttpd, nginx-common, php-common, php-cgi, php-sqlite3, dnsmasq-base) with autoremove; deletes the configuration directories and the `pihole.log`/`FTL.log` files; removes the `pihole` user (including its home) and group; restores /etc/resolv.conf to Cloudflare (1.1.1.1 and 1.0.0.1) when the pihole binary was present at the start of the run; and finishes with an explicit autoremove and autoclean.
 
 Details that matter:
 

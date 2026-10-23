@@ -18,7 +18,7 @@ proxmox-homelab/
 ├── inventory.ini                 # Target host definitions
 │
 ├── install_proxmox.yml           # STEP 1 — Install PVE on bare Debian host
-├── configure_proxmox.yml         # STEP 2 — Post-reboot validation
+├── configure_proxmox.yml         # STEP 2 — Post-reboot validation, repo cleanup, and upgrade
 ├── prep_proxmox.yml              # STEP 3 — Harden, users, storage, firewall
 ├── templates_cloudinit.yml       # STEP 4a — Debian 12 + Ubuntu 24.04 VM templates
 ├── templates_turnkey.yml         # STEP 4b — Turnkey Linux LXC appliance downloads
@@ -139,12 +139,14 @@ ansible-playbook -i inventory.ini configure_proxmox.yml --ask-become-pass
 
 ```
 
-| What it validates |
+| What it does |
 |---|
-| PVE version and all core services running |
+| PVE version; ensures all core services are started and enabled |
 | `vmbr0` bridge is up |
 | SSH `PermitRootLogin no` confirmed |
 | `ansible@pam` API token present |
+| Ensures the enterprise and Ceph enterprise repo files are absent, and the no-subscription repo is present |
+| Runs a full apt dist-upgrade |
 | Prints Web UI URL + access summary |
 
 ---

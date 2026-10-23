@@ -30,14 +30,13 @@ stack for the cluster is `containers/monitoring/`.
 1. `sudo scripts/install.sh` (it locates the kit root itself; run as
    root). It creates the service users, installs the checksum-verified
    binaries (promtool and amtool alongside their daemons), the backup
-   scripts, the configs, and the units, then enables the always-on
-   set — grafana deliberately excluded.
+   scripts, the configs, and the units, then enables the always-on set plus the two backup timers — grafana deliberately excluded.
 1. Provision ntfy auth (deny-all is default-on):
 
    ```bash
    sudo -u ntfy ntfy user add alertmanager
    sudo -u ntfy ntfy access alertmanager alerts write-only
-   sudo -u ntfy ntfy token add alertmanager     # -> /etc/alertmanager/ntfy.token (chmod 640 root:alertmanager)
+   sudo -u ntfy ntfy token add alertmanager | grep -o 'tk_[A-Za-z0-9]*' | sudo tee /etc/alertmanager/ntfy.token >/dev/null  # then: sudo chown root:alertmanager /etc/alertmanager/ntfy.token && sudo chmod 640 /etc/alertmanager/ntfy.token
    sudo -u ntfy ntfy user add phone             # subscriber account for your device
    sudo -u ntfy ntfy access phone alerts read-only
    ```
@@ -72,5 +71,4 @@ stack for the cluster is `containers/monitoring/`.
   up per your OpSec standard.
 - Post-FriendlyWrt/tailnet migration: tighten ufw.sh ntfy rule from
   LAN to tailnet CIDR (100.64.0.0/10).
-- Fleet node_exporter rollout (pi0–pi4) is an Ansible play away;
-  targets pre-stubbed in prometheus.yml.
+- Fleet node_exporter rollout (pi0–pi4) is an Ansible play away; the pi0–pi4 targets in prometheus.yml are already live (uncommented), so NodeDown fires for a node until its exporter is deployed.

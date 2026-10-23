@@ -45,9 +45,7 @@ header's: pi0 (secondary) first, verify, then pi4 (primary).
 
 ## DNS test suite
 
-Three variants of the same DNS checks. All run `dig` inside the
-containers through `sudo docker exec`, so run them on the Docker host
-(or a host with equivalent Docker access). The checks are:
+One DNS test suite. It runs `dig` inside the containers through `sudo docker exec`, so run it on the Docker host (or a host with equivalent Docker access). The checks are:
 
 - `pi.hole` local resolution
 - Unbound direct resolution of google.com
@@ -56,6 +54,8 @@ containers through `sudo docker exec`, so run them on the Docker host
 - DNSSEC: dnssec-failed.org must fail validation, google.com must
   validate
 - Ad blocking: doubleclick.net must be blocked
+
+Pass/fail is dig's exit code only: the suite does not parse the answer, so the DNSSEC and ad-blocking entries above are the labelled expectations for each dig (dnssec-failed.org SERVFAIL, google.com AD flag, doubleclick.net blocked), not assertions the script checks in the output.
 
 The suite is `dns-test-pihole-unbound-linted.sh`, the single variant
 kept since the 2026-10-22 consolidation (the full and minimal

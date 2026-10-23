@@ -28,10 +28,7 @@ Run it from any host that can SSH to the fleet as the invoking user:
 Output goes to one timestamped file,
 `/var/log/firewall_audit/firewall_audit_YYYYMMDD_HHMMSS.log`, so run
 as root or as a user who can create that directory. A host that fails
-the 10-second SSH check is logged as an error and skipped. Several
-checks are RHEL-family oriented (firewalld, `rpm`); on the
-Debian-family hosts those sections print their not-available fallbacks
-instead of failing the run.
+the 10-second SSH check is logged as an error and skipped. Several checks are RHEL-family oriented (firewalld, `rpm`); on the Debian-family hosts most of those sections print their not-available fallbacks instead of failing the run — the `rpm` package list and the recent-changes find simply come back empty.
 
 ## 🛠️ Host firewall setup scripts
 
