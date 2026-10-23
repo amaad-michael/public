@@ -22,6 +22,9 @@ chmod 600. The pattern per project:
 - **gitea**: a `.env` copied from `gitea-env.example`, holding
   GITEA_SECRET_KEY and GITEA_INTERNAL_TOKEN, plus GITEA_DOMAIN and
   GITEA_ROOT_URL. Compose refuses to start until both secrets are set.
+- **jenkins**: no `.env` and no host-side secrets. The stack holds no
+  credentials of its own; the first-run setup wizard generates the
+  initial admin password inside the container.
 - **lamp**: a `.env` copied from `lamp-env.example`, holding
   MYSQL_ROOT_PASSWORD, MYSQL_DATABASE, MYSQL_USER, and
   MYSQL_PASSWORD. Compose refuses to start until the credentials are

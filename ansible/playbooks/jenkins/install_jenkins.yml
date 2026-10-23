@@ -1,0 +1,173 @@
+---
+# install_jenkins.yml — Ansible form of scripts/provisioning/install-jenkins-rocky.sh
+#
+# Installs Jenkins LTS 2.580.1 on Rocky Linux 8/9/10 (RHEL-like systems
+# can override the OS check with -e allow_other_os=true), mirroring the
+# bash installer step for step: Java selection (21 on Rocky 10+, 17 on
+# 8/9), the Jenkins stable repository file and GPG key from
+# pkg.jenkins.io, the jenkins package pinned to the same LTS version,
+# systemd enablement, a wait for port 8080 and the initial admin
+# password file, and firewalld opening of port 8080 (plus 50000 for
+# JNLP agents only with -e with_agent_port=true; -e configure_firewall=false
+# skips firewall changes).
+#
+# Idempotent: safe to re-run. It never removes or downgrades anything.
+# The companion removal playbook is
+# ansible/playbooks/cleanup/uninstall_jenkins.yml; it removes exactly
+# what this playbook creates (the jenkins package, /etc/yum.repos.d/
+# jenkins.repo, /var/lib/jenkins, and the jenkins user and group).
+#
+# Usage:
+#   ansible-playbook -i hosts playbooks/jenkins/install_jenkins.yml -l pi3 -K
+#   ansible-playbook -i hosts playbooks/jenkins/install_jenkins.yml -l pi3 -K -e with_agent_port=true
+- name: Install Jenkins LTS on Rocky Linux
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  vars:
+    jenkins_version: "2.580.1"
+    jenkins_port: 8080
+    jenkins_agent_port: 50000
+    # Empty means auto: 21 on Rocky 10+, 17 on 8/9 (Rocky 10 dropped
+    # java-17-openjdk). Override with -e java_ver=17 or =21.
+    java_ver: ""
+    with_agent_port: false
+    configure_firewall: true
+    allow_other_os: false
+    jenkins_repo_url: "https://pkg.jenkins.io/redhat-stable/jenkins.repo"
+    jenkins_repo_file: "/etc/yum.repos.d/jenkins.repo"
+    jenkins_key_url: "https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key"
+    jenkins_home: "/var/lib/jenkins"
+    # In a chroot or container test harness there is no running
+    # systemd; set jenkins_service_state=stopped there so the enable
+    # step still runs and the package install is proven end to end.
+    # Production runs use the default.
+    jenkins_service_state: started
+
+  tasks:
+    - name: Fail on non-Rocky/RHEL systems unless overridden
+      ansible.builtin.fail:
+        msg: "not Rocky/RHEL ({{ ansible_distribution | default('unknown') }}). Set allow_other_os=true to override."
+      when:
+        - ansible_distribution != "Rocky"
+        - "'rhel' not in (ansible_distribution | lower)"
+        - "'redhat' not in (ansible_os_family | lower)"
+        - not (allow_other_os | bool)
+
+    - name: Choose the Java version (21 on Rocky 10+, 17 on 8/9)
+      ansible.builtin.set_fact:
+        java_ver_effective: "{{ java_ver if (java_ver | string | length > 0) else ('21' if (ansible_distribution_major_version | int >= 10) else '17') }}"
+
+    - name: Validate the Java version
+      ansible.builtin.fail:
+        msg: "java_ver must be 17 or 21 (got '{{ java_ver_effective }}')"
+      when: java_ver_effective | string not in ["17", "21"]
+
+    - name: Install Java and prerequisites
+      ansible.builtin.dnf:
+        name:
+          - "java-{{ java_ver_effective }}-openjdk"
+          - fontconfig
+          - curl
+        state: present
+
+    - name: Check for an existing Jenkins repository file
+      ansible.builtin.stat:
+        path: "{{ jenkins_repo_file }}"
+      register: jenkins_repo_stat
+
+    # Retried: a single TLS hiccup fetching the small repo file
+    # should not fail the whole install. (Observed in testing.)
+    - name: Add the Jenkins stable repository
+      ansible.builtin.get_url:
+        url: "{{ jenkins_repo_url }}"
+        dest: "{{ jenkins_repo_file }}"
+        mode: "0644"
+      register: jenkins_repo_dl
+      retries: 5
+      delay: 5
+      until: jenkins_repo_dl is succeeded
+      when: not (jenkins_repo_stat.stat.exists and jenkins_repo_stat.stat.size > 0)
+
+    - name: Import the Jenkins GPG key
+      ansible.builtin.rpm_key:
+        key: "{{ jenkins_key_url }}"
+        state: present
+      register: jenkins_key_import
+      retries: 5
+      delay: 5
+      until: jenkins_key_import is succeeded
+
+    - name: Install Jenkins pinned to the LTS version
+      ansible.builtin.dnf:
+        name: "jenkins-{{ jenkins_version }}"
+        state: present
+
+    - name: Enable the Jenkins service (and start it where systemd runs)
+      ansible.builtin.systemd:
+        name: jenkins
+        enabled: yes
+        state: "{{ jenkins_service_state }}"
+        daemon_reload: yes
+
+    - name: Wait for Jenkins to answer and write its initial admin password
+      ansible.builtin.stat:
+        path: "{{ jenkins_home }}/secrets/initialAdminPassword"
+      register: jenkins_password_stat
+      until: jenkins_password_stat.stat.exists and jenkins_password_stat.stat.size > 0
+      retries: 24
+      delay: 5
+      when: jenkins_service_state == "started"
+
+    - name: Check whether firewalld is active
+      ansible.builtin.command: firewall-cmd --state
+      register: firewalld_state
+      changed_when: false
+      failed_when: false
+      when: configure_firewall | bool
+
+    - name: Open the Jenkins port in firewalld
+      ansible.builtin.command: "firewall-cmd --permanent --add-port={{ jenkins_port }}/tcp"
+      register: firewalld_web
+      changed_when: "'ALREADY_ENABLED' not in firewalld_web.stdout and 'ALREADY_ENABLED' not in firewalld_web.stderr"
+      when:
+        - configure_firewall | bool
+        - firewalld_state.rc | default(1) == 0
+
+    - name: Open the JNLP agent port in firewalld
+      ansible.builtin.command: "firewall-cmd --permanent --add-port={{ jenkins_agent_port }}/tcp"
+      register: firewalld_agent
+      changed_when: "'ALREADY_ENABLED' not in firewalld_agent.stdout and 'ALREADY_ENABLED' not in firewalld_agent.stderr"
+      when:
+        - configure_firewall | bool
+        - with_agent_port | bool
+        - firewalld_state.rc | default(1) == 0
+
+    - name: Reload firewalld after port changes
+      ansible.builtin.command: firewall-cmd --reload
+      changed_when: true
+      when:
+        - configure_firewall | bool
+        - firewalld_state.rc | default(1) == 0
+        - (firewalld_web is changed) or (firewalld_agent is changed)
+
+    - name: Read the initial admin password for the summary
+      ansible.builtin.slurp:
+        src: "{{ jenkins_home }}/secrets/initialAdminPassword"
+      register: jenkins_password_b64
+      when: jenkins_service_state == "started"
+
+    - name: Print the Jenkins URL
+      ansible.builtin.debug:
+        msg: "Jenkins {{ jenkins_version }} installed. URL: http://{{ ansible_default_ipv4.address | default(ansible_hostname) }}:{{ jenkins_port }}"
+
+    - name: Print the initial admin password
+      ansible.builtin.debug:
+        msg: "Initial password: {{ jenkins_password_b64.content | b64decode | trim }} — paste it into the Unlock Jenkins page to finish setup."
+      when: jenkins_service_state == "started"
+
+    - name: Note the first-start password location when not started
+      ansible.builtin.debug:
+        msg: "Service not started by this run (jenkins_service_state={{ jenkins_service_state }}); the initial admin password appears at {{ jenkins_home }}/secrets/initialAdminPassword on first start."
+      when: jenkins_service_state != "started"
