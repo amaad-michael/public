@@ -1,6 +1,6 @@
 # Firewall playbooks
 
-Three playbooks that configure host firewalls. One is a firewalld-only baseline; the other two are OS-aware variants of the same playbook with different port lists.
+Three playbooks that configure host firewalls, plus one read-only audit playbook. One is a firewalld-only baseline; the other two are OS-aware variants of the same playbook with different port lists.
 
 | Playbook | Firewall | Port list |
 |---|---|---|
@@ -28,3 +28,12 @@ The same playbook body, aimed at different hosts. Both declare the `community.ge
 The only difference between the two files is the TCP port list. `firewall_local_new.yml` opens 53, 80, 443, 853 (DNS over TLS), and 9090; its header notes the list is synchronised with a production set. `firewall_local_pi.yml` is the Pi variant and opens 53, 80, 443, and 9090, without 853. Both open UDP 53, and in both, port 22 is handled separately and first, specifically to prevent a lockout.
 
 Both variants end with a lockout safety probe: after the firewall changes, the controller checks that port 22 on the target still answers (10 second timeout, `ssh_probe_timeout`). A failed probe prints a warning. It aborts the run only when `-e fail_on_probe_failure=true` is set, which is the setting to use for hosts where a lockout would be critical. Setting `-e debug_firewall_status=true` also dumps the resulting UFW or firewalld status at the end of the run.
+
+## firewall_audit.yml
+
+The Ansible form of `scripts/network/firewall_audit.sh`. Where the bash audit SSHes from one host to the six fleet addresses and collects thirteen sections per host into `/var/log/firewall_audit/firewall_audit_<timestamp>.log`, this playbook collects the same thirteen sections, in the same order, with the same commands and fallback messages, from every target, and assembles one fleet report with the same naming on the controller.
+
+- Sections: SELinux status; firewalld status; active zones & services; masquerading & port forwarding; iptables rules; nftables rules; open ports (`ss`); PID-to-command mapping for open ports; listening services (`lsof`); non-localhost bound ports; installed firewall packages; recent firewall changes; firewalld logs (last 7 days).
+- One superset: installed packages tries `rpm` first, like the bash audit, and falls back to `dpkg-query` — the inventory includes Debian hosts, where the bash section prints nothing.
+- Findings: a host with firewalld down and no nftables ruleset or iptables chains is flagged `FLAG no-active-firewall`; non-localhost listeners are listed as `REVIEW` lines. `-e firewall_audit_fail_on_findings=true` also fails the run on any FLAG (default: flag in the report only); `-e firewall_audit_report_dir=/path` relocates the report.
+- This is not the admin toolkit's firewall audit (`scripts/linux-admin-toolkit/14-firewall-audit/`): that one detects the active stack and dumps a ruleset summary per host to stdout, with no fleet report and none of the port/process sections.
