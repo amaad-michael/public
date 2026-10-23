@@ -45,12 +45,14 @@ AUTHORIZED_KEYS_FILE="/root/.ssh/authorized_keys"
 BACKUP_DIR="/root/ssh_backup"
 mkdir -p "$BACKUP_DIR"
 
-for file in "${DEFAULT_SSH_CONFIG_FILES[@]}" "${DEFAULT_SSH_KEY_FILES[@]/%_key}"; do
+for file in "${DEFAULT_SSH_CONFIG_FILES[@]}" "${DEFAULT_SSH_KEY_FILES[@]}"; do
   if [ -f "$file" ] || [ -f "$file.pub" ]; then
     echo "Backing up SSH file: $file"
-    cp -p "$file" "$BACKUP_DIR/"
+    if [ -f "$file" ]; then
+      cp -p "$file" "$BACKUP_DIR/"
+    fi
     if [ -f "$file.pub" ]; then
-        cp -p "$file.pub" "$BACKUP_DIR/"
+      cp -p "$file.pub" "$BACKUP_DIR/"
     fi
   fi
 done
@@ -77,7 +79,10 @@ done
 for key in "${DEFAULT_SSH_KEY_FILES[@]}"; do
   if [ ! -f "$key" ]; then
     echo "Generating new SSH key pair: $key"
-    ssh-keygen -q -N "" -t "${key##*_}" -f "$key"
+    key_type="$(basename "$key")"
+    key_type="${key_type#ssh_host_}"
+    key_type="${key_type%_key}"
+    ssh-keygen -q -N "" -t "$key_type" -f "$key"
   fi
 done
 
