@@ -1,0 +1,464 @@
+---
+# install_gitea.yml — Ansible form of scripts/provisioning/install-gitea.sh
+# plus its post-setup tighten script, post-setup-tighten-gitea.sh.
+#
+# This is the PRIMARY-HOST form: it installs Gitea 1.26.4 as a hardened
+# systemd service on a bare-metal (or VM) host, with the git system
+# user, /var/lib/gitea data, /etc/gitea config, and the built-in SSH
+# server (web 3000, SSH 2222) — the same users, paths, and config
+# posture as the bash installer. It is NOT the containers/gitea/
+# project: that container is a pull-mirror instance with the web
+# installer locked (INSTALL_LOCK), a different job. Do not confuse
+# the two forms.
+#
+# Run order mirrors the bash pair:
+#   1. Run this playbook (install tasks). It seeds /etc/gitea/app.ini
+#      group-writable and leaves /etc/gitea in the unit's
+#      ReadWritePaths, because the first-run web installer needs both.
+#   2. Complete the first-run web installer at http://<host>:3000.
+#   3. Create a canary repository and upload the SSH public key of the
+#      account that will run the tighten step (normally root).
+#   4. Re-run with the tighten step enabled:
+#        -e gitea_tighten=true -e gitea_canary_repo=<owner>/<repo>
+#      The tighten step closes the config-write surface (app.ini mode
+#      0640, /etc/gitea removed from ReadWritePaths), restarts Gitea,
+#      and runs the same canary gates as the bash tighten script
+#      (HTTP, SSH clone, push through the hook chain, journal sweep).
+#
+# The SD-card variant (install-gitea-sd.sh) has no Ansible form; its
+# flash wear measures stay bash-only.
+#
+# Usage:
+#   ansible-playbook -i hosts playbooks/gitea/install_gitea.yml -l pi1 -K
+#   ansible-playbook -i hosts playbooks/gitea/install_gitea.yml -l pi1 -K -e gitea_tighten=true -e gitea_canary_repo=michael/canary
+- name: Install Gitea (primary host) on Debian and RHEL family systems
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  vars:
+    gitea_version: "1.26.4"
+    gitea_http_port: 3000
+    gitea_ssh_port: 2222
+    gitea_user: git
+    gitea_group: git
+    gitea_home: /var/lib/gitea
+    gitea_config: /etc/gitea/app.ini
+    gitea_unit: /etc/systemd/system/gitea.service
+    # Tighten step (post-setup-tighten-gitea.sh equivalent). Off by
+    # default: it needs the web installer finished and a canary repo.
+    gitea_tighten: false
+    gitea_canary_repo: ""
+    gitea_host: "127.0.0.1"
+    # In a chroot or container test harness there is no running
+    # systemd; set gitea_service_state=stopped there so the install
+    # still runs for real. Production runs use the default.
+    gitea_service_state: started
+
+  tasks:
+    # ------------------------------------------------------------------
+    # Install (install-gitea.sh)
+    # ------------------------------------------------------------------
+    - name: Map the architecture the way the bash installer does
+      ansible.builtin.set_fact:
+        gitea_arch: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64', 'armv7l': 'arm-6', 'armv6l': 'arm-6'}[ansible_architecture] }}"
+      tags: install
+
+    - name: Install dependencies (Debian family)
+      ansible.builtin.apt:
+        name:
+          - git
+          - wget
+          - sqlite3
+          - ca-certificates
+        state: present
+        update_cache: yes
+        install_recommends: no
+      when: ansible_os_family == "Debian"
+      tags: install
+
+    - name: Install dependencies (RHEL family)
+      ansible.builtin.dnf:
+        name:
+          - git
+          - wget
+          - sqlite
+          - ca-certificates
+        state: present
+      when: ansible_os_family == "RedHat"
+      tags: install
+
+    - name: Create the git system group
+      ansible.builtin.group:
+        name: "{{ gitea_group }}"
+        system: yes
+        state: present
+      tags: install
+
+    - name: Create the git system user (nologin shell, built-in SSH mode)
+      ansible.builtin.user:
+        name: "{{ gitea_user }}"
+        group: "{{ gitea_group }}"
+        system: yes
+        shell: /usr/sbin/nologin
+        comment: "Git Version Control"
+        home: /home/git
+        create_home: yes
+        state: present
+      tags: install
+
+    - name: Create the Gitea data directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ gitea_user }}"
+        group: "{{ gitea_group }}"
+        mode: "0750"
+      loop:
+        - "{{ gitea_home }}"
+        - "{{ gitea_home }}/custom"
+        - "{{ gitea_home }}/data"
+        - "{{ gitea_home }}/log"
+      tags: install
+
+    - name: Create the Gitea config directory
+      ansible.builtin.file:
+        path: /etc/gitea
+        state: directory
+        owner: root
+        group: "{{ gitea_group }}"
+        mode: "0750"
+      tags: install
+
+    - name: Seed app.ini (built-in SSH server) only if absent
+      ansible.builtin.copy:
+        dest: "{{ gitea_config }}"
+        owner: root
+        group: "{{ gitea_group }}"
+        mode: "0660"
+        force: false
+        content: |
+          [server]
+          PROTOCOL         = http
+          HTTP_PORT        = 3000
+          START_SSH_SERVER = true
+          SSH_PORT         = 2222
+          SSH_LISTEN_PORT  = 2222
+          DISABLE_SSH      = false
+      tags: install
+
+    - name: Create the download directory
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: gitea-dl-
+      register: gitea_dl
+      tags: install
+
+    - name: Download the pinned Gitea checksum file
+      ansible.builtin.get_url:
+        url: "https://dl.gitea.com/gitea/{{ gitea_version }}/gitea-{{ gitea_version }}-linux-{{ gitea_arch }}.sha256"
+        dest: "{{ gitea_dl.path }}/gitea-{{ gitea_version }}-linux-{{ gitea_arch }}.sha256"
+        mode: "0644"
+      tags: install
+
+    - name: Read the expected checksum
+      ansible.builtin.slurp:
+        src: "{{ gitea_dl.path }}/gitea-{{ gitea_version }}-linux-{{ gitea_arch }}.sha256"
+      register: gitea_sha_file
+      tags: install
+
+    - name: Extract the expected SHA-256
+      ansible.builtin.set_fact:
+        gitea_expected_sha256: "{{ (gitea_sha_file.content | b64decode).split()[0] }}"
+      tags: install
+
+    # get_url verifies the checksum itself when one is given, so a
+    # truncated or corrupted transfer fails the task instead of
+    # slipping through; the retries then re-download. (Observed in
+    # testing: a proxy that closed large transfers early produced
+    # short files that an unverified download reported as success.)
+    - name: Download the pinned Gitea binary (checksum-verified)
+      ansible.builtin.get_url:
+        url: "https://dl.gitea.com/gitea/{{ gitea_version }}/gitea-{{ gitea_version }}-linux-{{ gitea_arch }}"
+        dest: "{{ gitea_dl.path }}/gitea-{{ gitea_version }}-linux-{{ gitea_arch }}"
+        mode: "0755"
+        checksum: "sha256:{{ gitea_expected_sha256 }}"
+      register: gitea_binary_dl
+      retries: 5
+      delay: 5
+      until: gitea_binary_dl is succeeded
+      tags: install
+
+    - name: Verify the binary checksum independently (as the bash installer does)
+      ansible.builtin.command:
+        cmd: "sha256sum -c gitea-{{ gitea_version }}-linux-{{ gitea_arch }}.sha256"
+        chdir: "{{ gitea_dl.path }}"
+      changed_when: false
+      tags: install
+
+    - name: Stop Gitea before replacing the binary (if it is running)
+      ansible.builtin.systemd:
+        name: gitea
+        state: stopped
+      failed_when: false
+      when: gitea_service_state == "started"
+      tags: install
+
+    - name: Install the Gitea binary
+      ansible.builtin.copy:
+        src: "{{ gitea_dl.path }}/gitea-{{ gitea_version }}-linux-{{ gitea_arch }}"
+        dest: /usr/local/bin/gitea
+        remote_src: yes
+        owner: root
+        group: root
+        mode: "0755"
+      tags: install
+
+    - name: Remove the download directory
+      ansible.builtin.file:
+        path: "{{ gitea_dl.path }}"
+        state: absent
+      tags: install
+
+    - name: Write the hardened systemd unit (same unit as the bash installer)
+      ansible.builtin.copy:
+        dest: "{{ gitea_unit }}"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Gitea
+          After=network-online.target
+          Wants=network-online.target
+
+          [Service]
+          User=git
+          Group=git
+          WorkingDirectory=/var/lib/gitea/
+          ExecStart=/usr/local/bin/gitea web --config /etc/gitea/app.ini --work-path /var/lib/gitea
+          Restart=always
+          RestartSec=2
+          Environment=USER=git HOME=/home/git GITEA_WORK_DIR=/var/lib/gitea
+          UMask=0027
+
+          # 🔐 Hardening Options
+          PrivateTmp=true
+          ProtectSystem=full
+          ProtectHome=true
+          NoNewPrivileges=true
+
+          # Allow writes only where needed
+          # NOTE: remove /etc/gitea after first-run setup completes
+          ReadWritePaths=/var/lib/gitea /etc/gitea
+
+          # Kernel protections
+          ProtectKernelTunables=true
+          ProtectKernelModules=true
+          ProtectKernelLogs=true
+          ProtectControlGroups=true
+          ProtectClock=true
+          ProtectHostname=true
+
+          # Device isolation
+          PrivateDevices=true
+
+          # Capability restrictions
+          CapabilityBoundingSet=
+          AmbientCapabilities=
+          RestrictSUIDSGID=true
+
+          # Networking restrictions
+          RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+          # Namespace + exploit mitigations
+          RestrictNamespaces=true
+          RestrictRealtime=true
+          LockPersonality=true
+          MemoryDenyWriteExecute=true
+          SystemCallFilter=@system-service
+          SystemCallErrorNumber=EPERM
+
+          # Hide /proc details
+          ProtectProc=invisible
+
+          [Install]
+          WantedBy=multi-user.target
+      tags: install
+
+    - name: Check whether SELinux is enforcing
+      ansible.builtin.command: getenforce
+      register: gitea_getenforce
+      changed_when: false
+      failed_when: false
+      tags: install
+
+    - name: Restore SELinux contexts when enforcing
+      ansible.builtin.command: restorecon -R /usr/local/bin/gitea /var/lib/gitea /etc/gitea
+      changed_when: false
+      when: gitea_getenforce.stdout | default('') == "Enforcing"
+      tags: install
+
+    - name: Enable the Gitea service (and start it where systemd runs)
+      ansible.builtin.systemd:
+        name: gitea
+        enabled: yes
+        state: "{{ gitea_service_state }}"
+        daemon_reload: yes
+      tags: install
+
+    - name: Print the install summary
+      ansible.builtin.debug:
+        msg: >-
+          Gitea {{ gitea_version }} installed.
+          Web: http://{{ ansible_default_ipv4.address | default(ansible_hostname) }}:{{ gitea_http_port }}
+          SSH: ssh://git@{{ ansible_default_ipv4.address | default(ansible_hostname) }}:{{ gitea_ssh_port }}
+          Complete the web installer, then re-run with gitea_tighten=true.
+      tags: install
+
+    # ------------------------------------------------------------------
+    # Tighten (post-setup-tighten-gitea.sh), only with gitea_tighten
+    # ------------------------------------------------------------------
+    - name: Fail closed when the canary repo is not set
+      ansible.builtin.fail:
+        msg: "set gitea_canary_repo=<owner>/<repo> (canary repo, no .git suffix) to run the tighten step"
+      when:
+        - gitea_tighten | bool
+        - gitea_canary_repo | length == 0
+      tags: tighten
+
+    - name: Verify app.ini exists before tightening
+      ansible.builtin.stat:
+        path: "{{ gitea_config }}"
+      register: gitea_appini_stat
+      failed_when: not (gitea_appini_stat.stat.exists | default(false))
+      when: gitea_tighten | bool
+      tags: tighten
+
+    - name: Tighten app.ini permissions to 0640
+      ansible.builtin.file:
+        path: "{{ gitea_config }}"
+        owner: root
+        group: "{{ gitea_group }}"
+        mode: "0640"
+      when: gitea_tighten | bool
+      tags: tighten
+
+    - name: Capture the restart timestamp for the journal sweep
+      ansible.builtin.command: date '+%Y-%m-%d %H:%M:%S'
+      register: gitea_restart_ts
+      changed_when: false
+      when: gitea_tighten | bool
+      tags: tighten
+
+    - name: Remove /etc/gitea from the unit ReadWritePaths
+      ansible.builtin.lineinfile:
+        path: "{{ gitea_unit }}"
+        regexp: '^ReadWritePaths=/var/lib/gitea /etc/gitea$'
+        line: "ReadWritePaths=/var/lib/gitea"
+      when: gitea_tighten | bool
+      tags: tighten
+
+    - name: Restart Gitea so the tightened namespace applies
+      ansible.builtin.systemd:
+        name: gitea
+        state: restarted
+        daemon_reload: yes
+      when:
+        - gitea_tighten | bool
+        - gitea_service_state == "started"
+      tags: tighten
+
+    - name: Verify ReadWritePaths no longer includes /etc/gitea
+      ansible.builtin.command: systemctl show gitea -p ReadWritePaths
+      register: gitea_rwp
+      changed_when: false
+      failed_when: gitea_rwp.stdout != "ReadWritePaths=/var/lib/gitea"
+      when:
+        - gitea_tighten | bool
+        - gitea_service_state == "started"
+      tags: tighten
+
+    - name: Verify the git user cannot write app.ini
+      ansible.builtin.command: runuser -u git -- test -w /etc/gitea/app.ini
+      register: gitea_write_probe
+      changed_when: false
+      failed_when: gitea_write_probe.rc == 0
+      when: gitea_tighten | bool
+      tags: tighten
+
+    - name: Verify the service is active after the restart
+      ansible.builtin.command: systemctl is-active gitea
+      register: gitea_active
+      changed_when: false
+      failed_when: gitea_active.stdout != "active"
+      when:
+        - gitea_tighten | bool
+        - gitea_service_state == "started"
+      tags: tighten
+
+    - name: Canary HTTP probe (with retries, like the bash script)
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ gitea_http_port }}/"
+        status_code: 200
+      register: gitea_http_probe
+      until: gitea_http_probe.status == 200
+      retries: 5
+      delay: 2
+      when: gitea_tighten | bool
+      tags: tighten
+
+    - name: Create the canary work directory
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: gitea-canary-
+      register: gitea_canary_dir
+      when: gitea_tighten | bool
+      tags: tighten
+
+    - name: Canary SSH clone of the test repo
+      ansible.builtin.command:
+        cmd: "git clone -q ssh://git@{{ gitea_host }}:{{ gitea_ssh_port }}/{{ gitea_canary_repo }}.git {{ gitea_canary_dir.path }}/repo"
+      environment:
+        GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=accept-new"
+      changed_when: true
+      when: gitea_tighten | bool
+      tags: tighten
+
+    - name: Canary commit and push (traverses the server-side hook chain)
+      ansible.builtin.shell:
+        cmd: |
+          set -e
+          date > canary.txt
+          git add canary.txt
+          git -c user.name="canary" -c user.email="canary@localhost" commit -qm "sandbox canary"
+          git push -q origin HEAD
+        chdir: "{{ gitea_canary_dir.path }}/repo"
+      environment:
+        GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=accept-new"
+      changed_when: true
+      when: gitea_tighten | bool
+      tags: tighten
+
+    - name: Remove the canary work directory
+      ansible.builtin.file:
+        path: "{{ gitea_canary_dir.path }}"
+        state: absent
+      when: gitea_tighten | bool
+      tags: tighten
+
+    - name: Sweep the journal since the restart for sandbox denials
+      ansible.builtin.command: "journalctl -u gitea --since '{{ gitea_restart_ts.stdout }}' --no-pager"
+      register: gitea_journal
+      changed_when: false
+      failed_when: gitea_journal.stdout is search('(?i)eperm|sigsys|operation not permitted|read-only file system')
+      when:
+        - gitea_tighten | bool
+        - gitea_service_state == "started"
+      tags: tighten
+
+    - name: Print the tighten summary
+      ansible.builtin.debug:
+        msg: "Tighten complete: app.ini is 0640, /etc/gitea is out of ReadWritePaths, and the HTTP, SSH clone, and push canaries passed under the final hardened profile."
+      when: gitea_tighten | bool
+      tags: tighten
