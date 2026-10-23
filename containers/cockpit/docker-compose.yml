@@ -15,9 +15,9 @@ services:
   # image instead. Without the /host mount the image runs in its
   # unprivileged "bastion" mode (upstream's own term): the console
   # serves the login page and connects to hosts over SSH, which is the
-  # central-instance model cockpit_pcp.yml already assumes. Host-side
-  # pieces (cockpit-bridge, PCP collection) stay on the hosts via the
-  # playbooks — see README.md for exactly what this does not replace.
+  # central-instance model cockpit_setup.yml already assumes. Host-side
+  # pieces (cockpit-bridge) stay on the hosts via the playbook — see
+  # README.md for exactly what this does not replace.
   # Host port is 9091 because the monitoring stack already publishes
   # 9090 (Prometheus) when both stacks share a host; the in-container
   # port stays Cockpit's native 9090.

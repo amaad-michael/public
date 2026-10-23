@@ -63,7 +63,7 @@
 | 24 | Network inventory | Interfaces, IPs, default routes, DNS resolvers (read-only) | [24-net-inventory/net-inventory-local.sh](24-net-inventory/net-inventory-local.sh) | [24-net-inventory/net-inventory-group.yml](24-net-inventory/net-inventory-group.yml) |
 | 25 | Container hygiene | Prune stopped containers, dangling images, build cache (docker/podman) | [25-container-hygiene/container-hygiene-local.sh](25-container-hygiene/container-hygiene-local.sh) | [25-container-hygiene/container-hygiene-group.yml](25-container-hygiene/container-hygiene-group.yml) |
 | 26 | Kernel cleanup | Remove old kernels, keep N newest, never the running one | [26-kernel-cleanup/kernel-cleanup-local.sh](26-kernel-cleanup/kernel-cleanup-local.sh) | [26-kernel-cleanup/kernel-cleanup-group.yml](26-kernel-cleanup/kernel-cleanup-group.yml) |
-| 27 | Cockpit install | Install cockpit, enable cockpit.socket, open 9090/tcp | [27-cockpit-install/cockpit-install-local.sh](27-cockpit-install/cockpit-install-local.sh) | [27-cockpit-install/cockpit-install-group.yml](27-cockpit-install/cockpit-install-group.yml) |
+| 27 | Cockpit install | Install cockpit, enable cockpit.socket, open 9090/tcp | [27-cockpit-install/cockpit-install-local.sh](27-cockpit-install/cockpit-install-local.sh) | Consolidated: [ansible/playbooks/cockpit/cockpit_setup.yml](../../ansible/playbooks/cockpit/cockpit_setup.yml) |
 
 ## Distro support
 

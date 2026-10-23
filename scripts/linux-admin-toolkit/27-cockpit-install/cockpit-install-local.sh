@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
-# Install Cockpit, enable/start cockpit.socket, and open 9090/tcp in the
-# active firewall. Idempotent.
+# Install Cockpit, enable/start cockpit.socket, and open 9090/tcp in
+# the active firewall. Idempotent.
 set -euo pipefail
 
 usage() {
   cat <<'EOF'
 Usage: cockpit-install-local.sh [--check] [--help]
 
-  Install the cockpit package, enable and start cockpit.socket via systemd,
-  and open TCP port 9090 in the active firewall. Idempotent: re-running
-  changes nothing once everything is in place.
+  Install the cockpit package, enable and start cockpit.socket via
+  systemd, and open TCP port 9090 in the active firewall. Idempotent:
+  re-running changes nothing once everything is in place.
+
+  PCP is deliberately not installed (decision 2026-10-22): historical
+  metrics for the fleet live in the Prometheus/Grafana stack, so the
+  console runs live-only and hosts carry no archiving daemons
+  writing to their SD cards.
 
 Options:
   --check     Dry-run: print what would be done; change nothing.
@@ -18,9 +23,9 @@ Options:
 Behavior:
   * Package manager: dnf (yum fallback) on RHEL-family, apt-get on
     Debian-family.
-  * If systemd is not PID 1, the package is still installed but the socket
-    is not enabled; the script prints the manual step instead of failing
-    silently.
+  * If systemd is not PID 1, the packages are still installed but the
+    units are not enabled; the script prints the manual step instead
+    of failing silently.
   * Firewall: firewalld (--permanent --add-port=9090/tcp + reload) if
     firewall-cmd exists, else ufw (ufw allow 9090/tcp) if ufw exists.
     If neither is present, the script prints the rule the admin should
@@ -79,20 +84,26 @@ detect_distro() {
 
 DISTRO="$(detect_distro)"
 PORT=9090
+PACKAGES=(cockpit)
+UNITS=(cockpit.socket)
 
-cockpit_installed() {
+pkg_installed() {
   case "$DISTRO" in
-    redhat) rpm -q cockpit >/dev/null 2>&1 ;;
-    debian) dpkg -s cockpit >/dev/null 2>&1 ;;
+    redhat) rpm -q "$1" >/dev/null 2>&1 ;;
+    debian) dpkg -s "$1" >/dev/null 2>&1 ;;
   esac
 }
 
 systemd_running() { [[ -d /run/systemd/system ]]; }
 
-# --- package ---------------------------------------------------------------
-install_package() {
-  if cockpit_installed; then
-    log "cockpit package already installed"
+# --- packages ---------------------------------------------------------------
+install_packages() {
+  local missing=() pkg
+  for pkg in "${PACKAGES[@]}"; do
+    pkg_installed "$pkg" || missing+=("$pkg")
+  done
+  if [[ ${#missing[@]} -eq 0 ]]; then
+    log "packages already installed: ${PACKAGES[*]}"
     return 0
   fi
   case "$DISTRO" in
@@ -100,56 +111,45 @@ install_package() {
       local mgr=dnf
       command -v dnf >/dev/null 2>&1 || mgr=yum
       if [[ "$CHECK" -eq 1 ]]; then
-        log "[check] would run: $mgr -y install cockpit"
+        log "[check] would run: $mgr -y install ${missing[*]}"
       else
-        log "installing cockpit via $mgr"
-        "$mgr" -y install cockpit
+        log "installing via $mgr: ${missing[*]}"
+        "$mgr" -y install "${missing[@]}"
       fi
       ;;
     debian)
       export DEBIAN_FRONTEND=noninteractive
       if [[ "$CHECK" -eq 1 ]]; then
-        log "[check] would run: apt-get -y install cockpit"
+        log "[check] would run: apt-get -y install ${missing[*]}"
       else
-        log "installing cockpit via apt-get"
+        log "installing via apt-get: ${missing[*]}"
         apt_refresh
-        apt-get -y install cockpit
+        apt-get -y install "${missing[@]}"
       fi
       ;;
   esac
 }
 
-# --- socket ----------------------------------------------------------------
-enable_socket() {
+# --- units ------------------------------------------------------------------
+enable_units() {
   if ! systemd_running; then
-    log "systemd is not PID 1 on this host, so cockpit.socket cannot be enabled here."
-    log "manual step: on a systemd host run: systemctl enable --now cockpit.socket"
+    log "systemd is not PID 1 on this host, so these units cannot be enabled here: ${UNITS[*]}"
+    log "manual step: on a systemd host run: systemctl enable --now ${UNITS[*]}"
     return 0
   fi
-  if cockpit_installed && systemctl is-active --quiet cockpit.socket 2>/dev/null; then
-    log "cockpit.socket already active"
-    if ! systemctl is-enabled --quiet cockpit.socket 2>/dev/null; then
-      if [[ "$CHECK" -eq 1 ]]; then
-        log "[check] would run: systemctl enable cockpit.socket"
-      else
-        systemctl enable --quiet cockpit.socket
-        log "cockpit.socket enabled"
-      fi
-    else
-      log "cockpit.socket already enabled"
+  local unit
+  for unit in "${UNITS[@]}"; do
+    if systemctl is-active --quiet "$unit" 2>/dev/null && systemctl is-enabled --quiet "$unit" 2>/dev/null; then
+      log "$unit already enabled and active"
+      continue
     fi
-    return 0
-  fi
-  if [[ "$CHECK" -eq 1 ]]; then
-    if cockpit_installed; then
-      log "[check] would run: systemctl enable --now cockpit.socket"
+    if [[ "$CHECK" -eq 1 ]]; then
+      log "[check] would run: systemctl enable --now $unit"
     else
-      log "[check] would run (after install): systemctl enable --now cockpit.socket"
+      log "enabling and starting $unit"
+      systemctl enable --now "$unit"
     fi
-  else
-    log "enabling and starting cockpit.socket"
-    systemctl enable --now cockpit.socket
-  fi
+  done
 }
 
 # --- firewall ---------------------------------------------------------------
@@ -199,12 +199,15 @@ open_firewall() {
 # --- verify -----------------------------------------------------------------
 verify() {
   [[ "$CHECK" -eq 1 ]] && return 0
-  if systemd_running && cockpit_installed; then
-    if systemctl is-active --quiet cockpit.socket 2>/dev/null; then
-      log "verified: cockpit.socket is active"
-    else
-      warn "cockpit.socket is not active after enable --now"
-    fi
+  if systemd_running; then
+    local unit
+    for unit in "${UNITS[@]}"; do
+      if systemctl is-active --quiet "$unit" 2>/dev/null; then
+        log "verified: $unit is active"
+      else
+        warn "$unit is not active after enable --now"
+      fi
+    done
   fi
   if command -v ss >/dev/null 2>&1; then
     if ss -ltn 2>/dev/null | grep -qE "[:.]${PORT}[[:space:]]"; then
@@ -216,8 +219,8 @@ verify() {
   log "cockpit should be reachable at https://<this-host>:$PORT/"
 }
 
-install_package
-enable_socket
+install_packages
+enable_units
 open_firewall
 verify
 log "done"

@@ -1,8 +1,8 @@
 # cockpit — web console (bastion mode)
 
 A single-container Cockpit web service: the container form of
-`ansible/playbooks/cockpit/`. The playbooks install the `cockpit`
-metapackage on each host and enable `cockpit.socket`; this stack runs
+`ansible/playbooks/cockpit/`. The playbook installs the `cockpit`
+metapackage on each host and enables `cockpit.socket`; this stack runs
 the same web service (cockpit-ws, from the official
 `quay.io/cockpit/ws` image, pinned at 368) as one hardened container
 instead — same house style as the other stacks (cap_drop ALL,
@@ -17,7 +17,7 @@ deliberately does not do that. With no `/host` mount the image runs
 in its unprivileged **bastion mode** (upstream's term): the console
 serves the login page, the user names a host, and Cockpit connects to
 that host over SSH using the user's own credentials for it. That is
-the central-instance model `cockpit_pcp.yml` already assumes ("your
+the central-instance model `cockpit_setup.yml` already assumes ("your
 central Cockpit instance should be able to gather performance data
 from this host").
 
@@ -27,17 +27,15 @@ the port stays Cockpit's native 9090.
 
 ## What this does not replace
 
-The playbooks stay the way hosts get their side of Cockpit:
+The playbook stays the way hosts get their side of Cockpit:
 
 - `cockpit_setup.yml` still installs the host packages, including the
   bridge the console talks to once connected. A host with no Cockpit
   packages can still be reached from this console in a limited form,
-  but the full page set comes from the host's own install.
-- `cockpit_pcp.yml` (Performance Co-Pilot: `pcp`, `cockpit-pcp`,
-  `pmlogger`) is host-side data collection and is not containerized
-  here — a web-service container has no host metrics to log. Historical
-  performance graphs for a host appear in this console when that host
-  runs the PCP pieces from the playbook.
+  but the full page set comes from the host's own install. PCP is not
+  part of this repo's Cockpit setup by decision (2026-10-22): metric
+  history lives in the monitoring stack (Prometheus/Grafana), so the
+  console runs live-only and nothing here is containerized for it.
 
 ## 🛠️ Setup
 
@@ -61,9 +59,10 @@ user's own account on the target host, over SSH.
 1. `curl -k https://<host>:9091/login` returns 200 and the login
    page (titled "Cockpit Bastion").
 1. Log in to a playbook-managed host and confirm its dashboard loads.
-1. If that host also ran `cockpit_pcp.yml`, open its Metrics page
-   and confirm historical graphs are present — that proves the
-   console-to-host PCP path end to end.
+1. If that host also ran `cockpit_setup.yml`, open its Metrics page
+   and confirm live graphs are updating — historical graphs are
+   intentionally absent (no PCP, by the decision recorded above);
+   metric history lives in the monitoring stack.
 
 ## Optional: manage the container's own host
 
