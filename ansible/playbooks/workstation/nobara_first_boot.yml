@@ -1,0 +1,207 @@
+---
+# nobara_first_boot.yml
+# Ansible form of the Nobara first-boot workstation setup
+# (scripts/workstation/new-nobara-setup-v1.1.sh). This is the
+# first-boot job, not recurring patching: for patching see
+# nobara_patch.yml in this same directory.
+#
+# The playbook reproduces the bash script step for step:
+#   Part 1: find the discrete AMD GPU (amdgpu driver, AMD vendor
+#           0x1002, device class 0x030000 so the iGPU is skipped)
+#           and lock it to high performance by writing "high" to its
+#           power_dpm_force_performance_level, then read it back.
+#           The script exits with an error when no discrete AMD GPU
+#           is found, and so does this playbook by default
+#           (nobara_first_boot_require_gpu). The lock is a runtime
+#           sysfs setting: it does not persist across a reboot, in
+#           either form. Revert with "auto" in the same file.
+#   Part 2: system update with nobara-sync cli, falling back to
+#           dnf update -y when nobara-sync is missing (the script
+#           aborts when nobara-sync itself fails), then install the
+#           Cinnamon desktop group, then download the placeholder
+#           wallpaper to /usr/share/backgrounds/nobara-cinnamon.
+#           A failed wallpaper download only warns, in both forms.
+#   Part 3: the post-setup instructions (log out, pick Cinnamon at
+#           the login screen, set themes and wallpaper), printed as
+#           a message: they are manual steps in both forms.
+#
+# The script's interactive press-Enter prompt has no Ansible
+# equivalent and none is faked: a playbook run is the operator's
+# confirmation. The alt script (new-nobara-setup-alt-v1.1.sh) is the
+# same job in modular form; its gpu-high subcommand is this
+# playbook's gpu tag, and its setup subcommand is the full run:
+#   ansible-playbook -i inventory.ini nobara_first_boot.yml --tags gpu
+#
+# Docker form: not applicable. First-boot setup tunes the host's own
+# GPU and installs the host desktop; a container cannot do either.
+#
+# Test switches (leave at the defaults on a real Nobara box):
+#   nobara_first_boot_require_gpu:    false lets a GPU-less sandbox
+#                                     run continue past Part 1.
+#   nobara_first_boot_system_update:  false skips the update step.
+#   nobara_first_boot_install_cinnamon: false skips the group install.
+#
+# Usage:
+#   ansible-playbook -i inventory.ini nobara_first_boot.yml
+
+- name: Nobara first-boot setup (GPU performance plus Cinnamon desktop)
+  hosts: nobara
+  become: true
+  gather_facts: false
+
+  vars:
+    nobara_first_boot_require_gpu: true
+    nobara_first_boot_system_update: true
+    nobara_first_boot_install_cinnamon: true
+    nobara_wallpaper_dir: /usr/share/backgrounds/nobara-cinnamon
+    nobara_wallpaper_url: "https://source.unsplash.com/random/3840x2160/?nature,landscape"
+    nobara_wallpaper_file: "{{ nobara_wallpaper_dir }}/unsplash-background.jpg"
+
+  tasks:
+    # Part 1: AMD discrete GPU performance — bash Part 1, same
+    # detection loop over /sys/class/drm/card*/device.
+    - name: Detect the discrete AMD GPU and lock it to high performance
+      ansible.builtin.shell: |
+        set -o pipefail
+        GPU_DEVICE=""
+        for card in /sys/class/drm/card*/device/uevent; do
+            if [ -f "$card" ]; then
+                card_path=$(dirname "$card")
+                if grep -q "DRIVER=amdgpu" "$card"; then
+                    if [ -f "$card_path/vendor" ]; then
+                        vendor=$(cat "$card_path/vendor")
+                        if [ "$vendor" = "0x00001002" ]; then
+                            if [ -f "$card_path/class" ]; then
+                                class=$(cat "$card_path/class")
+                                if [ "$class" = "0x030000" ]; then
+                                    GPU_DEVICE="$card_path"
+                                    break
+                                fi
+                            fi
+                        fi
+                    fi
+                fi
+            fi
+        done
+        if [ -z "$GPU_DEVICE" ]; then
+            echo "NO_GPU"
+            exit 0
+        fi
+        echo "high" > "$GPU_DEVICE/power_dpm_force_performance_level"
+        echo "GPU_DEVICE=$GPU_DEVICE"
+        echo "CURRENT_LEVEL=$(cat "$GPU_DEVICE/power_dpm_force_performance_level")"
+      args:
+        executable: /bin/bash
+      register: nobara_gpu_result
+      changed_when: "'GPU_DEVICE=' in nobara_gpu_result.stdout"
+      tags: [gpu]
+
+    - name: Fail when no discrete AMD GPU is found (the script exits here)
+      ansible.builtin.fail:
+        msg: "Error: No AMD discrete GPU found. Exiting."
+      when:
+        - "'NO_GPU' in nobara_gpu_result.stdout"
+        - nobara_first_boot_require_gpu | bool
+      tags: [gpu]
+
+    - name: Report the GPU result
+      ansible.builtin.debug:
+        msg: >-
+          {{ nobara_gpu_result.stdout_lines | select('match', '^(GPU_DEVICE|CURRENT_LEVEL)=') | list
+             if 'GPU_DEVICE=' in nobara_gpu_result.stdout
+             else 'No discrete AMD GPU found; continuing because nobara_first_boot_require_gpu is false.' }}
+      tags: [gpu]
+
+    # Part 2, step 1: system update — bash Part 2 step 1.
+    - name: Check nobara-sync is available
+      ansible.builtin.command: which nobara-sync
+      register: nobara_sync_check
+      changed_when: false
+      failed_when: false
+      when: nobara_first_boot_system_update | bool
+      tags: [update]
+
+    - name: Sync system packages with nobara-sync cli
+      ansible.builtin.command: nobara-sync cli
+      register: nobara_sync_result
+      changed_when: true
+      when:
+        - nobara_first_boot_system_update | bool
+        - nobara_sync_check.rc == 0
+      tags: [update]
+
+    - name: Fall back to dnf update when nobara-sync is missing
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+        update_cache: true
+      when:
+        - nobara_first_boot_system_update | bool
+        - nobara_sync_check.rc != 0
+      tags: [update]
+
+    # Part 2, step 2: Cinnamon desktop group — bash Part 2 step 2.
+    # The script runs dnf groupinstall @cinnamon-desktop -y; the dnf
+    # module installs the same group with the @ syntax.
+    - name: Install the Cinnamon desktop group
+      ansible.builtin.dnf:
+        name: "@cinnamon-desktop"
+        state: present
+      when: nobara_first_boot_install_cinnamon | bool
+      tags: [cinnamon]
+
+    # Part 2, step 3: placeholder wallpaper — bash Part 2 step 3.
+    # A failed download only warns in the script, so it only warns
+    # here (failed_when: false) and the result is reported.
+    - name: Ensure the wallpaper directory exists
+      ansible.builtin.file:
+        path: "{{ nobara_wallpaper_dir }}"
+        state: directory
+        mode: "0755"
+      tags: [wallpaper]
+
+    - name: Download the placeholder wallpaper
+      ansible.builtin.get_url:
+        url: "{{ nobara_wallpaper_url }}"
+        dest: "{{ nobara_wallpaper_file }}"
+        mode: "0644"
+      register: nobara_wallpaper_result
+      failed_when: false
+      tags: [wallpaper]
+
+    - name: Verify the wallpaper file actually landed
+      # Ground truth is the file on disk: with failed_when: false a
+      # failed download still reports task success, so the report
+      # below keys on this stat, never on the task result alone.
+      ansible.builtin.stat:
+        path: "{{ nobara_wallpaper_file }}"
+      register: nobara_wallpaper_stat
+      tags: [wallpaper]
+
+    - name: Report the wallpaper result
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'Wallpaper saved to ' ~ nobara_wallpaper_file
+             if nobara_wallpaper_stat.stat.exists
+             else 'Warning: Could not download the wallpaper. You can set your own later.' }}
+      tags: [wallpaper]
+
+    # Part 3: final instructions — bash Part 3. Manual in both forms.
+    - name: Print the post-setup instructions
+      ansible.builtin.debug:
+        msg: |
+          Setup Complete!
+          GPU Performance:
+            - The discrete AMD GPU (when found above) is locked to high performance mode.
+            - To revert: echo auto | sudo tee <gpu device>/power_dpm_force_performance_level
+              (the exact device path is in the GPU result above; the script prints it too).
+          Cinnamon Desktop:
+            1. Log out of your current session (or reboot).
+            2. On the login screen, click the small gear icon.
+            3. Select 'Cinnamon' from the session list and log in.
+          Customize Appearance:
+            - Open main menu, search for 'Themes', select your preferred style.
+          Set Wallpaper:
+            - Right-click the desktop, 'Change Desktop Background', add the folder
+              {{ nobara_wallpaper_dir }} and select 'unsplash-background.jpg'.
+      tags: [always]
