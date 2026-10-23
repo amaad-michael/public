@@ -23,6 +23,9 @@ the usage guide for its playbooks:
   performance collection setup.
 - [firewall](playbooks/firewall/README.md): the firewalld playbooks
   and which hosts each one targets.
+- [gitea](playbooks/gitea/README.md): the primary-host Gitea install
+  and tighten playbook, mirroring `scripts/provisioning/install-gitea.sh`
+  and its tighten script (not the mirror container).
 - [healthchecks](playbooks/healthchecks/README.md): the fleet health
   checks and the SMART harvest.
 - [jenkins](playbooks/jenkins/README.md): the Jenkins LTS install
