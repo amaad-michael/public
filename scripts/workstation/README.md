@@ -89,9 +89,11 @@ Recurring update pass for the Nobara GPU box. Run as root: it writes
    `dnf distro-sync --refresh`; other failures abort the run.
 1. Repository key packages (`nobara-repos`, `nobara-gpg-keys`,
    `fedora-repos`).
-1. Ollama reinstall through the official installer, with the same
-   optional `OLLAMA_INSTALL_SHA256` checksum pin as the setup
-   script, then an Ollama service restart.
+1. Ollama reinstall from the version-pinned release tarballs
+   (`OLLAMA_VERSION`), verified against the release's published
+   `sha256sum.txt` before extraction — the official installer script
+   is no longer executed — reproducing the installer's user, groups,
+   and systemd unit, then an Ollama service restart.
 1. Image pulls: SearXNG `:latest` and Open WebUI `v0.5.20`.
 1. Recreation of the SearXNG and Open WebUI containers.
 1. Pulls of the five models.
@@ -158,9 +160,10 @@ target.
 On hosts where the GPU box setup has run (`/etc/searxng` exists),
 the playbook also performs the LLM-stack refresh from
 `update-gpu-box.sh` steps 3-7, in the same order and with the same
-safeguards (tag `llm`): the Ollama reinstall through the official
-installer (with the same optional sha256 pin, here the
-`ollama_install_sha256` variable), the SearXNG `:latest` and Open
+safeguards (tag `llm`): the Ollama reinstall from the
+version-pinned release tarballs (verified against the release's
+`sha256sum.txt`; here the `ollama_version` variable), the
+SearXNG `:latest` and Open
 WebUI `v0.5.20` image pulls, recreation of both containers with the
 updater's exact volume, environment, and capability sets, pulls of
 the five models (a failed model warns and never aborts the run),
