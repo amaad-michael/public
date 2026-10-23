@@ -1,0 +1,227 @@
+---
+# ssh_toolkit.yml
+# Ansible form of the SSH access toolkit (scripts/security/):
+# ssh-setup-new-box-v1.0.sh, send_keys.sh, setup_key_access.sh,
+# add_known_hosts.sh and export_ssh.sh. The fleet in every script is
+# pi0 to pi4 plus neo1 at 192.168.0.100 to 105, login user michael.
+#
+# What this playbook does declaratively, in three plays:
+#   Play 1 (the controller, connection: local) mirrors
+#   ssh-setup-new-box-v1.0.sh steps 1-3 except the agent load:
+#   keychain installed (EPEL fallback exactly as the script), the
+#   keychain eval line in ~/.bashrc, ~/.ssh at 0700, and an ed25519
+#   keypair generated only if missing, with the script's comment.
+#   Play 2 (the fleet) is the declarative form of send_keys.sh and
+#   setup_key_access.sh: the controller's public key installed in
+#   each target user's authorized_keys with ~/.ssh at 0700 and
+#   authorized_keys at 0600. Where the bash tools append (and can
+#   duplicate a key line on re-run), authorized_key is exact-state:
+#   re-runs converge instead of duplicating. That is a deliberate
+#   improvement in form, not a change of scope: the key, the user
+#   and the fleet are the scripts' own. Note the scripts disagree
+#   on the key file (ssh-setup-new-box uses id_ed25519, send_keys
+#   and setup_key_access read id_rsa.pub); the variable
+#   ssh_toolkit_public_key_file takes either, defaulting to the
+#   ed25519 key play 1 manages.
+#   Play 3 (the controller again) mirrors add_known_hosts.sh:
+#   ssh-keyscan of every fleet address into ~/.ssh/known_hosts,
+#   hashed (the script hashes with keyscan -H; the module hashes
+#   on write instead - same hashed entries in the file). Where the
+#   script appends blindly (duplicates on re-run, stale entries
+#   after a rebuild), the known_hosts module replaces each host's
+#   entry with the fresh scan, which is the state the script
+#   aims at.
+#
+# What stays bash-only, stated plainly instead of faked:
+#   - Loading the key into a persistent agent and being asked the
+#     passphrase once (ssh-setup-new-box step 3) is an interactive
+#     operator-session action. No playbook can hold your agent or
+#     answer your passphrase; run the bash script, or keychain by
+#     hand, for that step.
+#   - The password prompts ssh-copy-id makes on first contact with
+#     a host that does not carry the key yet are the same class of
+#     action: play 2 reaches the fleet over the connection Ansible
+#     already has (in this repo's inventory, key-based, as michael),
+#     so a host with no working access path at all still needs the
+#     bash bootstrap first.
+#   - export_ssh.sh is a one-off, run-on-the-host archival of that
+#     host's private host keys into a tarball. It is not part of
+#     the access-distribution scope above and it is deliberately
+#     not re-implemented here: bulk-moving private host key
+#     material through a playbook is the wrong shape for it. It
+#     stays the bash script, run as root on the host itself.
+#
+# Docker form: not applicable. The toolkit operates on the
+# operator's own ~/.ssh and on live sessions to the fleet; a
+# container form would administer a container's ~/.ssh, not yours.
+#
+# Usage:
+#   ansible-playbook -i ansible/hosts playbooks/security/ssh_toolkit.yml
+#   # controller side only:
+#   ansible-playbook -i ansible/hosts playbooks/security/ssh_toolkit.yml --tags controller
+#   # one host outside the fleet (setup_key_access.sh equivalent):
+#   ansible-playbook -i ansible/hosts playbooks/security/ssh_toolkit.yml --limit <host> --tags fleet
+
+- name: SSH toolkit - controller setup (ssh-setup-new-box-v1.0.sh steps 1-2)
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  vars:
+    ssh_toolkit_user_home: "{{ lookup('ansible.builtin.env', 'HOME') }}"
+    ssh_toolkit_key_file: "{{ ssh_toolkit_user_home }}/.ssh/id_ed25519"
+    ssh_toolkit_install_keychain: true
+
+  tasks:
+    - name: Install keychain (Rocky family, EPEL fallback as in the script)
+      ansible.builtin.dnf:
+        name: keychain
+        state: present
+      become: true
+      register: ssh_toolkit_keychain_install
+      failed_when: false
+      when:
+        - ssh_toolkit_install_keychain | bool
+        - ansible_os_family | default('') == 'RedHat'
+      tags: [controller]
+
+    - name: Enable EPEL and install keychain when the first attempt failed
+      ansible.builtin.dnf:
+        name:
+          - epel-release
+          - keychain
+        state: present
+      become: true
+      when:
+        - ssh_toolkit_install_keychain | bool
+        - ansible_os_family | default('') == 'RedHat'
+        - ssh_toolkit_keychain_install is failed
+      tags: [controller]
+
+    - name: Install keychain (other families)
+      ansible.builtin.package:
+        name: keychain
+        state: present
+      become: true
+      when:
+        - ssh_toolkit_install_keychain | bool
+        - ansible_os_family | default('') != 'RedHat'
+      tags: [controller]
+
+    - name: Ensure ~/.ssh exists at 0700
+      ansible.builtin.file:
+        path: "{{ ssh_toolkit_user_home }}/.ssh"
+        state: directory
+        mode: "0700"
+      tags: [controller]
+
+    - name: Check for an existing keypair
+      ansible.builtin.stat:
+        path: "{{ ssh_toolkit_key_file }}"
+      register: ssh_toolkit_key_stat
+      tags: [controller]
+
+    - name: Generate the ed25519 keypair only if missing
+      # ssh-keygen directly, as the script runs it, with an empty
+      # passphrase: a playbook cannot answer the passphrase prompt.
+      # If the key must carry a passphrase, generate it with the bash
+      # script first; this task then keeps the existing key.
+      ansible.builtin.command: >-
+        ssh-keygen -t ed25519 -C michael@homelab -f {{ ssh_toolkit_key_file }} -N ''
+      changed_when: true
+      when: not ssh_toolkit_key_stat.stat.exists
+      tags: [controller]
+
+    - name: Set the private key mode to 0600, as the script does
+      ansible.builtin.file:
+        path: "{{ ssh_toolkit_key_file }}"
+        mode: "0600"
+      tags: [controller]
+
+    - name: Add the keychain eval line to ~/.bashrc
+      ansible.builtin.lineinfile:
+        path: "{{ ssh_toolkit_user_home }}/.bashrc"
+        line: 'eval $(keychain --eval --quiet ~/.ssh/id_ed25519)'
+        state: present
+        create: true
+        mode: "0644"
+      tags: [controller]
+
+    - name: Note the step that stays interactive
+      ansible.builtin.debug:
+        msg: >-
+          Controller files are in place. Loading the key into a persistent agent
+          (the script's step 3, passphrase asked once) is an operator-session
+          action and stays with the bash script or a manual keychain run.
+      tags: [controller]
+
+- name: SSH toolkit - distribute the public key (send_keys.sh, setup_key_access.sh)
+  hosts: all
+  become: false
+  gather_facts: false
+
+  vars:
+    ssh_toolkit_public_key_file: "{{ lookup('ansible.builtin.env', 'HOME') }}/.ssh/id_ed25519.pub"
+    ssh_toolkit_target_user: michael
+
+  tasks:
+    - name: Install the controller public key in authorized_keys
+      ansible.posix.authorized_key:
+        user: "{{ ssh_toolkit_target_user }}"
+        key: "{{ lookup('ansible.builtin.file', ssh_toolkit_public_key_file) }}"
+        state: present
+        manage_dir: true
+      tags: [fleet]
+
+- name: SSH toolkit - pre-trust the fleet (add_known_hosts.sh)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    ssh_toolkit_user_home: "{{ lookup('ansible.builtin.env', 'HOME') }}"
+    ssh_toolkit_fleet_addresses:
+      - "192.168.0.100"
+      - "192.168.0.101"
+      - "192.168.0.102"
+      - "192.168.0.103"
+      - "192.168.0.104"
+      - "192.168.0.105"
+    ssh_toolkit_pretrust_hosts: true
+
+  tasks:
+    - name: Scan each fleet host (ssh-keyscan, as the script runs it)
+      # The script scans with -H (hashed output). This form scans
+      # plain and lets the known_hosts module hash on write with
+      # hash_host below: the resulting known_hosts state is the
+      # same hashed entries, and the module accepts the plain scan
+      # line, which it cannot match against a pre-hashed one.
+      ansible.builtin.command: "ssh-keyscan {{ item }}"
+      loop: "{{ ssh_toolkit_fleet_addresses }}"
+      register: ssh_toolkit_keyscan
+      changed_when: false
+      failed_when: false
+      when: ssh_toolkit_pretrust_hosts | bool
+      tags: [known_hosts]
+
+    - name: Record the scanned host keys in ~/.ssh/known_hosts, hashed
+      ansible.builtin.known_hosts:
+        path: "{{ ssh_toolkit_user_home }}/.ssh/known_hosts"
+        name: "{{ item.item }}"
+        key: "{{ item.stdout }}"
+        hash_host: true
+        state: present
+      loop: "{{ ssh_toolkit_keyscan.results | default([]) }}"
+      when:
+        - ssh_toolkit_pretrust_hosts | bool
+        - item.stdout | default('') | length > 0
+      tags: [known_hosts]
+
+    - name: Report hosts that did not answer a keyscan
+      ansible.builtin.debug:
+        msg: "Failed to add {{ item.item }}. Check connectivity or permissions."
+      loop: "{{ ssh_toolkit_keyscan.results | default([]) }}"
+      when:
+        - ssh_toolkit_pretrust_hosts | bool
+        - item.stdout | default('') | length == 0
+      tags: [known_hosts]

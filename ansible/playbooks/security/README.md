@@ -61,9 +61,47 @@ Four test switches (`secure_init_install_packages`,
 cannot provide one layer; leave them at their defaults (`true`) on
 real hosts.
 
+## 🔑 ssh_toolkit.yml
+
+The Ansible form of the SSH access toolkit in `scripts/security/`
+(`ssh-setup-new-box-v1.0.sh`, `send_keys.sh`,
+`setup_key_access.sh`, `add_known_hosts.sh`), in three plays:
+
+1. Controller (connection: local): keychain installed with the
+   script's EPEL fallback, the keychain eval line in `~/.bashrc`,
+   `~/.ssh` at 0700, and an ed25519 keypair generated only if
+   missing, with the script's `michael@homelab` comment.
+1. Fleet (`hosts: all`): the controller's public key in each target
+   user's `authorized_keys` — the declarative form of `send_keys.sh`
+   and `setup_key_access.sh`. Where the bash tools append and can
+   duplicate a key line on re-run, `authorized_key` is exact-state
+   and converges; the key, user and fleet are the scripts' own.
+1. Controller again: `ssh-keyscan -H` of every fleet address
+   (192.168.0.100 to 105) recorded hashed in `~/.ssh/known_hosts`,
+   the state `add_known_hosts.sh` aims at, without its blind-append
+   duplicates.
+
+What stays bash-only, stated in the playbook header as well:
+loading the key into a persistent agent with its one passphrase
+prompt is an operator-session action no playbook can perform; the
+first-contact password prompts of `ssh-copy-id` are the same class;
+and `export_ssh.sh` (archiving a host's private host keys, run as
+root on that host) is deliberately not re-implemented — moving
+private host key material through a playbook is the wrong shape
+for it.
+
+```bash
+ansible-playbook -i ansible/hosts playbooks/security/ssh_toolkit.yml
+ansible-playbook -i ansible/hosts playbooks/security/ssh_toolkit.yml --tags controller
+```
+
+There is no Docker form: the toolkit operates on the operator's
+own `~/.ssh` and live sessions, which a container cannot reach.
+
 ## 📝 Notes
 
-- The playbook targets `hosts: all`; scope every run with `--limit`
-  and an explicit inventory.
-- No secrets live in the playbook. The admin key, if any, is added
-  afterward with the SSH access toolkit.
+- Both playbooks target `hosts: all` or the controller; scope every
+  run with `--limit` and an explicit inventory.
+- No secrets live in either playbook. Key material is generated on
+  the host it belongs to or read from the operator's own public key
+  file at run time.
