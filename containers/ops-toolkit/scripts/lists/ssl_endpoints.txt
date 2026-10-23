@@ -1,0 +1,4 @@
+
+# host:port per line; SNI taken from host portion
+example.com:443
+# internal.example.net:8443

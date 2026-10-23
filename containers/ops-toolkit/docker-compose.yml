@@ -1,0 +1,50 @@
+---
+# Ops Toolkit — container form of scripts/ops-toolkit/.
+#
+# PARTIAL EQUIVALENCE, by design and stated up front (details in
+# README.md): the six host jobs run under cron inside the container on
+# the same schedule, but a container is not the host. Host-state jobs
+# (sys-health, service-uptime) describe the container unless host
+# paths are mounted in, and filesystem jobs (log-clean, tmp-clean)
+# clean the container's files unless host directories are mounted.
+# The compose defaults mount nothing from the host, so a plain
+# `docker compose up -d` exercises the tooling against the container
+# itself; the README's override example wires the host paths that
+# make backup-verify and the cleaners meaningful.
+services:
+  ops-toolkit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ops-toolkit:bookworm
+    container_name: ops-toolkit
+    volumes:
+      # The toolkit's own output/state, persisted across restarts —
+      # the same paths the bash install uses on a host.
+      - ops_log:/var/log/ops
+      - ops_state:/var/lib/ops-toolkit
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # cron starts as root and setuid/setgid's to the job user (root
+      # in the shipped crontab); DAC_OVERRIDE lets the jobs write the
+      # log/state volumes regardless of volume ownership.
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+      - CHOWN
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+
+volumes:
+  ops_log:
+  ops_state:

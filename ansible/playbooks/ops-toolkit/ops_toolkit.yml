@@ -1,0 +1,127 @@
+---
+# ops_toolkit.yml — Ansible form of the Ops Toolkit (bash: scripts/ops-toolkit/).
+#
+# Installs the toolkit's six job scripts, its config and lists, and its six
+# systemd timer/service pairs onto a target host. Schedules, unit files,
+# install paths, file modes, and exit-code semantics are identical to the
+# bash README's "Install (as root)" procedure — this playbook automates
+# exactly those steps instead of inventing its own.
+#
+# Usage:
+#   cd ansible
+#   ansible-playbook -i hosts playbooks/ops-toolkit/ops_toolkit.yml -l pi1
+#
+# Jobs installed (same set and same schedules as scripts/ops-toolkit/systemd/):
+#   sys-health         Sun 04:00 weekly     (*-*-*: Sun *-*-* 04:00:00)
+#   backup-verify      daily 03:30         (*-*-* 03:30:00)
+#   log-clean          1st of month 03:00  (*-*-01 03:00:00)
+#   cert-expiry-audit  1st of month 03:30  (*-*-01 03:30:00)
+#   service-uptime     Sun 04:30 weekly    (Sun *-*-* 04:30:00)
+#   tmp-clean          Mon 02:30 weekly    (Mon *-*-* 02:30:00)
+#
+# Timers carry the units' Persistent=true and RandomizedDelaySec=15m, so a
+# host that was off at the scheduled time catches up once.
+#
+# Extra vars:
+#   ops_toolkit_manage_systemd_state=true|false   (default true) — when true
+#     the playbook daemon-reloads and starts the timers after install. Set
+#     false when applying to a host whose systemd is not running (containers,
+#     chroot test rigs); the units are still installed and enabled.
+
+- name: Install the Ops Toolkit (scripts, config, systemd timers)
+  hosts: all
+  become: true
+
+  vars:
+    ops_toolkit_src_dir: "{{ playbook_dir }}/../../../scripts/ops-toolkit"
+    ops_toolkit_manage_systemd_state: true
+    ops_toolkit_jobs:
+      - sys-health
+      - backup-verify
+      - log-clean
+      - cert-expiry-audit
+      - service-uptime
+      - tmp-clean
+
+  tasks:
+    - name: Fail on unsupported OS family
+      ansible.builtin.fail:
+        msg: "Unsupported OS family {{ ansible_facts['os_family'] }}; only RedHat and Debian families are supported."
+      when: ansible_facts['os_family'] not in ['RedHat', 'Debian']
+
+    - name: Create toolkit directories
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: /usr/local/sbin, mode: "0755" }
+        - { path: /etc/ops, mode: "0755" }
+        - { path: /var/log/ops, mode: "0755" }
+        - { path: /var/lib/ops-toolkit, mode: "0755" }
+
+    - name: Install the job scripts and the shared library
+      ansible.builtin.copy:
+        src: "{{ ops_toolkit_src_dir }}/{{ item }}"
+        dest: "/usr/local/sbin/{{ item }}"
+        owner: root
+        group: root
+        mode: "0755"
+      loop:
+        - common.sh
+        - sys-health.sh
+        - backup-verify.sh
+        - log-clean.sh
+        - cert-expiry-audit.sh
+        - service-uptime.sh
+        - tmp-clean.sh
+
+    - name: Install ops.conf (keeps an existing one, like the bash install)
+      ansible.builtin.copy:
+        src: "{{ ops_toolkit_src_dir }}/ops.conf"
+        dest: /etc/ops/ops.conf
+        owner: root
+        group: root
+        mode: "0644"
+        force: false
+
+    - name: Install the starter lists (keeps existing ones, like the bash install)
+      ansible.builtin.copy:
+        src: "{{ ops_toolkit_src_dir }}/lists/{{ item }}"
+        dest: "/etc/ops/{{ item }}"
+        owner: root
+        group: root
+        mode: "0644"
+        force: false
+      loop:
+        - services.txt
+        - ssl_endpoints.txt
+
+    - name: Install the systemd units (identical files to scripts/ops-toolkit/systemd/)
+      ansible.builtin.copy:
+        src: "{{ ops_toolkit_src_dir }}/systemd/{{ item.0 }}.{{ item.1 }}"
+        dest: "/etc/systemd/system/{{ item.0 }}.{{ item.1 }}"
+        owner: root
+        group: root
+        mode: "0644"
+      loop: "{{ ops_toolkit_jobs | product(['service', 'timer']) | list }}"
+      loop_control:
+        label: "{{ item.0 }}.{{ item.1 }}"
+
+    - name: Enable the toolkit timers (offline-safe; only creates the wants symlinks)
+      ansible.builtin.systemd:
+        name: "{{ item }}.timer"
+        enabled: true
+        daemon_reload: false
+      loop: "{{ ops_toolkit_jobs }}"
+
+    - name: Reload systemd and start the timers
+      ansible.builtin.systemd:
+        name: "{{ item }}.timer"
+        enabled: true
+        state: started
+        daemon_reload: true
+      loop: "{{ ops_toolkit_jobs }}"
+      when: ops_toolkit_manage_systemd_state | bool

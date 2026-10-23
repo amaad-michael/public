@@ -1,0 +1,18 @@
+# Ops Toolkit schedule for the container form.
+#
+# Each line is the systemd timer's OnCalendar from
+# scripts/ops-toolkit/systemd/<job>.timer translated to cron format —
+# same job, same wall-clock time. Two timer properties have no cron
+# equivalent and are NOT reproduced (see README.md):
+#   Persistent=true        (catch-up run after downtime)
+#   RandomizedDelaySec=15m (start-time jitter)
+#
+# Output appends to the same log directory the scripts use on a host.
+#
+# m h dom mon dow user command
+0 4 * * 0 root /usr/local/sbin/sys-health.sh >> /var/log/ops/cron.log 2>&1
+30 3 * * * root /usr/local/sbin/backup-verify.sh >> /var/log/ops/cron.log 2>&1
+0 3 1 * * root /usr/local/sbin/log-clean.sh >> /var/log/ops/cron.log 2>&1
+30 3 1 * * root /usr/local/sbin/cert-expiry-audit.sh >> /var/log/ops/cron.log 2>&1
+30 4 * * 0 root /usr/local/sbin/service-uptime.sh >> /var/log/ops/cron.log 2>&1
+30 2 * * 1 root /usr/local/sbin/tmp-clean.sh >> /var/log/ops/cron.log 2>&1
