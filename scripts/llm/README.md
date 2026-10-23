@@ -10,6 +10,7 @@ the three forms so you can pick the right one.
 - [optiplex-llm-setup-v2.1.sh](#optiplex-llm-setup-v21sh)
 - [deploy-llama-ui-raw.sh](#deploy-llama-ui-rawsh)
 - [setup_open_terminal-v1_2.sh](#setup_open_terminal-v1_2sh)
+- [nanopi-llm-setup.sh](#nanopi-llm-setupsh)
 - [Which form of each stack](#which-form-of-each-stack)
 
 ## gpu-box-llm-setup-v1.9.sh

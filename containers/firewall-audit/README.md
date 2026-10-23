@@ -23,7 +23,7 @@ shipped compose is built around that fact:
   looking at nothing. If you run it bridged anyway, the Findings
   section flags `no-active-firewall` — believe the flag, not the
   empty tables.
-- **`CAP_NET_ADMIN` (read-only use)** — listing the host's nftables
+- **`CAP_NET_ADMIN` + `CAP_NET_RAW` (read-only use)** — listing the host's nftables
   ruleset and iptables chains requires it. Every command the
   collector runs is a query (`list`, `-L`, `--state`); it writes no
   rule. All other capabilities are dropped, the root filesystem is

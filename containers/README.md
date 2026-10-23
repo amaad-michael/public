@@ -52,6 +52,18 @@ chmod 600. The pattern per project:
   the repo's health scripts read-only from the checkout and writes
   reports to `./reports/` on the host; it needs host-device access
   (privileged, `/dev`, `pid: host`) — see its README.
+- **backup-integrity**: no `.env` and no secrets. The image is built
+  locally and run on demand against a data directory
+  (`BACKUP_INTEGRITY_DIR`, default `./data`).
+- **cron-audit**: no `.env` and no secrets. The image is built locally;
+  the host's cron configuration is mounted read-only at `/host`.
+- **firewall-audit**: no `.env` and no secrets. The image is built
+  locally and runs with host networking (`network_mode: host`,
+  CAP_NET_ADMIN) against the host's firewall, with its configuration
+  directories mounted read-only.
+- **ops-toolkit**: no `.env` and no secrets. The image is built locally;
+  configuration ships in the image and output persists in named
+  volumes (`ops_log`, `ops_state`).
 - **open-terminal**: a `.env` copied from
   `open-terminal-env.example`, holding OPEN_TERMINAL_API_KEY (the
   key the bash form generates at

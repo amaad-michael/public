@@ -3,6 +3,10 @@
 Ansible forms of the `scripts/security/` family: the server
 hardening baseline and the SSH access toolkit.
 
+The Jinja templates the playbooks render live in `templates/`
+(`05-system-info.j2`, `99-hardening.conf.j2`, `hardening.rules.j2`,
+`jail.local.j2`).
+
 ## 🔒 secure_server_init.yml
 
 The Ansible form of the secure-server-init family

@@ -105,11 +105,23 @@ services:
 Add host `/var/log`, `/tmp`, `/var/tmp`, or `/var/cache` binds the
 same way only if you intend the container to delete aged files there.
 
+## 📁 Files
+
+- `entrypoint.sh` — prepares the runtime directories
+  (`/var/log/ops`, `/var/lib/ops-toolkit`), then execs the container
+  command (`cron -f` by default, or a single job script passed as
+  the command).
+- `crontab` — the shipped job schedule, installed into the image at
+  `/etc/cron.d/ops-toolkit`.
+- `scripts/` — the six job scripts with their shared `common.sh`,
+  `ops.conf`, and `lists/`.
+
 ## Notes
 
 - The image runs as root: cron and the jobs need it (the host form's
   systemd units also run the scripts as root — no `User=` line). All
-  capabilities are dropped except the setuid/setgid set cron needs.
+  capabilities are dropped except SETUID, SETGID, DAC_OVERRIDE, and
+  CHOWN (the set cron and the jobs need).
 - Config is the toolkit's own: `/etc/ops/ops.conf` in the image is the
   shipped `ops.conf`, and `load_config` honours the same overrides.
 - The base image is `debian:bookworm-slim` pinned by digest in the

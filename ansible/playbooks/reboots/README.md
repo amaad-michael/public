@@ -26,7 +26,7 @@ rebooted one at a time in inventory order, each verified back before
 the next is touched. The default mode is the complex one (the
 `uptime` pre-check gates the reboot; `whoami` plus a changed boot ID
 confirm the return, within the same 600 second timeout);
-`--simple` drops the pre-check. The monthly wrapper's reboot step is
+`--simple` drops the pre-check. The bash equivalent of the monthly wrapper's reboot step is
 `./scripts/fleet-reboot.sh --simple --limit pi0,pi2,pi3,pi4`. There
 is no Docker form: rebooting a host is an operation on the host
 itself.
