@@ -18,3 +18,15 @@ This is the playbook the monthly maintenance wrapper (`scripts/run_monthly_maint
 The guarded reboot. Before rebooting, a pre-task runs `uptime` on the host: if the command returns a non-zero exit code, the play fails for that host and no reboot is attempted. The uptime output is printed so the run log shows the pre-reboot state. The reboot itself passes `test_command: whoami`, so the module confirms the host is genuinely back and accepting commands, and a handler logs that the host rebooted successfully and is accessible.
 
 Pick `reboot_complex.yml` when a host might already be unhealthy and you want the run to stop instead of rebooting a sick machine blind. Pick `reboot_simple.yml` for routine, scheduled reboots of hosts you have just patched and verified.
+
+## Bash form
+
+`scripts/fleet-reboot.sh` mirrors both playbooks over SSH: hosts are
+rebooted one at a time in inventory order, each verified back before
+the next is touched. The default mode is the complex one (the
+`uptime` pre-check gates the reboot; `whoami` plus a changed boot ID
+confirm the return, within the same 600 second timeout);
+`--simple` drops the pre-check. The monthly wrapper's reboot step is
+`./scripts/fleet-reboot.sh --simple --limit pi0,pi2,pi3,pi4`. There
+is no Docker form: rebooting a host is an operation on the host
+itself.

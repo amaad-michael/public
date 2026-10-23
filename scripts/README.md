@@ -36,4 +36,9 @@ the usage guide for the scripts in that folder.
 Also at this level: `run_monthly_maintenance.sh`, the wrapper that
 runs the monthly maintenance playbooks (see
 [ansible/README.md](../ansible/README.md)) and logs to
-`scripts/logs/maintenance.log`.
+`scripts/logs/maintenance.log`; and `fleet-reboot.sh`, the bash
+form of the reboot playbooks (see
+[ansible/playbooks/reboots](../ansible/playbooks/reboots/README.md)),
+which reboots the fleet one host at a time over SSH with the
+playbooks' pre-check, 600-second return wait, and `whoami`
+confirmation.
