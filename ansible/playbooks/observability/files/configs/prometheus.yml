@@ -1,0 +1,105 @@
+---
+# neo1 Prometheus — 30s cadence, sized for 512MB ARMv7.
+# All targets resolved against live subnet inventory (2026-07).
+
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["127.0.0.1:9093"]
+
+rule_files:
+  - /etc/prometheus/alert_rules.yml
+
+scrape_configs:
+  # --- Self + host ---
+  - job_name: prometheus
+    static_configs:
+      - targets: ["127.0.0.1:9091"]
+
+  - job_name: node
+    static_configs:
+      - targets:
+          - "127.0.0.1:9100"          # neo1
+          # Fleet — targets live; comment out any node until its
+          # node_exporter is deployed, or NodeDown fires immediately:
+          - "192.168.0.100:9100"   # pi0
+          - "192.168.0.101:9100"   # pi1
+          - "192.168.0.102:9100"   # pi2
+          - "192.168.0.103:9100"   # pi3
+          - "192.168.0.104:9100"   # pi4
+        labels:
+          site: homelab
+
+  # --- Reachability (ICMP) for nodes without exporters yet ---
+  - job_name: blackbox_icmp
+    metrics_path: /probe
+    params:
+      module: [icmp]
+    static_configs:
+      - targets:
+          - "192.168.0.100"    # pi0
+          - "192.168.0.101"    # pi1
+          - "192.168.0.102"    # pi2
+          - "192.168.0.103"    # pi3
+          - "192.168.0.104"    # pi4
+    relabel_configs: &blackbox_relabel
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 127.0.0.1:9115
+
+  # --- DNS resolution health ---
+  # Unbound is 127.0.0.1:5335 per node (not network-probeable from neo1);
+  # probing Pi-hole:53 exercises the full chain: pihole -> local unbound -> roots.
+  # Direct Unbound visibility = future unbound_exporter on pi4/pi0.
+  - job_name: blackbox_dns
+    metrics_path: /probe
+    params:
+      module: [dns_udp]
+    static_configs:
+      - targets:
+          - "192.168.0.104:53"   # pi4 — pihole primary
+          - "192.168.0.100:53"   # pi0 — pihole secondary
+    relabel_configs: *blackbox_relabel
+
+  # --- DNSSEC enforcement: dnssec-failed.org MUST return SERVFAIL.
+  # probe_success==0 here means validation is NOT being enforced (or resolver down).
+  - job_name: blackbox_dnssec
+    metrics_path: /probe
+    params:
+      module: [dns_dnssec_enforced]
+    static_configs:
+      - targets:
+          - "192.168.0.104:53"   # pi4 — pihole primary
+          - "192.168.0.100:53"   # pi0 — pihole secondary
+    relabel_configs: *blackbox_relabel
+
+  # --- NEGATIVE CONTROL: Unbound must NOT be LAN-reachable ---
+  # Design: unbound is a private backend behind pihole (loopback/docker-net only).
+  # These probes are EXPECTED TO FAIL. probe_success==1 => exposure regression.
+  # (Found live-exposed 2026-07-07, remediated; this tripwire keeps it closed.)
+  - job_name: blackbox_unbound_exposure
+    metrics_path: /probe
+    params:
+      module: [tcp_connect]
+    static_configs:
+      - targets:
+          - "192.168.0.104:5053"   # pi4 unbound (must be closed)
+          - "192.168.0.100:5053"   # pi0 unbound (must be closed)
+    relabel_configs: *blackbox_relabel
+
+  # --- WAN reachability (through your normal DNS path) ---
+  - job_name: blackbox_wan
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - "https://one.one.one.one"
+    relabel_configs: *blackbox_relabel

@@ -1,0 +1,79 @@
+---
+groups:
+  - name: fleet
+    rules:
+      - alert: NodeDown
+        expr: up{job="node"} == 0
+        for: 3m
+        labels: {severity: critical}
+        annotations:
+          summary: "node_exporter target {{ $labels.instance }} down 3m"
+
+      - alert: HostUnreachable
+        expr: probe_success{job="blackbox_icmp"} == 0
+        for: 3m
+        labels: {severity: critical}
+        annotations:
+          summary: "ICMP to {{ $labels.instance }} failing 3m"
+
+      - alert: DNSResolutionFailing
+        expr: probe_success{job="blackbox_dns"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "DNS probe against {{ $labels.instance }} failing — resolver degraded"
+
+      - alert: DNSSECNotEnforced
+        expr: probe_success{job="blackbox_dnssec"} == 0
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.instance }}: dnssec-failed.org did NOT SERVFAIL — DNSSEC validation broken or resolver down"
+
+      # INVERTED alert: fires when the probe SUCCEEDS.
+      - alert: UnboundExposedToLAN
+        expr: probe_success{job="blackbox_unbound_exposure"} == 1
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.instance }}: Unbound reachable from LAN — violates loopback-only design, blocklist bypass possible"
+
+      - alert: WANDown
+        expr: probe_success{job="blackbox_wan"} == 0
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "WAN HTTP probe failing 5m"
+
+  - name: host_health
+    rules:
+      - alert: DiskAlmostFull
+        expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|squashfs"} / node_filesystem_size_bytes) < 0.10
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.instance }} {{ $labels.mountpoint }} under 10% free"
+
+      - alert: MemoryPressure
+        expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) < 0.10
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.instance }} under 10% memory available"
+
+      - alert: HighLoad
+        expr: node_load5 / count without(cpu, mode) (node_cpu_seconds_total{mode="idle"}) > 2
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.instance }} load5 > 2x core count for 15m"
+
+      # Watcher-watching: this only catches a broken self-scrape while Prometheus
+      # still runs. Death of the watcher itself requires an EXTERNAL dead-man's
+      # switch (e.g. Watchdog alert -> healthchecks.io or a peer node) — tracked in README.
+      - alert: PrometheusSelfScrapeAbsent
+        expr: absent(up{job="prometheus"})
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "Prometheus self-scrape absent (watcher degraded)"

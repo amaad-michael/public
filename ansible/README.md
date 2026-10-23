@@ -29,6 +29,10 @@ the usage guide for its playbooks:
   and load balancer), plus the two full deployment guides,
   [gpu-box-llm-setup-v2.1.md](playbooks/llm/gpu-box-llm-setup-v2.1.md)
   and [optiplex-llm-v2.3.md](playbooks/llm/optiplex-llm-v2.3.md).
+- [observability](playbooks/observability/README.md): the neo1
+  observability stack (Prometheus, Alertmanager, blackbox_exporter,
+  node_exporter, ntfy, on-demand Grafana) — the Ansible form of the
+  native kit in `scripts/provisioning/neo1-observability-native/`.
 - [monthly](playbooks/monthly/README.md): monthly patching for the
   fleet, Nobara, and the Pi-hole hosts, driven by
   `scripts/run_monthly_maintenance.sh`.

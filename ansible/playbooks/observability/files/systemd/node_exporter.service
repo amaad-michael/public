@@ -1,0 +1,23 @@
+[Unit]
+Description=node_exporter (neo1 host metrics)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=nodeexp
+Group=nodeexp
+ExecStart=/usr/local/bin/node_exporter \
+  --web.listen-address=0.0.0.0:9100 \
+  --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run)($|/)
+Restart=on-failure
+RestartSec=5
+MemoryMax=48M
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

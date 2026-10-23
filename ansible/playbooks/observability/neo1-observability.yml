@@ -1,0 +1,388 @@
+---
+# NAME: neo1-observability.yml
+# WHAT: Ansible form of the neo1 observability node. Mirrors the native
+#       kit (scripts/provisioning/neo1-observability-native/) exactly:
+#       same component versions and checksums, same ports, paths,
+#       service users, systemd units, configs, UFW posture, and the
+#       same always-on set (grafana deliberately on-demand only).
+# WHY:  The native kit README notes the fleet rollout "is an Ansible
+#       play away" — this is that play. It also rebuilds neo1 itself
+#       idempotently from the repo instead of a one-shot shell run.
+# HOW:  cd ansible && ansible-playbook -i hosts \
+#         playbooks/observability/neo1-observability.yml -l neo1
+#
+# Test and lab overrides (defaults are the kit's armv7 pins for neo1):
+#   neo1_obs_arch / neo1_obs_*_sha256  — build for another architecture
+#     (update version and sha256 together, from the same release's
+#     checksum file, exactly as install.sh demands).
+#   neo1_obs_manage_services: false    — stage files only, no systemd
+#     changes (chroot and CI runs without a running systemd).
+#   neo1_obs_manage_firewall: false    — skip the UFW tasks.
+#
+# Out of scope, exactly as in the native kit's deploy order: ntfy user
+# and token provisioning (interactive, after first start) and placing
+# the command-restricted backup SSH keys under /home/backup/.ssh/.
+
+- name: Install the neo1 observability stack (native kit, Ansible form)
+  hosts: all
+  become: true
+  gather_facts: false
+
+  vars:
+    neo1_obs_arch: armv7
+    neo1_obs_download_dir: /tmp/neo1-dl
+    neo1_obs_lan: 192.168.0.0/24
+    neo1_obs_manage_services: true
+    neo1_obs_manage_firewall: true
+    # Pins copied verbatim from scripts/install.sh in the native kit
+    # (linux-armv7 sha256 values from each release's checksum file,
+    # resolved 2026-10-18). Bump version and sha256 together.
+    neo1_obs_prom_version: "3.15.0"
+    neo1_obs_prom_sha256: "66c26d503b8600fd512f9fddf6937f37597c4d35cc162c329b8a6c3c7d67def0"
+    neo1_obs_am_version: "0.34.1"
+    neo1_obs_am_sha256: "75f568dc43b3f905cc846e71417bbcc1d63d186bc7d95bd87fd2f41b1124d4f3"
+    neo1_obs_bb_version: "0.29.0"
+    neo1_obs_bb_sha256: "8f8a318cf3be2eed347c52d0e91e3297f8eaedb6d03720cc10868b7c753f38cb"
+    neo1_obs_ne_version: "1.12.1"
+    neo1_obs_ne_sha256: "ae3d72fbf77f9ebed553c24465310e0880383f45d3d1566357ce7a31a997acb2"
+    neo1_obs_ntfy_version: "2.32.0"
+    neo1_obs_ntfy_sha256: "feda554c21ef68176b0defa704815eec64d5751557fa16eb041de778d9c2b476"
+    neo1_obs_grafana_version: "13.2.4"
+    neo1_obs_grafana_sha256: "e157812666d3a275f43452c83eefd8d0a5bf9c067275e8a7a7d5b0b579d169cb"
+    neo1_obs_users:
+      - prometheus
+      - alertmanager
+      - blackbox
+      - nodeexp
+      - ntfy
+      - grafana
+      - backup
+    neo1_obs_directories:
+      - {path: /var/lib/prometheus, owner: prometheus, group: prometheus, mode: "0750"}
+      - {path: /etc/prometheus, owner: prometheus, group: prometheus, mode: "0750"}
+      - {path: /var/lib/alertmanager, owner: alertmanager, group: alertmanager, mode: "0750"}
+      - {path: /etc/alertmanager, owner: alertmanager, group: alertmanager, mode: "0750"}
+      - {path: /etc/blackbox, owner: blackbox, group: blackbox, mode: "0750"}
+      - {path: /var/lib/ntfy, owner: ntfy, group: ntfy, mode: "0750"}
+      - {path: /var/cache/ntfy, owner: ntfy, group: ntfy, mode: "0750"}
+      - {path: /etc/ntfy, owner: ntfy, group: ntfy, mode: "0750"}
+      - {path: /var/lib/grafana, owner: grafana, group: grafana, mode: "0750"}
+      - {path: /etc/grafana, owner: grafana, group: grafana, mode: "0750"}
+      - {path: /var/backups/pihole, owner: backup, group: backup, mode: "0750"}
+      - {path: /var/backups/unbound, owner: backup, group: backup, mode: "0750"}
+      - {path: /home/backup/.ssh, owner: backup, group: backup, mode: "0700"}
+
+  tasks:
+    - name: Refuse to run with a blanked pin (native kit zero-guesswork gate)
+      ansible.builtin.assert:
+        that:
+          - neo1_obs_prom_version | length > 0
+          - neo1_obs_prom_sha256 | length == 64
+          - neo1_obs_am_version | length > 0
+          - neo1_obs_am_sha256 | length == 64
+          - neo1_obs_bb_version | length > 0
+          - neo1_obs_bb_sha256 | length == 64
+          - neo1_obs_ne_version | length > 0
+          - neo1_obs_ne_sha256 | length == 64
+          - neo1_obs_ntfy_version | length > 0
+          - neo1_obs_ntfy_sha256 | length == 64
+          - neo1_obs_grafana_version | length > 0
+          - neo1_obs_grafana_sha256 | length == 64
+        fail_msg: "ABORT: a version or sha256 pin is unset — verify and pin versions first."
+
+    - name: Create the service users (no shells, no homes)
+      ansible.builtin.user:
+        name: "{{ item }}"
+        system: true
+        create_home: false
+        shell: /usr/sbin/nologin
+      loop: "{{ neo1_obs_users }}"
+
+    - name: Create the service directories
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+      loop: "{{ neo1_obs_directories }}"
+
+    - name: Create the download directory
+      ansible.builtin.file:
+        path: "{{ neo1_obs_download_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Fetch the Prometheus tarball (checksum-verified)
+      ansible.builtin.get_url:
+        url: "https://github.com/prometheus/prometheus/releases/download/v{{ neo1_obs_prom_version }}/prometheus-{{ neo1_obs_prom_version }}.linux-{{ neo1_obs_arch }}.tar.gz"
+        dest: "{{ neo1_obs_download_dir }}/prom.tgz"
+        checksum: "sha256:{{ neo1_obs_prom_sha256 }}"
+        mode: "0644"
+
+    - name: Extract the Prometheus tarball
+      ansible.builtin.unarchive:
+        src: "{{ neo1_obs_download_dir }}/prom.tgz"
+        dest: "{{ neo1_obs_download_dir }}"
+        remote_src: true
+        creates: "{{ neo1_obs_download_dir }}/prometheus-{{ neo1_obs_prom_version }}.linux-{{ neo1_obs_arch }}/prometheus"
+
+    - name: Install the Prometheus binaries
+      ansible.builtin.copy:
+        src: "{{ neo1_obs_download_dir }}/prometheus-{{ neo1_obs_prom_version }}.linux-{{ neo1_obs_arch }}/{{ item }}"
+        dest: "/usr/local/bin/{{ item }}"
+        remote_src: true
+        mode: "0755"
+      loop:
+        - prometheus
+        - promtool
+
+    - name: Fetch the Alertmanager tarball (checksum-verified)
+      ansible.builtin.get_url:
+        url: "https://github.com/prometheus/alertmanager/releases/download/v{{ neo1_obs_am_version }}/alertmanager-{{ neo1_obs_am_version }}.linux-{{ neo1_obs_arch }}.tar.gz"
+        dest: "{{ neo1_obs_download_dir }}/am.tgz"
+        checksum: "sha256:{{ neo1_obs_am_sha256 }}"
+        mode: "0644"
+
+    - name: Extract the Alertmanager tarball
+      ansible.builtin.unarchive:
+        src: "{{ neo1_obs_download_dir }}/am.tgz"
+        dest: "{{ neo1_obs_download_dir }}"
+        remote_src: true
+        creates: "{{ neo1_obs_download_dir }}/alertmanager-{{ neo1_obs_am_version }}.linux-{{ neo1_obs_arch }}/alertmanager"
+
+    - name: Install the Alertmanager binaries
+      ansible.builtin.copy:
+        src: "{{ neo1_obs_download_dir }}/alertmanager-{{ neo1_obs_am_version }}.linux-{{ neo1_obs_arch }}/{{ item }}"
+        dest: "/usr/local/bin/{{ item }}"
+        remote_src: true
+        mode: "0755"
+      loop:
+        - alertmanager
+        - amtool
+
+    - name: Fetch the blackbox_exporter tarball (checksum-verified)
+      ansible.builtin.get_url:
+        url: "https://github.com/prometheus/blackbox_exporter/releases/download/v{{ neo1_obs_bb_version }}/blackbox_exporter-{{ neo1_obs_bb_version }}.linux-{{ neo1_obs_arch }}.tar.gz"
+        dest: "{{ neo1_obs_download_dir }}/bb.tgz"
+        checksum: "sha256:{{ neo1_obs_bb_sha256 }}"
+        mode: "0644"
+
+    - name: Extract the blackbox_exporter tarball
+      ansible.builtin.unarchive:
+        src: "{{ neo1_obs_download_dir }}/bb.tgz"
+        dest: "{{ neo1_obs_download_dir }}"
+        remote_src: true
+        creates: "{{ neo1_obs_download_dir }}/blackbox_exporter-{{ neo1_obs_bb_version }}.linux-{{ neo1_obs_arch }}/blackbox_exporter"
+
+    - name: Install the blackbox_exporter binary
+      ansible.builtin.copy:
+        src: "{{ neo1_obs_download_dir }}/blackbox_exporter-{{ neo1_obs_bb_version }}.linux-{{ neo1_obs_arch }}/blackbox_exporter"
+        dest: /usr/local/bin/blackbox_exporter
+        remote_src: true
+        mode: "0755"
+
+    - name: Fetch the node_exporter tarball (checksum-verified)
+      ansible.builtin.get_url:
+        url: "https://github.com/prometheus/node_exporter/releases/download/v{{ neo1_obs_ne_version }}/node_exporter-{{ neo1_obs_ne_version }}.linux-{{ neo1_obs_arch }}.tar.gz"
+        dest: "{{ neo1_obs_download_dir }}/ne.tgz"
+        checksum: "sha256:{{ neo1_obs_ne_sha256 }}"
+        mode: "0644"
+
+    - name: Extract the node_exporter tarball
+      ansible.builtin.unarchive:
+        src: "{{ neo1_obs_download_dir }}/ne.tgz"
+        dest: "{{ neo1_obs_download_dir }}"
+        remote_src: true
+        creates: "{{ neo1_obs_download_dir }}/node_exporter-{{ neo1_obs_ne_version }}.linux-{{ neo1_obs_arch }}/node_exporter"
+
+    - name: Install the node_exporter binary
+      ansible.builtin.copy:
+        src: "{{ neo1_obs_download_dir }}/node_exporter-{{ neo1_obs_ne_version }}.linux-{{ neo1_obs_arch }}/node_exporter"
+        dest: /usr/local/bin/node_exporter
+        remote_src: true
+        mode: "0755"
+
+    - name: Fetch the ntfy tarball (checksum-verified)
+      ansible.builtin.get_url:
+        url: "https://github.com/binwiederhier/ntfy/releases/download/v{{ neo1_obs_ntfy_version }}/ntfy_{{ neo1_obs_ntfy_version }}_linux_{{ neo1_obs_arch }}.tar.gz"
+        dest: "{{ neo1_obs_download_dir }}/ntfy.tgz"
+        checksum: "sha256:{{ neo1_obs_ntfy_sha256 }}"
+        mode: "0644"
+
+    - name: Extract the ntfy tarball
+      ansible.builtin.unarchive:
+        src: "{{ neo1_obs_download_dir }}/ntfy.tgz"
+        dest: "{{ neo1_obs_download_dir }}"
+        remote_src: true
+        creates: "{{ neo1_obs_download_dir }}/ntfy_{{ neo1_obs_ntfy_version }}_linux_{{ neo1_obs_arch }}/ntfy"
+
+    - name: Install the ntfy binary
+      ansible.builtin.copy:
+        src: "{{ neo1_obs_download_dir }}/ntfy_{{ neo1_obs_ntfy_version }}_linux_{{ neo1_obs_arch }}/ntfy"
+        dest: /usr/local/bin/ntfy
+        remote_src: true
+        mode: "0755"
+
+    - name: Fetch the Grafana tarball (checksum-verified)
+      ansible.builtin.get_url:
+        url: "https://dl.grafana.com/oss/release/grafana-{{ neo1_obs_grafana_version }}.linux-{{ neo1_obs_arch }}.tar.gz"
+        dest: "{{ neo1_obs_download_dir }}/grafana.tgz"
+        checksum: "sha256:{{ neo1_obs_grafana_sha256 }}"
+        mode: "0644"
+
+    - name: Create the Grafana program directory
+      ansible.builtin.file:
+        path: /opt/grafana
+        state: directory
+        mode: "0755"
+
+    - name: Extract Grafana into /opt/grafana
+      ansible.builtin.unarchive:
+        src: "{{ neo1_obs_download_dir }}/grafana.tgz"
+        dest: /opt/grafana
+        remote_src: true
+        extra_opts:
+          - --strip-components=1
+        creates: /opt/grafana/bin/grafana
+
+    - name: Install the backup scripts
+      ansible.builtin.copy:
+        src: "files/scripts/{{ item }}"
+        dest: "/usr/local/sbin/{{ item }}"
+        mode: "0755"
+      loop:
+        - pihole-backup.sh
+        - unbound-backup.sh
+
+    - name: Install the kit helper scripts for parity with the native kit
+      ansible.builtin.copy:
+        src: "files/scripts/{{ item.src }}"
+        dest: "/usr/local/sbin/{{ item.dest }}"
+        mode: "0755"
+      loop:
+        - {src: ufw.sh, dest: neo1-ufw.sh}
+        - {src: verify.sh, dest: neo1-verify.sh}
+
+    - name: Hard gate — refuse to continue until every binary is installed
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: neo1_obs_binary_stats
+      loop:
+        - /usr/local/bin/prometheus
+        - /usr/local/bin/promtool
+        - /usr/local/bin/alertmanager
+        - /usr/local/bin/amtool
+        - /usr/local/bin/blackbox_exporter
+        - /usr/local/bin/node_exporter
+        - /usr/local/bin/ntfy
+        - /opt/grafana/bin/grafana
+
+    - name: Assert the hard gate
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.executable
+        fail_msg: "ABORT: {{ item.item }} missing or not executable — complete the fetch blocks first."
+      loop: "{{ neo1_obs_binary_stats.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Install the configs (byte-identical to the native kit)
+      ansible.builtin.copy:
+        src: "files/configs/{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: root
+        group: "{{ item.group }}"
+        mode: "0640"
+      loop:
+        - {src: prometheus.yml, dest: /etc/prometheus/prometheus.yml, group: prometheus}
+        - {src: alert_rules.yml, dest: /etc/prometheus/alert_rules.yml, group: prometheus}
+        - {src: alertmanager.yml, dest: /etc/alertmanager/alertmanager.yml, group: alertmanager}
+        - {src: blackbox.yml, dest: /etc/blackbox/blackbox.yml, group: blackbox}
+        - {src: ntfy-server.yml, dest: /etc/ntfy/server.yml, group: ntfy}
+        - {src: grafana.ini, dest: /etc/grafana/grafana.ini, group: grafana}
+      loop_control:
+        label: "{{ item.dest }}"
+
+    - name: Install the systemd units (byte-identical to the native kit)
+      ansible.builtin.copy:
+        src: "files/systemd/{{ item }}"
+        dest: "/etc/systemd/system/{{ item }}"
+        mode: "0644"
+      loop:
+        - prometheus.service
+        - alertmanager.service
+        - blackbox_exporter.service
+        - node_exporter.service
+        - ntfy.service
+        - grafana.service
+        - pihole-backup.service
+        - pihole-backup.timer
+        - unbound-backup.service
+        - unbound-backup.timer
+
+    - name: Enable and start the always-on set (grafana deliberately excluded)
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        enabled: true
+        state: started
+        daemon_reload: true
+      loop:
+        - node_exporter
+        - blackbox_exporter
+        - prometheus
+        - alertmanager
+        - ntfy
+        - pihole-backup.timer
+        - unbound-backup.timer
+      when: neo1_obs_manage_services | bool
+
+    - name: Keep grafana disabled (on-demand only, as in the native kit)
+      ansible.builtin.systemd:
+        name: grafana
+        enabled: false
+        daemon_reload: true
+      when: neo1_obs_manage_services | bool
+
+    - name: UFW — check the binary exists before touching the firewall
+      ansible.builtin.stat:
+        path: /usr/sbin/ufw
+      register: neo1_obs_ufw_stat
+      when: neo1_obs_manage_firewall | bool
+
+    - name: UFW — fail loudly when the firewall is requested but ufw is absent
+      ansible.builtin.fail:
+        msg: "neo1_obs_manage_firewall is true but /usr/sbin/ufw is missing; install ufw or set neo1_obs_manage_firewall=false."
+      when:
+        - neo1_obs_manage_firewall | bool
+        - not neo1_obs_ufw_stat.stat.exists
+
+    - name: UFW — default policies (mirrors scripts/ufw.sh in the native kit)
+      community.general.ufw:
+        state: enabled
+        policy: "{{ item.policy }}"
+        direction: "{{ item.direction }}"
+      loop:
+        - {policy: deny, direction: incoming}
+        - {policy: allow, direction: outgoing}
+      loop_control:
+        label: "{{ item.direction }} {{ item.policy }}"
+      when: neo1_obs_manage_firewall | bool
+
+    - name: UFW — LAN allowances (9093 and 9115 stay loopback-only, never opened)
+      community.general.ufw:
+        rule: allow
+        port: "{{ item.port }}"
+        proto: tcp
+        from_ip: "{{ neo1_obs_lan }}"
+        comment: "{{ item.comment }}"
+      loop:
+        - {port: "22", comment: "ssh lan"}
+        - {port: "9091", comment: "prometheus ui"}
+        - {port: "9100", comment: "node_exporter"}
+        - {port: "8081", comment: "ntfy"}
+        - {port: "3002", comment: "grafana on-demand"}
+      loop_control:
+        label: "{{ item.port }}/tcp {{ item.comment }}"
+      when: neo1_obs_manage_firewall | bool
