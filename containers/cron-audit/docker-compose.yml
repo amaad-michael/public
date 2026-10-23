@@ -1,0 +1,40 @@
+---
+# Fleet cron audit — container form of
+# scripts/monitoring/local_cron_checker.sh + remote_cron_checker.sh
+# (Ansible form: ansible/playbooks/audits/cron_audit.yml).
+#
+# Run-on-demand collector, not a daemon: it prints the audit report
+# to stdout and exits. The default mode reads the host's cron state
+# from the read-only mounts below; README.md documents exactly what
+# each access mode can and cannot see (mounted mode cannot read
+# systemd timer state).
+services:
+  cron-audit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cron-audit:bookworm
+    container_name: cron-audit
+    volumes:
+      # The host's cron configuration, read-only. The collector reads
+      # /host/etc/{passwd,crontab,cron.d,cron.*} and both spool layouts
+      # (RHEL: /host/var/spool/cron/<user>; Debian:
+      # /host/var/spool/cron/crontabs/<user>).
+      - /etc:/host/etc:ro
+      - /var/spool/cron:/host/var/spool/cron:ro
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
