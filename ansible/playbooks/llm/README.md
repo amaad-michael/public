@@ -1,6 +1,6 @@
 # LLM playbooks
 
-Four Ansible deployments live in this folder. Two of them, the GPU box and the OptiPlex, have their own full guides and are only linked here. The other two, the NanoPi inference server and its load balancer, are documented in this README.
+Five Ansible deployments live in this folder. Two of them, the GPU box and the OptiPlex, have their own full guides and are only linked here. The other three, the NanoPi inference server, its load balancer, and Open Terminal, are documented in this README.
 
 | Playbook | Target | Guide |
 |---|---|---|
@@ -8,6 +8,11 @@ Four Ansible deployments live in this folder. Two of them, the GPU box and the O
 | `optiplex-llm-setup-v2.1.yml` | Dell OptiPlex, llama.cpp | [optiplex-llm-v2.3.md](optiplex-llm-v2.3.md) |
 | `llm-server-setup.yml` | NanoPi boards, llama.cpp inference | This README |
 | `llm-lb-setup.yml` | NanoPi board, nginx load balancer | This README |
+| `open_terminal_setup.yml` | GPU box, Open Terminal file service | This README |
+
+## open_terminal_setup.yml
+
+The Ansible form of `scripts/llm/setup_open_terminal-v1_2.sh`: it prepares the host exactly as the script does (workspace and log directories at mode 0700, the workspace owned 1000:1000, the API key generated once at `/var/lib/open-terminal/api_key.txt`, mode 0600) and then deploys the same container with every hardening flag of the script's `docker run` — loopback-only publish on port 9000, read-only rootfs, `ipc: none`, sized tmpfs mounts, cap_drop ALL with SETUID/SETGID/CHOWN added back, no-new-privileges, 256 MB / 1 CPU / 50 PID limits, the curl healthcheck, and capped json-file logging. The compose form of the same deployment is `containers/open-terminal/`. The script's `--uninstall` (which also deletes the workspace, logs and API key) stays bash-only.
 
 ## llm-server-setup.yml
 

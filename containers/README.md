@@ -54,3 +54,9 @@ chmod 600. The pattern per project:
   the repo's health scripts read-only from the checkout and writes
   reports to `./reports/` on the host; it needs host-device access
   (privileged, `/dev`, `pid: host`) — see its README.
+- **open-terminal**: a `.env` copied from
+  `open-terminal-env.example`, holding OPEN_TERMINAL_API_KEY (the
+  key the bash form generates at
+  `/var/lib/open-terminal/api_key.txt`; reuse that value when
+  switching forms) and optionally OPEN_TERMINAL_WORKSPACE. Compose
+  refuses to start until the API key is set.
