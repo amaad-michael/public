@@ -15,6 +15,7 @@ host, and each installer ends with its own verification pass.
    - [What one run does](#what-one-run-does)
    - [Verifying and restoring](#verifying-and-restoring)
 - [🔗 Jenkins](#-jenkins)
+- [🛠️ Proxmox VE](#-proxmox-ve)
 
 ## 🛠️ Gitea (bare metal)
 
@@ -236,3 +237,15 @@ passphrase is enough to unlock the disk.
 or 10. Its guide is `jenkins-consolidated-v1.0.md` in this folder. Run
 the installer with `--help` for its options (Java version selection,
 the optional JNLP agent port, and a no-firewall mode).
+
+## 🛠️ Proxmox VE
+
+`proxmox-setup.sh` is the bash form of the Proxmox VE deployment in
+`ansible/playbooks/proxmox/`: one subcommand per playbook (`install`,
+`configure`, `prep`, `templates-cloudinit`, `templates-turnkey`, or
+`all` for the full sequence), run as root on the target host, with
+the same values, checks, and defaults as the playbooks. Every
+subcommand accepts `--dry-run`; the `api-check` subcommand validates
+an API token against the Proxmox REST API. There is no Docker form —
+Proxmox VE is a bare-metal hypervisor. The full mapping and run
+order are in the Proxmox playbooks' README.
