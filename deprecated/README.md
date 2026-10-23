@@ -1,9 +1,10 @@
 # deprecated
 
-Files moved here in the 2026-09-18 reorganization (PR #3) and a follow-up
-pass on 2026-09-21, because their filenames mark them as superseded
-(`_OLD`, `-old`, `.bak`, `~`) or a successor has replaced them. Git history
-is intact: use `git log --follow` on any file to see where it came from.
+Files moved here in the 2026-09-18 reorganization (PR #3), a follow-up
+pass on 2026-09-21, and a duplicate-consolidation pass on 2026-10-22,
+because their filenames mark them as superseded (`_OLD`, `-old`, `.bak`,
+`~`) or a successor has replaced them. Git history is intact: use
+`git log --follow` on any file to see where it came from.
 
 ## 📦 Manifest
 
@@ -19,3 +20,6 @@ is intact: use `git log --follow` on any file to see where it came from.
 | health_check_universal.yml | ansible/playbooks/healthchecks/health_check_universal.yml | 2026-09-21 | health_check_universal2.yml |
 | cleanup_logs_pihole.sh | scripts/pihole/cleanup_logs_pihole.sh | 2026-09-21 | cleanup_logs_pihole2.sh |
 | docker-compose-new.yml | containers/docker-files-pihole-v1.1/docker-compose-new.yml | 2026-09-21 | docker-compose.yml (renamed from pi-dns-docker-compose.yml, the hardened v2) |
+| uninstall_pihole.yml | ansible/playbooks/cleanup/uninstall_pihole.yml | 2026-10-22 | ansible/playbooks/cleanup/uninstall_pihole2.yml (which also gained this file's gated final DNS check in the same pass) |
+| new-nobara-setup-alt-v1.1.sh | scripts/workstation/new-nobara-setup-alt-v1.1.sh | 2026-10-22 | scripts/workstation/new-nobara-setup-v1.1.sh (its `gpu-high` subcommand was folded into the survivor) |
+| neofetch_motd.yml | ansible/playbooks/motd/neofetch_motd.yml | 2026-10-22 | ansible/playbooks/motd/fastfetch_motd.yml |

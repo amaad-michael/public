@@ -4,25 +4,23 @@ First-boot setup and recurring update scripts for the two workstation
 hosts: the Nobara GPU box and the Linux Mint OptiPlex, plus a
 role-prep checklist and setup script for a personal Linux laptop.
 The Ansible patching counterpart for Nobara lives in
-`ansible/playbooks/workstation/nobara_patch.yml`.
+`ansible/playbooks/monthly/monthly_maint_nobara.yml`.
 
 ## 🛠️ New Nobara setup
 
-Two variants of the same first-boot job. Both run as root on a fresh
-Nobara install, and both:
+One script for the first-boot job: `new-nobara-setup-v1.1.sh`, run
+as root on a fresh Nobara install. It:
 
-- Find the discrete AMD GPU (amdgpu driver, device class 0x030000,
-  so the iGPU is skipped) and lock it to high performance by writing
-  `high` to its `power_dpm_force_performance_level`. Both exit with
+- Finds the discrete AMD GPU (amdgpu driver, device class 0x030000,
+  so the iGPU is skipped) and locks it to high performance by writing
+  `high` to its `power_dpm_force_performance_level`. It exits with
   an error if no discrete AMD GPU is found.
-- Install the Cinnamon desktop group and download a placeholder
+- Installs the Cinnamon desktop group and downloads a placeholder
   wallpaper to `/usr/share/backgrounds/nobara-cinnamon`.
 
 The GPU lock is a runtime sysfs setting and does not persist across
-a reboot. Revert it by writing `auto` to the same file; the main
-script prints the exact path.
-
-### new-nobara-setup-v1.1.sh
+a reboot. Revert it by writing `auto` to the same file; the script
+prints the exact path.
 
 A single linear, interactive run: GPU tuning first, then a press
 Enter prompt, then the desktop part. It updates with `nobara-sync
@@ -31,20 +29,15 @@ wallpaper downloads at 3840x2160, and a failed download only warns.
 It ends with post-setup instructions: log out, pick Cinnamon from
 the gear menu on the login screen, then set themes and wallpaper.
 
-### new-nobara-setup-alt-v1.1.sh
-
-A modular variant that takes a subcommand:
+For GPU tuning alone, without the setup:
 
 ```bash
-sudo ./new-nobara-setup-alt-v1.1.sh setup     # full setup
-sudo ./new-nobara-setup-alt-v1.1.sh gpu-high  # GPU tuning only
+sudo ./new-nobara-setup-v1.1.sh gpu-high
 ```
 
-`setup` runs nobara-sync if present, then `dnf update -y` and
-`dnf autoremove -y`, the Cinnamon install, and a 1920x1080
-wallpaper. `gpu-high` runs only the GPU tuning and verifies the
-level reads back as `high`. There is no prompt and no closing
-instructions block; the script recommends a reboot at the end.
+(The retired `new-nobara-setup-alt-v1.1.sh` variant, whose
+`gpu-high` subcommand was folded into the script above, is in
+`deprecated/`.)
 
 ## Laptop role prep
 
@@ -143,13 +136,13 @@ and high-performance lock, the nobara-sync update with the dnf
 fallback, the Cinnamon desktop group install, and the placeholder
 wallpaper. Its usage header is the guide.
 
-`ansible/playbooks/workstation/nobara_patch.yml` patches Nobara
+`ansible/playbooks/monthly/monthly_maint_nobara.yml` patches Nobara
 desktops through Ansible instead of by hand (target group `nobara`,
 `become: true`):
 
 ```bash
-ansible-playbook -i inventory.ini nobara_patch.yml
-ansible-playbook -i inventory.ini nobara_patch.yml --tags flatpak
+ansible-playbook -i inventory.ini monthly_maint_nobara.yml
+ansible-playbook -i inventory.ini monthly_maint_nobara.yml --tags flatpak
 ```
 
 It runs `nobara-sync --no-reboot`, a full dnf upgrade and

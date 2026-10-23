@@ -92,32 +92,14 @@ Both checkers suit an on-demand or scheduled audit. Every run writes
 a new timestamped file; nothing is overwritten, so the directory
 becomes the audit history.
 
-## local_backups_checker.sh
+## Backup manifest integrity
 
-Creates and verifies SHA-256 manifests for a directory tree. It works
-on the current directory, so run it from the root of the tree you want
-to protect:
-
-```bash
-cd /path/to/tree
-./local_backups_checker.sh --generate            # on the source side
-./local_backups_checker.sh --verify              # on the destination side
-./local_backups_checker.sh --generate-and-verify # both, as a sanity check
-```
-
-- `-o <file>` sets the manifest name for generation and `-m <file>`
-  for verification. Both default to `backup.manifest`.
-- The manifest stores relative paths, so verification works wherever
-  the tree was copied to.
-- The manifest itself and the `verify_*.log` files are excluded from
-  the manifest; both change as the script runs and would guarantee a
-  false corruption result.
-- Each run writes a timestamped log, `verify_YYYYMMDD_HHMMSS.log`, in
-  the current directory.
-- Exit codes: 0 means everything matched (or a manifest was
-  generated), 1 means one or more files are missing or corrupted, 2
-  means a usage error or a missing manifest for verification.
-- `-h` or `--help` prints the usage header.
-
-Typical flow: generate the manifest on the source before copying,
-then verify on the destination after the copy lands.
+This folder no longer carries its own backup checker: the repo's
+single SHA-256 manifest tool is
+[`scripts/backups/backup_integrity_tool_v1.sh`](../backups/backup_integrity_tool_v1.sh)
+(guide: [`backup_integrity_tool_guide-v1.md`](../backups/backup_integrity_tool_guide-v1.md)).
+The former `local_backups_checker.sh` was removed on 2026-10-22
+because the two tools wrote incompatible manifests that could not
+verify each other's output. Note that any `backup.manifest` files
+the old tool produced cannot be verified by the surviving tool;
+regenerate manifests with the backups tool.

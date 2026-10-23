@@ -27,7 +27,7 @@ Debian patching with Pi-hole awareness. Every task is gated on the Debian OS fam
 
 ## monthly_maint_nobara.yml
 
-Full patching for Nobara desktops. The file's own header still calls it `nobara_patch.yml`; the `nobara` target group is not in the shipped `ansible/hosts` file, so define it in your inventory.
+Full patching for Nobara desktops. This is the only copy of the Nobara patching playbook (the identical `nobara_patch.yml` under `playbooks/workstation/` was removed 2026-10-22). The `nobara` target group is not in the shipped `ansible/hosts` file, so define it in your inventory.
 
 - Primary mechanism is the native updater: `nobara-sync --no-reboot -y`. If `nobara-sync` is missing the playbook warns and falls back to dnf alone.
 - A dnf full upgrade plus autoremove runs regardless, to catch anything the sync missed.
