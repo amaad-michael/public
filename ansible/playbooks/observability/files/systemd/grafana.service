@@ -1,0 +1,30 @@
+# ON-DEMAND SERVICE — do NOT `systemctl enable` this unit.
+# Start:  sudo systemctl start grafana
+# Stop:   sudo systemctl stop grafana  (or let RuntimeMaxSec kill it)
+[Unit]
+Description=Grafana (on-demand dashboard sessions only)
+Wants=network-online.target
+After=network-online.target prometheus.service
+
+[Service]
+User=grafana
+Group=grafana
+WorkingDirectory=/opt/grafana
+ExecStart=/opt/grafana/bin/grafana server \
+  --config=/etc/grafana/grafana.ini \
+  --homepath=/opt/grafana
+Restart=no
+# Auto-terminate after 6h so a forgotten session can't squat on RAM:
+RuntimeMaxSec=6h
+MemoryHigh=200M
+MemoryMax=240M
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/grafana
+ProtectHome=true
+PrivateTmp=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

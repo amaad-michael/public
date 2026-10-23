@@ -1,0 +1,26 @@
+[Unit]
+Description=Alertmanager (neo1)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=alertmanager
+Group=alertmanager
+ExecStart=/usr/local/bin/alertmanager \
+  --config.file=/etc/alertmanager/alertmanager.yml \
+  --storage.path=/var/lib/alertmanager \
+  --web.listen-address=127.0.0.1:9093
+Restart=on-failure
+RestartSec=5
+MemoryMax=64M
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/alertmanager
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target
