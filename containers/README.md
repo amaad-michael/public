@@ -50,3 +50,7 @@ chmod 600. The pattern per project:
   set.
 - **scanner**: no `.env`. The image is built locally from the
   Dockerfile and run on demand.
+- **health-smart**: no `.env` and no secrets. The collector mounts
+  the repo's health scripts read-only from the checkout and writes
+  reports to `./reports/` on the host; it needs host-device access
+  (privileged, `/dev`, `pid: host`) — see its README.

@@ -1,11 +1,13 @@
 # scripts/monitoring
 
-Three standalone checkers and one deploy wrapper. Two checkers collect
-cron configuration (one host at a time, or the whole fleet over SSH);
-the third verifies backup integrity with SHA-256 manifests. The
-checkers change nothing on the hosts they inspect; the deploy wrapper
-is the one script here that changes state, and only on the host it
-runs on.
+Three standalone checkers, one deploy wrapper, and one SMART
+harvester. Two checkers collect cron configuration (one host at a
+time, or the whole fleet over SSH); the third verifies backup
+integrity with SHA-256 manifests. The harvester collects
+drive-health data. The checkers change nothing on the hosts they
+inspect; the harvester writes only its report files; the deploy
+wrapper is the one script here that changes state, and only on the
+host it runs on.
 
 ## deploy-monitoring-stack.sh
 
@@ -32,6 +34,33 @@ deployment, and the Ansible form is
   report `(healthy)` within `--wait` seconds (default 120).
 - `--project-dir DIR` deploys a checkout elsewhere; by default the
   project is `containers/monitoring/` relative to this script.
+
+## smart-harvest.sh
+
+The bash form of the SMART harvest: the Ansible form is
+`ansible/playbooks/healthchecks/smart-harvest-v1.0.yml` and the
+Docker form is `containers/health-smart/`. It collects SMART data
+from every physical disk on the host it runs on and writes one
+JSON report per host (`./smart-data/<host>.json` by default), with
+the same fields as the Ansible form: per-drive device, rc, SMART
+support, overall health, model, serial number, temperature, and
+power-on hours, plus the full smartctl JSON.
+
+```bash
+sudo ./smart-harvest.sh                          # auto-discover via lsblk
+sudo ./smart-harvest.sh /dev/sda                 # pinned drive list
+sudo ./smart-harvest.sh --keep-history --extra-args "-d sat"
+```
+
+- Needs smartmontools and python3 on the host; both are checked up
+  front and a missing one fails loudly before anything runs.
+- Collection is read-only (`smartctl --json --all`, 60 second
+  timeout per drive). Drives without SMART support are captured as
+  unsupported rather than failing the run, and re-running
+  overwrites the same report file — it never duplicates data.
+- `--output-dir DIR` changes where reports land;
+  `--keep-history` also keeps a dated copy under
+  `<output-dir>/history/`.
 
 ## local_cron_checker.sh
 
