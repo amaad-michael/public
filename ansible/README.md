@@ -15,6 +15,11 @@ Playbooks are grouped by job under `playbooks/`. Most groups have a README that 
 - [accounts](playbooks/accounts/README.md): credential cycling and
   account removal. The fleet password-cycle kit has its own guide at
   [password-cycle](playbooks/accounts/password-cycle/README.md).
+- [audits](playbooks/audits/README.md): read-only fleet audits
+  (the cron audit; the firewall audit lives under firewall/),
+  assembled into timestamped reports on the controller.
+- [backups](playbooks/backups/README.md): backup integrity —
+  generates and verifies the same SHA-256 manifests as the bash tool.
 - [cleanup](playbooks/cleanup/README.md): log cleanup, update
   disabling, and the uninstall playbooks (Jenkins, Pi-hole). These
   remove things; read the guide first.
@@ -43,6 +48,9 @@ Playbooks are grouped by job under `playbooks/`. Most groups have a README that 
   observability stack (Prometheus, Alertmanager, blackbox_exporter,
   node_exporter, ntfy, on-demand Grafana) — the Ansible form of the
   native kit in `scripts/provisioning/neo1-observability-native/`.
+- [ops-toolkit](playbooks/ops-toolkit/README.md): installs the Ops
+  Toolkit's six job scripts, its configuration, and its systemd
+  timer/service pairs onto a target host.
 - [monthly](playbooks/monthly/README.md): monthly patching for the
   fleet, Nobara, and the Pi-hole hosts, driven by
   `scripts/run_monthly_maintenance.sh`.

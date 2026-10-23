@@ -12,11 +12,12 @@ Utility scripts for the homelab, grouped by job. Each folder's README is the usa
 - [linux-admin-toolkit](linux-admin-toolkit/README.md): 27 everyday
   admin tasks, each as a local Bash script and a fleet Ansible
   playbook.
-- [llm](llm/README.md): bare-metal LLM installers for the GPU box and
-  the OptiPlex, a llama-ui container deploy, and the Open Terminal
-  file service.
-- [monitoring](monitoring/README.md): local and remote cron checkers
-  for the fleet.
+- [llm](llm/README.md): bare-metal LLM installers for the GPU box,
+  the OptiPlex, and the NanoPi pool, a llama-ui container deploy, and
+  the Open Terminal file service.
+- [monitoring](monitoring/README.md): local and remote cron checkers,
+  the monitoring-stack deploy wrapper, and the SMART harvest for
+  the fleet.
 - [network](network/README.md): firewall audit and host firewall
   setup, plus the nmap scan set (ad hoc, hourly, monthly, vuln).
 - [ops-toolkit](ops-toolkit/README.md): six Bash jobs with systemd
@@ -24,9 +25,10 @@ Utility scripts for the homelab, grouped by job. Each folder's README is the usa
   expiry, service uptime, temp cleanup.
 - [pihole](pihole/README.md): Pi-hole + Unbound DNS test suite, log
   cleanup, and blocklist initialization.
-- [provisioning](provisioning/README.md): Gitea, Jenkins, and LAMP
-  installers, the Gitea post-setup tightening scripts, the LUKS
-  Vault Guardian, and the neo1 observability kit (native systemd form).
+- [provisioning](provisioning/README.md): Gitea, Jenkins, LAMP, and
+  Proxmox installers, the Gitea post-setup tightening scripts, the
+  LUKS Vault Guardian, and the neo1 observability kit (native
+  systemd form).
 - [security](security/README.md): the secure-server-init hardening
   family, SSH access tooling, and repo-public-check.
 - [workstation](workstation/README.md): Nobara setup, the GPU box
@@ -39,5 +41,6 @@ runs the monthly maintenance playbooks (see
 form of the reboot playbooks (see
 [ansible/playbooks/reboots](../ansible/playbooks/reboots/README.md)),
 which reboots the fleet one host at a time over SSH with the
-playbooks' pre-check, 600-second return wait, and `whoami`
+playbooks' pre-check (default mode; `--simple` drops it),
+  600-second return wait, and `whoami`
 confirmation.
