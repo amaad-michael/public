@@ -129,17 +129,12 @@ the shipped config, noting that it validates the config only, not
 resolution.
 
 For a full check, run the DNS test suite in `scripts/pihole/` on the
-host. All three variants run the same eight dig checks from inside the
-containers (Pi-hole local resolution, Unbound direct, Pi-hole to
-Unbound routing in both port syntaxes, DNSSEC pass and fail cases, and
-an ad-block check on doubleclick.net):
-
-- `dns-test-pihole-unbound-full.sh`: prints a pass/fail summary and
-  exits 1 if any test fails.
-- `dns-test-pihole-unbound-linted.sh`: same checks, with failures also
-  written to a timestamped log in `/tmp`.
-- `dns-test-pihole-unbound-minimal.sh`: the bare command list, no
-  summary.
+host: `dns-test-pihole-unbound-linted.sh` runs eight dig checks from
+inside the containers (Pi-hole local resolution, Unbound direct,
+Pi-hole to Unbound routing in both port syntaxes, DNSSEC pass and
+fail cases, and an ad-block check on doubleclick.net), writes
+failures to a timestamped log in `/tmp`, and exits 1 if any check
+fails.
 
 ## 🔄 Upgrade and rollback
 

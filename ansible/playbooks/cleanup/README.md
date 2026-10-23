@@ -2,7 +2,7 @@
 
 > **Warning: this folder deletes things.** Every playbook here removes packages, users, configuration, or logs. The removals are not reversible by re-running anything in this folder; recovery means reinstalling and restoring from whatever backup existed beforehand. Read the per-playbook notes before running one, and note which backups are opt-in.
 
-All five playbooks target `hosts: all` with privilege escalation, so always scope a run with `--limit`.
+All four playbooks target `hosts: all` with privilege escalation, so always scope a run with `--limit`.
 
 ## cleanup_logs_pihole2.yml
 
@@ -41,18 +41,14 @@ Complete Jenkins removal for Debian and RedHat family hosts, with a forensic arc
 
 The installed Jenkins is not recoverable from the playbook; the archive in `/var/backups/jenkins` is the only restore source, and restoring it is a manual job.
 
-## uninstall_pihole.yml and uninstall_pihole2.yml
+## uninstall_pihole2.yml
 
-Two versions of the same job: remove Pi-hole and Unbound completely, returning the host to a clean slate for reinstallation. Both stop pihole-FTL, lighttpd, nginx, unbound, and dnsmasq; run the official `pihole uninstall --unattended` when the binary exists; purge the same package set (unbound, pihole-FTL, lighttpd, nginx-common, php-common, php-cgi, php-sqlite3, dnsmasq-base) with autoremove; delete the configuration directories; remove the `pihole` user (including its home) and group; restore `/etc/resolv.conf` to Cloudflare (1.1.1.1 and 1.0.0.1); and verify external DNS resolution at the end.
+The Pi-hole and Unbound uninstaller: removes both completely, returning the host to a clean slate for reinstallation. It stops pihole-FTL, lighttpd, nginx, unbound, and dnsmasq; runs the official `pihole uninstall --unattended` when the binary exists; purges the package set (unbound, pihole-FTL, lighttpd, nginx-common, php-common, php-cgi, php-sqlite3, dnsmasq-base) with autoremove; deletes the configuration directories and the `pihole.log`/`FTL.log` files; removes the `pihole` user (including its home) and group; restores `/etc/resolv.conf` to Cloudflare (1.1.1.1 and 1.0.0.1); and finishes with an explicit autoremove and autoclean.
 
-Differences that matter when choosing one:
+Details that matter:
 
-| Aspect | `uninstall_pihole.yml` | `uninstall_pihole2.yml` |
-|---|---|---|
-| Optional backup | `-e backup_configs=true` archives `/etc/pihole` and `/etc/unbound` into a temporary directory on the host; the location is printed | `-e backup_enabled=true` archives each configuration directory separately to `/root/pihole_backup_<name>.tar.gz` |
-| Log directory | Deletes `/var/log/pihole` as part of the directory list | Deletes `pihole.log` and `FTL.log` individually; the directory itself is not in its list |
-| Run log | None | Writes a start line to `/var/log/uninstall_dns.log` |
-| Final DNS check | `getent hosts google.com`, and the playbook fails if it does not resolve | `getent hosts example.com`, reported but not gated |
-| Final apt step | Included in the purge (autoremove) | Adds an explicit autoremove and autoclean at the end |
+- Optional backup: `-e backup_enabled=true` archives each configuration directory separately to `/root/pihole_backup_<name>.tar.gz` before deletion. Off by default; with the flag unset, the configuration is deleted with everything else and a reinstall starts from nothing.
+- Each run writes a start line to `/var/log/uninstall_dns.log`.
+- Final DNS check is gated: `getent hosts google.com` must resolve or the playbook fails. (This gate came from the retired `uninstall_pihole.yml`, whose check was gated while this one's was report-only; the consolidation kept the gate.)
 
-Backups are off by default in both. With the backup flag unset, the configuration is deleted with everything else and a reinstall starts from nothing.
+`uninstall_pihole.yml`, the older version of this job, was retired to `deprecated/` on 2026-10-22; this playbook is the only live uninstaller.

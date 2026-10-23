@@ -82,6 +82,7 @@ run_dig "google.com via localhost"    "$UNBOUND_CTR" "@localhost" "google.com"
 section "3 — PI-HOLE → UNBOUND FORWARDER"
 run_dig "google.com @${UNBOUND_IP}:53"          "$PIHOLE_CTR" "@${UNBOUND_IP}" "google.com"
 run_dig "google.com @${UNBOUND_IP}:${UNBOUND_PORT}" "$PIHOLE_CTR" "@${UNBOUND_IP}" "-p" "${UNBOUND_PORT}" "google.com"
+run_dig "google.com @${UNBOUND_IP}#${UNBOUND_PORT} (fragment)" "$PIHOLE_CTR" "@${UNBOUND_IP}#${UNBOUND_PORT}" "google.com"
 
 section "4 — DNSSEC VALIDATION"
 run_dig "dnssec-failed.org (expect SERVFAIL)" "$PIHOLE_CTR" "@${UNBOUND_IP}" "-p" "${UNBOUND_PORT}" "dnssec-failed.org" "+dnssec"

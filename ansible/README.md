@@ -47,9 +47,9 @@ the usage guide for its playbooks:
 - [monthly](playbooks/monthly/README.md): monthly patching for the
   fleet, Nobara, and the Pi-hole hosts, driven by
   `scripts/run_monthly_maintenance.sh`.
-- [motd](playbooks/motd/): login banners, fastfetch or neofetch on
-  login, plus the hosts file and MOTD updater. Small enough to read
-  directly; no group guide.
+- [motd](playbooks/motd/): login banners (fastfetch on login), plus
+  the hosts file and MOTD updater. Small enough to read directly;
+  no group guide.
 - [pihole](playbooks/pihole/README.md): Pi-hole + Unbound, attended
   and automated variants.
 - [proxmox](playbooks/proxmox/README.md): Proxmox VE install,
@@ -61,10 +61,11 @@ the usage guide for its playbooks:
   toolkit form.
 - [vuln](playbooks/vuln/README.md): the scanner node setup and the
   Nmap scan playbook.
-- [workstation](playbooks/workstation/): the Nobara playbooks —
-  first-boot setup (`nobara_first_boot.yml`, the Ansible form of
-  the bash first-boot script) and recurring patching
-  (`nobara_patch.yml`); their usage headers are the guide.
+- [workstation](playbooks/workstation/): the Nobara first-boot
+  setup (`nobara_first_boot.yml`, the Ansible form of the bash
+  first-boot script); its usage header is the guide. Recurring
+  Nobara patching lives in the monthly group
+  (`monthly_maint_nobara.yml`).
 
 ---
 Copyright (c) Michael Tatum.

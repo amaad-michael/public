@@ -117,9 +117,17 @@
       tags: dns-reset
 
     - name: Verify DNS resolution post-uninstall
-      ansible.builtin.command: getent hosts example.com
+      ansible.builtin.command:
+        cmd: getent hosts google.com
       register: dns_test
       changed_when: false
+      failed_when: dns_test.rc != 0
+      tags: verify
+
+    - name: Report DNS resolution success
+      ansible.builtin.debug:
+        msg: "DNS resolution confirmed. Server is ready for re-installation."
+      when: dns_test.rc == 0
       tags: verify
 
     - name: Final apt cleanup

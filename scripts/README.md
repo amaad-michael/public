@@ -17,7 +17,7 @@ the usage guide for the scripts in that folder.
   the OptiPlex, a llama-ui container deploy, and the Open Terminal
   file service.
 - [monitoring](monitoring/README.md): local and remote cron checkers
-  and a backups checker for the fleet.
+  for the fleet.
 - [network](network/README.md): firewall audit and host firewall
   setup, plus the nmap scan set (ad hoc, hourly, monthly, vuln).
 - [ops-toolkit](ops-toolkit/README.md): six Bash jobs with systemd

@@ -57,17 +57,14 @@ containers through `sudo docker exec`, so run them on the Docker host
   validate
 - Ad blocking: doubleclick.net must be blocked
 
-| Variant | Behavior |
-| --- | --- |
-| `dns-test-pihole-unbound-full.sh` | 8 tests, prints the dig HEADER status line per test, counts passes and failures, exit 1 if any test fails |
-| `dns-test-pihole-unbound-linted.sh` | Pre-flight aborts if either container is stopped or missing; 7 tests in sections; failures are appended to `/tmp/dns-test-failures-<epoch>.log` (deleted on a clean run); warns if sudo would prompt, which would hang a CI run; exit 1 on any failure |
-| `dns-test-pihole-unbound-minimal.sh` | The same checks as a bare list with raw dig output; no pass/fail counting and no failure exit code |
-
-Which to use: the linted variant for routine or scripted
-verification, the full variant for a compact summary, the minimal
-variant for manual debugging where you want the raw output. One real
-difference: the minimal variant runs the `pi.hole` test inside the
-`unbound-backup` container; the other two run it in `pihole-backup`.
+The suite is `dns-test-pihole-unbound-linted.sh`, the single variant
+kept since the 2026-10-22 consolidation (the full and minimal
+variants were removed; the full variant's fragment-syntax port test
+was folded in). It runs 8 tests in sections; pre-flight aborts if
+either container is stopped or missing; failures are appended to
+`/tmp/dns-test-failures-<epoch>.log` (deleted on a clean run); it
+warns if sudo would prompt, which would hang a CI run; and it exits
+1 on any failure, so scripted callers can trust the exit code.
 
 ## pihole-init-blocklists.sh
 

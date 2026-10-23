@@ -10,9 +10,10 @@
 #  - Downloads wallpaper and provides setup guidance
 #
 #  Usage:
-#  1. Save as setup_nobara_complete.sh
-#  2. chmod +x setup_nobara_complete.sh
-#  3. sudo ./setup_nobara_complete.sh
+#  1. Save as new-nobara-setup-v1.1.sh
+#  2. chmod +x new-nobara-setup-v1.1.sh
+#  3. sudo ./new-nobara-setup-v1.1.sh            (full setup)
+#     sudo ./new-nobara-setup-v1.1.sh gpu-high   (GPU tuning only)
 #
 # ==============================================================================
 
@@ -21,13 +22,17 @@ set -e
 # --- Safety Check: Ensure root ---
 if [ "$EUID" -ne 0 ]; then
   echo "Error: This script must be run with root privileges."
-  echo "Please use 'sudo ./setup_nobara_complete.sh'"
+  echo "Please use 'sudo ./new-nobara-setup-v1.1.sh'"
   exit 1
 fi
 
 # ==============================================================================
 #  PART 1: AMD Discrete GPU Performance Configuration
 # ==============================================================================
+# Runs as the first part of a full setup, or alone via the gpu-high
+# argument (folded in from the retired alt variant on 2026-10-22).
+
+gpu_high() {
 
 echo "--------------------------------------------------"
 echo "    AMD GPU Performance Configuration"
@@ -86,6 +91,17 @@ echo ""
 CURRENT_LEVEL=$(cat "$GPU_DEVICE/power_dpm_force_performance_level")
 echo "Verification: Current level is '$CURRENT_LEVEL'"
 echo ""
+
+}
+
+# --- Dispatch: gpu-high runs Part 1 only ---
+if [ "${1:-}" = "gpu-high" ]; then
+    gpu_high
+    echo "GPU tuning only: setup not run. Run without arguments for the full setup."
+    exit 0
+fi
+
+gpu_high
 
 # ==============================================================================
 #  PART 2: Cinnamon Desktop Installation
