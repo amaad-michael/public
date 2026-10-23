@@ -1,0 +1,263 @@
+---
+# firewall_audit.yml — Ansible form of the fleet firewall audit.
+#
+# Bash form: scripts/network/firewall_audit.sh — a controller-side
+# script that SSHes to the six fleet addresses (192.168.0.100-105,
+# pi0-pi4 and neo1, from ansible/hosts) and collects thirteen sections
+# per host into /var/log/firewall_audit/firewall_audit_<timestamp>.log.
+#
+# This playbook collects the same thirteen sections, in the same
+# order, with the same commands and the same fallback messages, from
+# every target host, and assembles one fleet report on the controller
+# with the same file naming. The admin toolkit's firewall-audit
+# playbook (scripts/linux-admin-toolkit/14-firewall-audit/) is a
+# different workflow — it detects the active stack (firewalld / ufw /
+# nftables / iptables) and dumps a ruleset summary per host to stdout;
+# it has no fleet report and none of the port/process sections below.
+#
+# Sections per host (identical to the bash audit):
+#   SELinux Status, FirewallD Status, Active Zones & Services,
+#   Masquerading & Port Forwarding, iptables Rules, nftables Rules,
+#   Open Ports (ss), PID to Command Mapping for Open Ports,
+#   Listening Services (lsof), Non-localhost Bound Ports,
+#   Installed Firewall Packages, Recent Firewall Changes,
+#   FirewallD Logs (last 7 days)
+#
+# One superset: Installed Firewall Packages tries rpm first (as the
+# bash audit does) and falls back to dpkg-query, because the fleet
+# inventory includes Debian hosts where the bash section prints
+# nothing at all.
+#
+# Findings (the report flags these; the bash audit only collects):
+#   FLAG no-active-firewall: firewalld not running and no nftables
+#     ruleset and no iptables chains — nothing is filtering the host.
+#   Non-localhost listeners are additionally listed as REVIEW lines
+#   (informational; most hosts legitimately bind some).
+#
+# Report: one timestamped file on the controller,
+#   <firewall_audit_report_dir>/firewall_audit_YYYYMMDD_HHMMSS.log
+# (mode 0600), mirroring the bash audit's naming.
+#
+# Usage:
+#   cd ansible
+#   ansible-playbook -i hosts playbooks/firewall/firewall_audit.yml
+#
+# Extra vars:
+#   firewall_audit_report_dir=/var/log/firewall_audit  (controller-side)
+#   firewall_audit_fail_on_findings=true|false  (default false: flag
+#     in the report only; true also fails the run on any FLAG)
+
+- name: Collect firewall and port state from each host
+  hosts: all
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: SELinux status
+      ansible.builtin.shell: getenforce || echo "SELinux not available"
+      register: fw_selinux
+      changed_when: false
+      failed_when: false
+
+    - name: FirewallD status
+      ansible.builtin.shell: systemctl is-active firewalld && firewall-cmd --state || echo "FirewallD not active or not installed"
+      register: fw_firewalld_status
+      changed_when: false
+      failed_when: false
+
+    - name: Active zones and services
+      ansible.builtin.shell: firewall-cmd --get-active-zones && firewall-cmd --list-services || echo "No active zones/services"
+      register: fw_zones
+      changed_when: false
+      failed_when: false
+
+    - name: Masquerading and port forwarding
+      ansible.builtin.shell: firewall-cmd --query-masquerade && firewall-cmd --list-forward-ports || echo "No masquerading or port forwarding"
+      register: fw_masq
+      changed_when: false
+      failed_when: false
+
+    - name: iptables rules
+      ansible.builtin.shell: iptables -L -n -v || echo "iptables not available"
+      register: fw_iptables
+      changed_when: false
+      failed_when: false
+
+    - name: Count actual iptables rules (chain headers alone are not an active firewall)
+      ansible.builtin.shell: iptables -S 2>/dev/null | grep -c '^-A' || true
+      register: fw_iptables_rule_count
+      changed_when: false
+      failed_when: false
+
+    - name: nftables rules
+      ansible.builtin.shell: nft list ruleset || echo "nftables not in use"
+      register: fw_nft
+      changed_when: false
+      failed_when: false
+
+    - name: Open ports (ss)
+      ansible.builtin.shell: ss -tuln || netstat -tuln
+      register: fw_ss
+      changed_when: false
+      failed_when: false
+
+    - name: PID to command mapping for open ports
+      ansible.builtin.shell: |
+        ss -tulnp | awk "NR>1" | while read -r line; do
+            pid=$(echo "$line" | grep -oP "pid=\K[0-9]+")
+            if [ -n "$pid" ]; then
+                cmd=$(ps -p "$pid" -o cmd=)
+                echo "PID: $pid - Command: $cmd"
+            fi
+        done || echo "No PID to command mapping available"
+      register: fw_pidmap
+      changed_when: false
+      failed_when: false
+
+    - name: Listening services (lsof)
+      ansible.builtin.shell: lsof -i -P -n | grep LISTEN || echo "lsof not available or no services listening"
+      register: fw_lsof
+      changed_when: false
+      failed_when: false
+
+    - name: Non-localhost bound ports
+      ansible.builtin.shell: ss -tuln | grep -v "127.0.0.1" || echo "No external bindings found"
+      register: fw_nonlocal
+      changed_when: false
+      failed_when: false
+
+    - name: Installed firewall packages
+      ansible.builtin.shell: rpm -qa 2>/dev/null | grep -E "firewalld|iptables|nftables" || dpkg-query -W -f='${Package}\n' 2>/dev/null | grep -E "firewalld|iptables|nftables|ufw" || true
+      register: fw_packages
+      changed_when: false
+      failed_when: false
+
+    - name: Recent firewall changes
+      ansible.builtin.shell: find /etc/firewalld /etc/sysconfig/iptables -type f -exec ls -l {} \; 2>/dev/null || true
+      register: fw_changes
+      changed_when: false
+      failed_when: false
+
+    - name: FirewallD logs (last 7 days)
+      ansible.builtin.shell: journalctl -u firewalld --since "7 days ago" || echo "No recent logs found"
+      register: fw_logs
+      changed_when: false
+      failed_when: false
+
+    - name: Build this host's report section
+      ansible.builtin.set_fact:
+        fw_nonlocal_listeners: >-
+          {{ fw_nonlocal.stdout_lines | default([]) | reject('search', '^Netid') | reject('search', 'No external bindings') | list }}
+        fw_firewall_active: >-
+          {{ ('running' in (fw_firewalld_status.stdout | default(''))) or
+          ((fw_nft.stdout | default('') | trim | length) > 0 and 'not in use' not in (fw_nft.stdout | default(''))) or
+          ((fw_iptables_rule_count.stdout | default('0') | trim | int) > 0) }}
+
+    - name: Build this host's report text
+      ansible.builtin.set_fact:
+        firewall_audit_section: |
+          ========== {{ inventory_hostname }} ({{ ansible_host | default(inventory_hostname) }}) ==========
+          Hostname: {{ inventory_hostname }}
+
+          --- SELinux Status ---
+          {{ fw_selinux.stdout | default('') }}
+
+          --- FirewallD Status ---
+          {{ fw_firewalld_status.stdout | default('') }}
+
+          --- Active Zones & Services ---
+          {{ fw_zones.stdout | default('') }}
+
+          --- Masquerading & Port Forwarding ---
+          {{ fw_masq.stdout | default('') }}
+
+          --- iptables Rules ---
+          {{ fw_iptables.stdout | default('') }}
+
+          --- nftables Rules ---
+          {{ fw_nft.stdout | default('') }}
+
+          --- Open Ports (ss) ---
+          {{ fw_ss.stdout | default('') }}
+
+          --- PID to Command Mapping for Open Ports ---
+          {{ fw_pidmap.stdout | default('') }}
+
+          --- Listening Services (lsof) ---
+          {{ fw_lsof.stdout | default('') }}
+
+          --- Non-localhost Bound Ports ---
+          {{ fw_nonlocal.stdout | default('') }}
+
+          --- Installed Firewall Packages ---
+          {{ fw_packages.stdout | default('') }}
+
+          --- Recent Firewall Changes ---
+          {{ fw_changes.stdout | default('') }}
+
+          --- FirewallD Logs (last 7 days) ---
+          {{ fw_logs.stdout | default('') }}
+
+          --- Findings ---
+          {% if not (fw_firewall_active | bool) %}
+          FLAG no-active-firewall: firewalld is not running and no nftables ruleset or iptables chains were found
+          {% endif %}
+          {% for l in fw_nonlocal_listeners %}
+          REVIEW non-localhost listener: {{ l }}
+          {% endfor %}
+          {% if (fw_firewall_active | bool) and (fw_nonlocal_listeners | length == 0) %}
+          none
+          {% endif %}
+        firewall_audit_flag_count: "{{ 0 if (fw_firewall_active | bool) else 1 }}"
+
+- name: Assemble the fleet firewall audit report on the controller
+  hosts: all
+  gather_facts: false
+  run_once: true
+
+  vars:
+    firewall_audit_report_dir: /var/log/firewall_audit
+    firewall_audit_fail_on_findings: false
+
+  tasks:
+    - name: Stamp the report run
+      ansible.builtin.set_fact:
+        firewall_audit_stamp: "{{ lookup('pipe', 'date +%Y%m%d_%H%M%S') }}"
+        firewall_audit_now: "{{ lookup('pipe', 'date') }}"
+
+    - name: Ensure the report directory exists on the controller
+      ansible.builtin.file:
+        path: "{{ firewall_audit_report_dir }}"
+        state: directory
+        mode: "0755"
+      delegate_to: localhost
+      become: true
+
+    - name: Write the fleet report
+      ansible.builtin.copy:
+        dest: "{{ firewall_audit_report_dir }}/firewall_audit_{{ firewall_audit_stamp }}.log"
+        mode: "0600"
+        content: |
+          Starting firewall and port audit...
+          Timestamp: {{ firewall_audit_now }}
+          =========================================
+          {% for h in ansible_play_hosts %}
+          {{ hostvars[h].firewall_audit_section }}
+          {% endfor %}
+          Firewall audit complete.
+      delegate_to: localhost
+      become: true
+
+    - name: Show the report location and flag total
+      ansible.builtin.debug:
+        msg: >-
+          Report: {{ firewall_audit_report_dir }}/firewall_audit_{{ firewall_audit_stamp }}.log —
+          {{ ansible_play_hosts | map('extract', hostvars, 'firewall_audit_flag_count') | map('int') | sum }}
+          FLAG(s) across {{ ansible_play_hosts | length }} host(s)
+
+    - name: Fail when findings exist and failing was requested
+      ansible.builtin.fail:
+        msg: "Firewall audit raised FLAGs (see the report); firewall_audit_fail_on_findings=true"
+      when:
+        - firewall_audit_fail_on_findings | bool
+        - (ansible_play_hosts | map('extract', hostvars, 'firewall_audit_flag_count') | map('int') | sum) > 0

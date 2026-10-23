@@ -1,0 +1,49 @@
+---
+# Fleet firewall audit — container form of
+# scripts/network/firewall_audit.sh (Ansible form:
+# ansible/playbooks/firewall/firewall_audit.yml).
+#
+# Run-on-demand collector, not a daemon: it prints the audit report
+# to stdout and exits. Host networking is the deployment choice:
+# a firewall audit must see the host's interfaces, sockets, and
+# rulesets, and behind the docker bridge it would see only the
+# container's own empty namespace — a report that looks clean
+# because it is looking at nothing. CAP_NET_ADMIN is added for the
+# read-only ruleset queries (nft list ruleset, iptables -L);
+# every command the collector runs is a query. README.md documents
+# the full access model, including the optional D-Bus mount for
+# firewall-cmd.
+services:
+  firewall-audit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: firewall-audit:bookworm
+    container_name: firewall-audit
+    network_mode: host
+    volumes:
+      # The host's firewall configuration directories, read-only, so
+      # the "Recent Firewall Changes" section can stat the same
+      # files the bash audit stats over SSH.
+      - /etc/firewalld:/etc/firewalld:ro
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # Read the host netns rulesets (nft/iptables queries) and raw
+      # socket tables. No rule is ever written by the collector.
+      - NET_ADMIN
+      - NET_RAW
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
