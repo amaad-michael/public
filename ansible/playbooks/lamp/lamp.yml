@@ -1,0 +1,307 @@
+---
+# lamp.yml — Ansible form of the two LAMP bash installers:
+#   scripts/provisioning/lamp-install-debian13.sh (pi2, Debian 13)
+#   scripts/provisioning/lamp-install-rocky10.sh  (pi3, Rocky 10)
+# Same stack, same packages, same wiring, same verification as the
+# installers; the differences between the installers are reconciled
+# below as distro-conditional tasks and called out per task.
+#
+# Run from the ansible/ directory against the pi_lamp group
+# (pi2 = Debian family, pi3 = RHEL family, see ansible/hosts):
+#   ansible-playbook -i hosts playbooks/lamp/lamp.yml -K
+#
+# Deliberate differences from the bash installers (none change the
+# resulting stack):
+#   - The Debian installer's `timeout 120 apt-get update` has no
+#     direct apt-module equivalent; the cache update below is the
+#     same step without the wrapper.
+#   - The installers enable services with `systemctl enable --now`
+#     and then reload the web server once; Ansible expresses the
+#     same end state with the service module per service, plus
+#     handlers (below) that restart a service only when a task
+#     that affects it reports a change — the installers' one
+#     reload becomes a change-triggered Apache restart, and no
+#     service is restarted on an unchanged run.
+#   - The probe page cleanup is a block/always pair, the Ansible
+#     equivalent of the installers' EXIT trap.
+
+- name: Install LAMP stack (Apache, PHP-FPM, MariaDB)
+  hosts: pi_lamp
+  become: true
+  gather_facts: true
+
+  vars:
+    lamp_probe_path: /var/www/html/__lamp_check.php
+    lamp_probe_url: http://127.0.0.1/__lamp_check.php
+
+  pre_tasks:
+    - name: Fail on unsupported OS families
+      ansible.builtin.fail:
+        msg: >-
+          LAMP playbook supports the Debian and RedHat families only.
+          Detected: {{ ansible_os_family }}
+      when: ansible_os_family not in ["Debian", "RedHat"]
+
+  tasks:
+    # ------------------------------------------------------------------
+    # Debian family — mirrors lamp-install-debian13.sh step for step
+    # ------------------------------------------------------------------
+    - name: Debian family LAMP install
+      when: ansible_os_family == "Debian"
+      block:
+        - name: Update apt cache (Debian)
+          ansible.builtin.apt:
+            update_cache: true
+          environment:
+            DEBIAN_FRONTEND: noninteractive
+
+        - name: Install LAMP packages (Debian)
+          ansible.builtin.apt:
+            name:
+              - apache2
+              - mariadb-server
+              - php-fpm
+              - php-mysql
+            state: present
+          environment:
+            DEBIAN_FRONTEND: noninteractive
+          notify:
+            - Restart Apache
+            - Restart MariaDB
+            - Restart PHP-FPM
+
+        - name: Detect installed PHP version (Debian)
+          ansible.builtin.command: >-
+            php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;'
+          register: lamp_php_version
+          changed_when: false
+
+        - name: Wire Apache to PHP-FPM modules (Debian)
+          ansible.builtin.command: a2enmod proxy_fcgi setenvif
+          register: lamp_a2enmod
+          changed_when: "'Enabling module' in lamp_a2enmod.stdout"
+          notify: Restart Apache
+
+        - name: Enable the PHP-FPM Apache config (Debian)
+          ansible.builtin.command: >-
+            a2enconf php{{ lamp_php_version.stdout }}-fpm
+          register: lamp_a2enconf
+          changed_when: "'Enabling conf' in lamp_a2enconf.stdout"
+          notify: Restart Apache
+
+        - name: Enable and start MariaDB, PHP-FPM and Apache (Debian)
+          ansible.builtin.service:
+            name: "{{ item }}"
+            enabled: true
+            state: started
+          loop:
+            - mariadb
+            - "php{{ lamp_php_version.stdout }}-fpm"
+            - apache2
+
+        - name: Check whether UFW is active (Debian)
+          ansible.builtin.command: ufw status
+          register: lamp_ufw_status
+          changed_when: false
+          failed_when: false
+
+        - name: Allow HTTP and HTTPS through UFW (Debian, active only)
+          ansible.builtin.command: "ufw allow {{ item }}"
+          loop:
+            - 80/tcp
+            - 443/tcp
+          when: >-
+            lamp_ufw_status.rc == 0
+            and 'Status: active' in lamp_ufw_status.stdout
+          changed_when: true
+
+    # ------------------------------------------------------------------
+    # RedHat family — mirrors lamp-install-rocky10.sh step for step
+    # ------------------------------------------------------------------
+    - name: RedHat family LAMP install
+      when: ansible_os_family == "RedHat"
+      block:
+        - name: Install LAMP packages (Rocky)
+          ansible.builtin.dnf:
+            name:
+              - httpd
+              - mariadb-server
+              - php
+              - php-fpm
+              - php-mysqlnd
+            state: present
+          notify:
+            - Restart Apache
+            - Restart MariaDB
+            - Restart PHP-FPM
+
+        - name: Enable and start MariaDB, PHP-FPM and httpd (Rocky)
+          ansible.builtin.service:
+            name: "{{ item }}"
+            enabled: true
+            state: started
+          loop:
+            - mariadb
+            - php-fpm
+            - httpd
+
+        - name: Check whether firewalld is active (Rocky)
+          ansible.builtin.command: systemctl is-active firewalld
+          register: lamp_firewalld_status
+          changed_when: false
+          failed_when: false
+
+        - name: Allow HTTP and HTTPS through firewalld (Rocky, active only)
+          ansible.builtin.command: >-
+            firewall-cmd --permanent --add-service={{ item }}
+          loop:
+            - http
+            - https
+          when: lamp_firewalld_status.stdout == "active"
+          changed_when: true
+
+        - name: Reload firewalld after adding services (Rocky)
+          ansible.builtin.command: firewall-cmd --reload
+          when: lamp_firewalld_status.stdout == "active"
+          changed_when: true
+
+    - name: Flush handlers before verification
+      ansible.builtin.meta: flush_handlers
+
+    # ------------------------------------------------------------------
+    # Verification — the installers' shared verification block
+    # ------------------------------------------------------------------
+    - name: Report versions
+      ansible.builtin.shell: |
+        set -o pipefail
+        {{ lamp_web_version_cmd }} | head -1
+        php -v | head -1
+        mariadb --version
+      args:
+        executable: /bin/bash
+      vars:
+        lamp_web_version_cmd: >-
+          {{ 'apache2 -v' if ansible_os_family == 'Debian' else 'httpd -v' }}
+      register: lamp_versions
+      changed_when: false
+
+    - name: Show versions
+      ansible.builtin.debug:
+        msg: "{{ lamp_versions.stdout_lines }}"
+
+    - name: Assert the Rocky MariaDB stream is 10.11
+      ansible.builtin.assert:
+        that:
+          - "' 10.11.' in lamp_versions.stdout"
+        fail_msg: "FAIL: expected MariaDB 10.11 stream"
+      when: ansible_os_family == "RedHat"
+
+    - name: Verify the stack services are active (Rocky)
+      ansible.builtin.command: systemctl is-active httpd php-fpm mariadb
+      changed_when: false
+      when: ansible_os_family == "RedHat"
+
+    - name: Verify the Debian services are active (incl. PHP-FPM)
+      ansible.builtin.command: >-
+        systemctl is-active apache2
+        php{{ lamp_php_version.stdout }}-fpm mariadb
+      changed_when: false
+      when: ansible_os_family == "Debian"
+
+    - name: Report SELinux mode (Rocky)
+      ansible.builtin.command: getenforce
+      register: lamp_getenforce
+      changed_when: false
+      when: ansible_os_family == "RedHat"
+
+    - name: Show SELinux mode (Rocky)
+      ansible.builtin.debug:
+        msg: "SELinux: {{ lamp_getenforce.stdout }}"
+      when: ansible_os_family == "RedHat"
+
+    - name: Prove PHP through the web server, then remove the probe
+      block:
+        - name: Write the PHP probe page
+          ansible.builtin.copy:
+            dest: "{{ lamp_probe_path }}"
+            content: |
+              <?php echo "PHP ".PHP_VERSION." OK\n";
+            mode: "0644"
+
+        - name: Restore the probe page SELinux context (Rocky)
+          ansible.builtin.command: restorecon {{ lamp_probe_path }}
+          when: ansible_os_family == "RedHat"
+          changed_when: true
+
+        - name: Fetch the probe page through the web server
+          ansible.builtin.uri:
+            url: "{{ lamp_probe_url }}"
+            return_content: true
+          register: lamp_probe
+
+        - name: Assert the probe answered with PHP OK
+          ansible.builtin.assert:
+            that:
+              - "'OK' in lamp_probe.content"
+            fail_msg: "PHP probe did not answer OK: {{ lamp_probe.content }}"
+      always:
+        - name: Remove the PHP probe page
+          ansible.builtin.file:
+            path: "{{ lamp_probe_path }}"
+            state: absent
+
+    - name: Verify MariaDB socket authentication
+      ansible.builtin.command: mariadb -e "SELECT VERSION();"
+      register: lamp_mariadb_check
+      changed_when: false
+
+    - name: Show MariaDB version answer
+      ansible.builtin.debug:
+        msg: "{{ lamp_mariadb_check.stdout_lines }}"
+
+    - name: LAMP OK
+      ansible.builtin.debug:
+        msg: "LAMP OK"
+
+  handlers:
+    - name: Restart Apache (Debian)
+      ansible.builtin.service:
+        name: apache2
+        state: restarted
+      when: ansible_os_family == "Debian"
+      listen: Restart Apache
+
+    - name: Restart MariaDB (Debian)
+      ansible.builtin.service:
+        name: mariadb
+        state: restarted
+      when: ansible_os_family == "Debian"
+      listen: Restart MariaDB
+
+    - name: Restart PHP-FPM (Debian)
+      ansible.builtin.service:
+        name: "php{{ lamp_php_version.stdout | default('') }}-fpm"
+        state: restarted
+      when: ansible_os_family == "Debian"
+      listen: Restart PHP-FPM
+
+    - name: Restart Apache (Rocky)
+      ansible.builtin.service:
+        name: httpd
+        state: restarted
+      when: ansible_os_family == "RedHat"
+      listen: Restart Apache
+
+    - name: Restart MariaDB (Rocky)
+      ansible.builtin.service:
+        name: mariadb
+        state: restarted
+      when: ansible_os_family == "RedHat"
+      listen: Restart MariaDB
+
+    - name: Restart PHP-FPM (Rocky)
+      ansible.builtin.service:
+        name: php-fpm
+        state: restarted
+      when: ansible_os_family == "RedHat"
+      listen: Restart PHP-FPM
