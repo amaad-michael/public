@@ -6,9 +6,19 @@
 # Usage:
 #   ansible-playbook -i inventory.ini nobara_patch.yml
 #   ansible-playbook -i inventory.ini nobara_patch.yml --tags flatpak   # flatpak only
+#   ansible-playbook -i inventory.ini nobara_patch.yml --tags llm       # LLM-stack refresh only
 #
 # Reboot:  NOT automatic. A notification is printed if a reboot is required.
 # Firmware: NOT updated automatically. A notification is printed if updates are available.
+#
+# LLM stack: on hosts where the GPU box setup has run (/etc/searxng
+# exists), the run ends with the LLM-stack refresh from
+# scripts/workstation/update-gpu-box.sh steps 3-7 (Ollama reinstall,
+# image pulls, container recreation, model pulls, verification), in the
+# same order and with the same safeguards. Hosts without /etc/searxng
+# skip it: the bash updater is a single-host script and aborts there,
+# while this playbook serves the whole nobara group. Set
+# llm_refresh_enabled=false to skip it explicitly.
 
 - name: Patch Nobara Linux Desktops
   hosts: nobara
@@ -18,6 +28,29 @@
   vars:
     patch_log_dir: /var/log/ansible-patch
     patch_log_file: "{{ patch_log_dir }}/nobara_patch_{{ ansible_date_time.date }}.log"
+
+    # ── LLM stack refresh (update-gpu-box.sh steps 3-7) ──
+    # Values are copied from scripts/workstation/update-gpu-box.sh.
+    llm_refresh_enabled: true
+    ollama_port: 11434
+    webui_port: 8080
+    searxng_port: 8888
+    searxng_config_dir: /etc/searxng
+    searxng_image: docker.io/searxng/searxng:latest
+    webui_image: ghcr.io/open-webui/open-webui:v0.5.20
+    # Optional sha256 pin for the Ollama installer, mirroring the bash
+    # updater's OLLAMA_INSTALL_SHA256. Empty = run without a pin (the
+    # refresh warns, exactly like the bash updater).
+    ollama_install_sha256: ""
+    llm_models:
+      - qwen2.5-coder:14b
+      - qwen2.5-coder:7b
+      - deepseek-r1:14b
+      - nomic-embed-text
+      - llava:13b
+    llm_volumes:
+      - searxng-data
+      - open-webui-storage
 
   pre_tasks:
     - name: Ensure patch log directory exists
@@ -221,12 +254,267 @@
       tags: [reboot_check]
 
     # ────────────────────────────────────────────────
-    # 7. PATCH SUMMARY
+    # 7. LLM STACK REFRESH (update-gpu-box.sh steps 3-7)
+    # ────────────────────────────────────────────────
+    - name: Check the GPU box LLM stack was set up on this host
+      ansible.builtin.stat:
+        path: "{{ searxng_config_dir }}"
+      register: searxng_config_stat
+      tags: [llm]
+
+    - name: Record whether the LLM refresh applies to this host
+      ansible.builtin.set_fact:
+        llm_stack_present: >-
+          {{ llm_refresh_enabled
+             and searxng_config_stat.stat.exists
+             and searxng_config_stat.stat.isdir }}
+      tags: [llm]
+
+    - name: Note when the LLM refresh is skipped
+      ansible.builtin.debug:
+        msg: >-
+          LLM refresh skipped on {{ inventory_hostname }}:
+          {{ searxng_config_dir }} not found (run the GPU box setup
+          first) or llm_refresh_enabled is false.
+      when: not (llm_stack_present | bool)
+      tags: [llm]
+
+    - name: Detect the LAN IPv4 address (update-gpu-box.sh method)
+      ansible.builtin.shell: |
+        ip -4 addr show | awk '/inet / && !/127\.0\.0\.1/ && !/172\./ {print $2}' | cut -d/ -f1 | head -1
+      register: llm_lan_ip_result
+      changed_when: false
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    - name: Record the detected LAN IPv4 address
+      ansible.builtin.set_fact:
+        llm_lan_ip: "{{ llm_lan_ip_result.stdout | trim }}"
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    - name: Fail if no LAN IPv4 address was detected
+      ansible.builtin.fail:
+        msg: "Could not detect LAN IP."
+      when: (llm_stack_present | bool) and llm_lan_ip | length == 0
+      tags: [llm]
+
+    # 7a. Ollama binary (update-gpu-box.sh step 3)
+    - name: Download the official Ollama installer
+      ansible.builtin.get_url:
+        url: https://ollama.com/install.sh
+        dest: /tmp/ollama-install.sh
+        mode: "0755"
+        checksum: "{{ ('sha256:' + ollama_install_sha256) if ollama_install_sha256 | length > 0 else omit }}"
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    - name: Warn if the Ollama installer checksum pin is not set
+      ansible.builtin.debug:
+        msg: "WARNING: ollama_install_sha256 not set — running ollama.com/install.sh without checksum verification"
+      when: (llm_stack_present | bool) and ollama_install_sha256 | length == 0
+      tags: [llm]
+
+    - name: Run the Ollama installer
+      ansible.builtin.command: bash /tmp/ollama-install.sh
+      register: ollama_install_result
+      changed_when: ollama_install_result.rc == 0
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    - name: Remove the downloaded Ollama installer
+      ansible.builtin.file:
+        path: /tmp/ollama-install.sh
+        state: absent
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    - name: Restart Ollama
+      ansible.builtin.service:
+        name: ollama
+        state: restarted
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    # 7b. Docker images (update-gpu-box.sh step 4)
+    - name: Pull the SearXNG image
+      ansible.builtin.command: docker pull {{ searxng_image }}
+      register: searxng_pull_result
+      changed_when: "'Image is up to date' not in searxng_pull_result.stdout"
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    - name: Pull the Open WebUI image
+      ansible.builtin.command: docker pull {{ webui_image }}
+      register: webui_pull_result
+      changed_when: "'Image is up to date' not in webui_pull_result.stdout"
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    # 7c. Container recreation (update-gpu-box.sh step 5)
+    - name: Inspect the LLM stack volumes
+      ansible.builtin.command: docker volume inspect {{ item }}
+      loop: "{{ llm_volumes }}"
+      register: llm_volume_inspect
+      changed_when: false
+      failed_when: false
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    - name: Create any missing LLM stack volume
+      ansible.builtin.command: docker volume create {{ item.item }}
+      loop: "{{ llm_volume_inspect.results | default([]) }}"
+      when: (llm_stack_present | bool) and item.rc != 0
+      tags: [llm]
+
+    - name: Check whether the SearXNG container exists
+      ansible.builtin.command: docker inspect -f '{{ "{{" }}.State.Running{{ "}}" }}' searxng
+      register: searxng_state
+      changed_when: false
+      failed_when: false
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    - name: Remove the existing SearXNG container
+      ansible.builtin.command: docker rm -f searxng
+      when: (llm_stack_present | bool) and searxng_state.rc == 0
+      tags: [llm]
+
+    - name: Wait for the SearXNG port to release
+      ansible.builtin.shell: |
+        for i in $(seq 1 12); do
+          if ! ss -tulpn | grep -qE "LISTEN.*:{{ searxng_port }}[[:space:]]"; then
+            exit 0
+          fi
+          sleep 2
+        done
+        echo "Timeout: Port {{ searxng_port }} did not release for SearXNG." >&2
+        exit 1
+      changed_when: false
+      when: (llm_stack_present | bool) and searxng_state.rc == 0 and searxng_state.stdout == "true"
+      tags: [llm]
+
+    - name: Start SearXNG with the refreshed image
+      ansible.builtin.command: >-
+        docker run -d --name searxng --restart always --network host
+        -v {{ searxng_config_dir }}:/etc/searxng:rw
+        -v searxng-data:/var/cache/searxng:rw
+        -e SEARXNG_BASE_URL=http://{{ llm_lan_ip }}:{{ searxng_port }}
+        -e SEARXNG_PORT={{ searxng_port }}
+        -e SEARXNG_BIND_ADDRESS=0.0.0.0
+        --cap-drop ALL --cap-add CHOWN --cap-add SETGID --cap-add SETUID
+        {{ searxng_image }}
+      register: searxng_run_result
+      changed_when: searxng_run_result.rc == 0
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    - name: Check whether the Open WebUI container exists
+      ansible.builtin.command: docker inspect -f '{{ "{{" }}.State.Running{{ "}}" }}' open-webui
+      register: webui_state
+      changed_when: false
+      failed_when: false
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    - name: Remove the existing Open WebUI container
+      ansible.builtin.command: docker rm -f open-webui
+      when: (llm_stack_present | bool) and webui_state.rc == 0
+      tags: [llm]
+
+    - name: Wait for the Open WebUI port to release
+      ansible.builtin.shell: |
+        for i in $(seq 1 12); do
+          if ! ss -tulpn | grep -qE "LISTEN.*:{{ webui_port }}[[:space:]]"; then
+            exit 0
+          fi
+          sleep 2
+        done
+        echo "Timeout: Port {{ webui_port }} did not release for Open WebUI." >&2
+        exit 1
+      changed_when: false
+      when: (llm_stack_present | bool) and webui_state.rc == 0 and webui_state.stdout == "true"
+      tags: [llm]
+
+    - name: Start Open WebUI with the refreshed image
+      ansible.builtin.command: >-
+        docker run -d --name open-webui --restart always --network host
+        -v open-webui-storage:/app/backend/data
+        -e OLLAMA_BASE_URL=http://{{ llm_lan_ip }}:{{ ollama_port }}
+        -e ENABLE_R1_THINKING=true
+        -e ENABLE_RAG_WEB_SEARCH=True
+        -e RAG_WEB_SEARCH_ENGINE=searxng
+        -e SEARXNG_QUERY_URL=http://127.0.0.1:{{ searxng_port }}/search?q=<query>&format=json
+        -e RAG_WEB_SEARCH_RESULT_COUNT=5
+        -e RAG_WEB_SEARCH_CONCURRENT_REQUESTS=10
+        {{ webui_image }}
+      register: webui_run_result
+      changed_when: webui_run_result.rc == 0
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    # 7d. Models (update-gpu-box.sh step 6). A failed model warns and
+    # never aborts the refresh, exactly like the bash updater.
+    - name: Pull the LLM models
+      ansible.builtin.command: ollama pull {{ item }}
+      environment:
+        OLLAMA_HOST: "{{ llm_lan_ip }}:{{ ollama_port }}"
+      loop: "{{ llm_models }}"
+      register: llm_model_results
+      changed_when: false
+      failed_when: false
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    - name: Warn about any model that failed to update
+      ansible.builtin.debug:
+        msg: "WARNING: Failed to update {{ item.item }}"
+      loop: "{{ llm_model_results.results | default([]) }}"
+      when: (llm_stack_present | bool) and item.rc != 0
+      tags: [llm]
+
+    # 7e. Verification (update-gpu-box.sh step 7). Warnings only.
+    - name: Wait briefly for the LLM stack to settle
+      ansible.builtin.pause:
+        seconds: 5
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    - name: Verify the LLM stack ports and API
+      ansible.builtin.shell: |
+        if ss -tulpn | grep -qE "LISTEN.*:{{ ollama_port }}[[:space:]]"; then echo "Ollama OK"; else echo "Ollama Down"; fi
+        if ss -tulpn | grep -qE "LISTEN.*:{{ webui_port }}[[:space:]]"; then echo "WebUI OK"; else echo "WebUI Down"; fi
+        if ss -tulpn | grep -qE "LISTEN.*:{{ searxng_port }}[[:space:]]"; then echo "SearXNG OK"; else echo "SearXNG Down"; fi
+        if curl -s "http://{{ llm_lan_ip }}:{{ ollama_port }}/api/tags" > /dev/null; then echo "API Responding"; else echo "API Not Responding"; fi
+      register: llm_verify_result
+      changed_when: false
+      failed_when: false
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    - name: Show the LLM stack verification
+      ansible.builtin.debug:
+        var: llm_verify_result.stdout_lines
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    - name: Log the LLM refresh to the patch log
+      ansible.builtin.shell: |
+        mkdir -p {{ patch_log_dir }}
+        echo "--- llm refresh ---" >> {{ patch_log_file }}
+        echo "Stack present : {{ llm_stack_present }}" >> {{ patch_log_file }}
+        echo "{{ llm_verify_result.stdout | default('not run') }}" >> {{ patch_log_file }}
+      changed_when: false
+      tags: [llm]
+
+    # ────────────────────────────────────────────────
+    # 8. PATCH SUMMARY
     # ────────────────────────────────────────────────
     - name: Write patch summary to log
       ansible.builtin.shell: |
         echo "--- Summary ---" >> {{ patch_log_file }}
         echo "DNF changed    : {{ dnf_upgrade_result.changed }}" >> {{ patch_log_file }}
+        echo "LLM refresh    : {{ 'ran' if (llm_stack_present | default(false) | bool) else 'skipped' }}" >> {{ patch_log_file }}
         echo "Reboot needed  : {{ 'yes' if 'reboot_required' in reboot_check.stdout else 'no' }}" >> {{ patch_log_file }}
         echo "Completed      : $(date)" >> {{ patch_log_file }}
         echo "" >> {{ patch_log_file }}
@@ -243,6 +531,7 @@
            flatpak      : {{ 'ran' if flatpak_check.rc == 0 else 'not installed' }}
            snap         : {{ 'ran' if snapd_check.rc == 0 else 'not active' }}
            firmware     : {{ 'updates available (manual action needed)' if (fwupd_check.rc == 0 and fwupd_updates is defined and 'No upgrades' not in fwupd_updates.stdout | default('')) else 'current or not checked' }}
+           llm refresh  : {{ 'ran' if (llm_stack_present | default(false) | bool) else 'skipped (no /etc/searxng or disabled)' }}
            reboot       : {{ '⚠️  REQUIRED' if 'reboot_required' in reboot_check.stdout else '✅ not needed' }}
            log          : {{ patch_log_file }}
           ════════════════════════════════════════

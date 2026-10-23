@@ -161,3 +161,21 @@ reboot-required notice. Tags (`nobara_sync`, `dnf`, `flatpak`,
 `snap`, `firmware`, `reboot_check`) run individual parts. Each run
 logs to `/var/log/ansible-patch/nobara_patch_<date>.log` on the
 target.
+
+On hosts where the GPU box setup has run (`/etc/searxng` exists),
+the playbook also performs the LLM-stack refresh from
+`update-gpu-box.sh` steps 3-7, in the same order and with the same
+safeguards (tag `llm`): the Ollama reinstall through the official
+installer (with the same optional sha256 pin, here the
+`ollama_install_sha256` variable), the SearXNG `:latest` and Open
+WebUI `v0.5.20` image pulls, recreation of both containers with the
+updater's exact volume, environment, and capability sets, pulls of
+the five models (a failed model warns and never aborts the run),
+and port/API verification (warnings only). One deliberate
+difference: the bash updater aborts when `/etc/searxng` is missing,
+while the playbook skips the refresh on such hosts, because it
+serves the whole `nobara` group; set `llm_refresh_enabled=false`
+to skip it explicitly. Container removal is existence-based (the
+updater removes only running containers, so a stopped container
+would make its `docker run` fail; the playbook removes a stopped
+container too and proceeds).
