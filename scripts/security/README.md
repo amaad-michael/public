@@ -13,6 +13,7 @@ pre-publication repo scanner.
 - [SSH access toolkit](#ssh-access-toolkit)
    - [New workstation, in order](#new-workstation-in-order)
    - [export_ssh.sh: host identity backup](#export_sshsh-host-identity-backup)
+- [Fleet password cycle](#fleet-password-cycle)
 - [⚠️ ssh-reset-defaults.sh: destructive, last resort only](#-ssh-reset-defaultssh-destructive-last-resort-only)
 - [repo-public-check.sh](#repo-public-checksh)
 
@@ -184,6 +185,47 @@ private keys, and it is not encrypted. No restore script ships in this
 folder; the layout above is the restore map (checksum first, then
 host keys back to `/etc/ssh`, authorized_keys back to each user's
 `.ssh`, SELinux contexts reapplied on RHEL-family targets).
+
+## Fleet password cycle
+
+`cycle-fleet-passwords.sh` is the bash form of the fleet password
+cycle whose Ansible form is the password-cycle kit in
+`ansible/playbooks/accounts/password-cycle/`. It performs the same
+cycle from the controller over SSH and with the same safety
+semantics:
+
+- Password values are runtime-injected only, from a vars file
+  outside the repo in the same shape as the kit's
+  `passwords.example.yml` (one unique 32-character value per host
+  per account, generated in the vault). No secret value is in the
+  repo, in the script, or in its output.
+- A pre-flight validates every selected host and account before
+  anything changes anywhere; a bad vars file changes nothing.
+- The cycle connects as root with the fleet key
+  (`~/.ssh/pi_cluster_key` by default), creates any missing
+  account (home directory, `/bin/bash`), writes the passwordless
+  sudo drop-ins for `michael` and `ansible` (visudo-validated),
+  then sets the `root`, `michael`, and `ansible` passwords by
+  piping the values to the remote `chpasswd` on stdin — never in
+  a command line, never logged. sshd is not restarted.
+- The first host failure aborts the run. After the cycle, the
+  script verifies each host the way `verify_cycle_creds.yml`
+  does: reachable as `ansible` with sudo to root, a set password
+  for all three accounts, and the sshd hardening in effect
+  (`PermitRootLogin prohibit-password`,
+  `PasswordAuthentication no`).
+
+```bash
+./cycle-fleet-passwords.sh --passwords-file ~/passwords.yml --limit neo1
+./cycle-fleet-passwords.sh --passwords-file ~/passwords.yml
+./cycle-fleet-passwords.sh --passwords-file ~/passwords.yml --verify-only
+```
+
+Pilot on one host first (`neo1` is the canary), keep the vars file
+until the whole fleet verifies, then shred it. `--dry-run`
+validates the vars file and prints the plan without connecting.
+There is no Docker form: the cycle is a controller-side operation
+driven by vault-held secrets.
 
 ## ⚠️ ssh-reset-defaults.sh: destructive, last resort only
 
