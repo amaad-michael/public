@@ -28,6 +28,14 @@ public/
 └── deprecated/   # retired files, kept for git history
 ```
 
+## 🔀 How this repo is maintained
+
+Changes here are built, tested, and packaged by an AI agent, then
+reviewed, committed, and merged by me. The full routine, the record
+keeping, and the standing rules are documented in
+[git-repo-workflow.md](git-repo-workflow.md), with worked examples of
+the commands themselves.
+
 ## ⚠️ Note
 
 IP addresses and hostnames are examples from my lab. Replace them with
