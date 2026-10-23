@@ -1,50 +1,175 @@
 ---
-- name: Install and enable Cockpit on Debian and RHEL systems
-  hosts: all
-  become: yes
+- name: Install Cockpit and open the console port
+  # The single Cockpit playbook: web console package, cockpit.socket,
+  # and 9090/tcp in the active firewall. Idempotent. PCP is
+  # deliberately not installed (decision 2026-10-22): historical
+  # metrics for the fleet live in the Prometheus/Grafana stack, so
+  # the console runs live-only and hosts carry no archiving daemons
+  # writing to their SD cards.
+  #
+  # Usage:
+  #   ansible-playbook -i hosts playbooks/cockpit/cockpit_setup.yml -K
+  # Target a group instead of all hosts: -e target_group=webservers
+  # Limit to one host: append -l host01
+  # Dry-run: append --check (module check-mode; nothing is installed)
+  hosts: "{{ target_group | default('all') }}"
+  become: true
+
+  vars:
+    cockpit_port: 9090
+    # Just the cockpit metapackage; the name is the same on both
+    # families.
+    cockpit_packages:
+      - cockpit
+
   tasks:
+    - name: Fail cleanly on unsupported OS families
+      ansible.builtin.fail:
+        msg: "Unsupported OS family {{ ansible_facts['os_family'] }}; only RedHat and Debian families are supported."
+      when: ansible_facts['os_family'] not in ['RedHat', 'Debian']
+
     - name: Ensure EPEL repository is present (RHEL family < 9, if needed for Cockpit or other tools)
       ansible.builtin.package:
         name: epel-release
         state: present
       when:
-        - ansible_os_family == "RedHat"
-        - ansible_distribution_major_version | int < 9 # Targets older RHEL/CentOS versions
+        - ansible_facts['os_family'] == "RedHat"
+        - ansible_facts['distribution_major_version'] | int < 9 # Targets older RHEL/CentOS versions
       tags: prerequisites, rhel
 
     - name: Install Cockpit package
       ansible.builtin.package:
-        name: cockpit # Metapackage that should pull in necessary components like cockpit-ws
+        name: "{{ cockpit_packages }}"
         state: present
-        update_cache: "{{ true if ansible_os_family == 'Debian' else omit }}" # Update cache for apt-based systems
+        update_cache: "{{ true if ansible_facts['os_family'] == 'Debian' else omit }}" # Update cache for apt-based systems
       register: cockpit_install_result
       tags: install
 
     - name: Validate Cockpit installation by checking cockpit-ws command
       ansible.builtin.command: >-
-        {{ '/usr/lib/cockpit/cockpit-ws' if ansible_os_family == 'Debian' else '/usr/libexec/cockpit-ws' }} --version
+        {{ '/usr/lib/cockpit/cockpit-ws' if ansible_facts['os_family'] == 'Debian' else '/usr/libexec/cockpit-ws' }} --version
       register: cockpit_ws_check
       changed_when: false
       failed_when: cockpit_ws_check.rc != 0
       when: cockpit_install_result is succeeded # Only run if package install task reported success
       tags: validation
 
-    - name: Ensure cockpit.socket is enabled and started
+    - name: Check whether systemd knows the cockpit.socket unit
+      ansible.builtin.command: systemctl cat cockpit.socket
+      register: cockpit_socket_known
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      when: ansible_facts['service_mgr'] == 'systemd'
+
+    - name: Enable and start cockpit.socket
       ansible.builtin.systemd:
         name: cockpit.socket
-        enabled: yes
+        enabled: true
         state: started
-        daemon_reload: yes # Ensures systemd reloads unit files if changed by package install
+        daemon_reload: true # Ensures systemd reloads unit files if changed by package install
+      when:
+        - ansible_facts['service_mgr'] == 'systemd'
+        - cockpit_socket_known.rc == 0
       tags: service, enable
+
+    - name: cockpit.socket unit not yet known | print follow-up step
+      ansible.builtin.debug:
+        msg: >-
+          The cockpit.socket unit is not known to systemd on {{ inventory_hostname }} yet
+          (normal for a fresh install evaluated in check mode). After installing,
+          run: systemctl enable --now cockpit.socket
+      when:
+        - ansible_facts['service_mgr'] == 'systemd'
+        - (cockpit_socket_known.rc | default(-1)) != 0
 
     - name: Verify Cockpit socket is active
       ansible.builtin.command: systemctl is-active cockpit.socket
       register: cockpit_socket_active_status
       changed_when: false
       failed_when: "cockpit_socket_active_status.stdout != 'active'" # Fail if socket is not active
+      when:
+        - ansible_facts['service_mgr'] == 'systemd'
+        - cockpit_socket_known.rc == 0
+        - not ansible_check_mode
       tags: validation, status
 
-    - name: Display Cockpit socket status
+    - name: Non-systemd hosts | print manual service steps
       ansible.builtin.debug:
-        msg: "Cockpit socket status: {{ cockpit_socket_active_status.stdout }}"
+        msg: >-
+          {{ inventory_hostname }} is not running systemd (service_mgr={{ ansible_facts['service_mgr'] }}),
+          so cockpit.socket was not enabled. Manual step on a systemd host:
+          systemctl enable --now cockpit.socket
+      when: ansible_facts['service_mgr'] != 'systemd'
+
+    - name: Detect firewall tooling
+      ansible.builtin.shell: |
+        if command -v firewall-cmd >/dev/null 2>&1; then echo firewalld
+        elif command -v ufw >/dev/null 2>&1; then echo ufw
+        else echo none
+        fi
+      register: firewall_tool
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: firewalld | check whether the port is already open
+      ansible.builtin.command: "firewall-cmd --query-port={{ cockpit_port }}/tcp"
+      register: firewalld_query
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      when: firewall_tool.stdout == 'firewalld'
+
+    - name: firewalld | open cockpit port permanently
+      ansible.builtin.command: "firewall-cmd --permanent --add-port={{ cockpit_port }}/tcp"
+      register: firewalld_add
+      changed_when: firewalld_add.rc == 0
+      failed_when: firewalld_add.rc != 0
+      when:
+        - firewall_tool.stdout == 'firewalld'
+        - firewalld_query.rc != 0
+
+    - name: firewalld | reload to apply permanent rules
+      ansible.builtin.command: firewall-cmd --reload
+      changed_when: true
+      when:
+        - firewall_tool.stdout == 'firewalld'
+        - firewalld_add is defined
+        - firewalld_add.changed | default(false)
+
+    - name: ufw | check whether the port is already allowed
+      ansible.builtin.shell: ufw status | grep -qE "^{{ cockpit_port }}/tcp.*ALLOW"
+      register: ufw_query
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      when: firewall_tool.stdout == 'ufw'
+
+    - name: ufw | allow cockpit port
+      ansible.builtin.command: "ufw allow {{ cockpit_port }}/tcp"
+      changed_when: true
+      when:
+        - firewall_tool.stdout == 'ufw'
+        - ufw_query.rc != 0
+
+    - name: No firewall tool | print manual rule
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }} has neither firewall-cmd nor ufw; no firewall
+          rule was applied. Allow inbound TCP {{ cockpit_port }} manually, e.g.
+          'iptables -A INPUT -p tcp --dport {{ cockpit_port }} -j ACCEPT' or the
+          equivalent cloud security-group rule.
+      when: firewall_tool.stdout == 'none'
+
+    - name: Report cockpit status
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }}: cockpit {{ 'would be ' if ansible_check_mode else '' }}installed
+          (packages: {{ cockpit_packages | join(', ') }});
+          cockpit.socket {{ 'enabled+started' if (cockpit_socket_known.rc | default(-1)) == 0 else
+          ('manual enablement (no systemd)' if ansible_facts['service_mgr'] != 'systemd'
+          else 'to be enabled after install: systemctl enable --now cockpit.socket') }};
+          firewall tool: {{ firewall_tool.stdout | default('unknown') }}.
+          Reach it at https://{{ inventory_hostname }}:{{ cockpit_port }}/
       tags: status
