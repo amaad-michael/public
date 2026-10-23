@@ -1,0 +1,47 @@
+---
+networks:
+  jenkins-net:
+    driver: bridge
+
+volumes:
+  jenkins_home:
+
+services:
+  # Jenkins - CI server, Docker form of
+  # scripts/provisioning/install-jenkins-rocky.sh and
+  # ansible/playbooks/jenkins/install_jenkins.yml: same Jenkins LTS
+  # version (2.580.1), same web port (8080). The JNLP agent port 50000
+  # is not published by default, matching the bash installer, where it
+  # is opened only with --with-agent-port; publish it with a compose
+  # override if inbound agents are needed (see README.md).
+  jenkins:
+    image: jenkins/jenkins:2.580.1-lts
+    container_name: jenkins
+    networks:
+      - jenkins-net
+    ports:
+      - "8080:8080"
+    environment:
+      - TZ=UTC
+    volumes:
+      - jenkins_home:/var/jenkins_home
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8080/login >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s

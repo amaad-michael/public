@@ -25,6 +25,8 @@ the usage guide for its playbooks:
   and which hosts each one targets.
 - [healthchecks](playbooks/healthchecks/README.md): the fleet health
   checks and the SMART harvest.
+- [jenkins](playbooks/jenkins/README.md): the Jenkins LTS install
+  playbook, mirroring `scripts/provisioning/install-jenkins-rocky.sh`.
 - [llm](playbooks/llm/README.md): the NanoPi inference fleet (server
   and load balancer), plus the two full deployment guides,
   [gpu-box-llm-setup-v2.1.md](playbooks/llm/gpu-box-llm-setup-v2.1.md)
