@@ -4,7 +4,7 @@
 
 ## 📦 What's Included
 
-### Configuration Files (5 shipped, 3 host-local)
+### Configuration Files (9 shipped, 3 host-local)
 
 Shipped in this folder:
 
@@ -67,12 +67,12 @@ docker compose ps  # All 9 should be "Up" and "healthy"
 |---------|------|----------|--------|
 | Prometheus | 9090 | Read-only, 512M limit | ✓ |
 | Grafana | 3000 | Auth required, CSRF protected | ✓ |
-| Alertmanager | 9093 | Internal, Ntfy webhook | ✓ |
-| Traefik | 80/443/8080 | Rate limiting, BasicAuth, headers | ✓ |
+| Alertmanager | 9093 | Published on host port 9093; Ntfy webhook | ✓ |
+| Traefik | 80/443/8080 | BasicAuth, security headers (RateLimitAuth defined, unattached) | ✓ |
 | Ntfy | 8081 | deny-all auth | ✓ |
 | step-ca | 9000 | Self-signed, encrypted | ✓ |
-| Headscale | 8082 | DB encrypted, ACL policy | ✓ |
-| Vaultwarden | 8000 | HTTPS enforced, no signups | ✓ |
+| Headscale | 8082, 3478/udp | DB encrypted, ACL policy | ✓ |
+| Vaultwarden | 8000 | No signups; plain HTTP on 8000 (DOMAIN declares an https:// URL, but no TLS is configured in the service) | ✓ |
 | Uptime Kuma | 3001 | UI only, health checks | ✓ |
 
 ---
@@ -81,17 +81,17 @@ docker compose ps  # All 9 should be "Up" and "healthy"
 
 **Container-Level:**
 
-- Capabilities dropped (38 → 0-4)
-- Read-only filesystems
+- Capabilities dropped (all; 1–4 added back per service)
+- Read-only filesystems (5 of 9 services: Prometheus, Grafana, Alertmanager, Traefik, Ntfy)
 - no-new-privileges enforced
-- Resource limits (CPU 0.5-1.0, Memory 128-512M)
+- Resource limits (CPU 0.5-1.0, Memory 256-512M)
 
 **Network-Level:**
 
 - Isolated bridge (standby-net)
-- Rate limiting (100/min avg, 200 burst)
+- Rate limiting (100/min avg, 200 burst — the RateLimitAuth middleware is defined in traefik.yml but not attached to any router)
 - Security headers (CSP, HSTS, X-Frame-Options)
-- Zero external exposure
+- Every service publishes host ports on all interfaces (9090, 3000, 9093, 80/443/8080, 8081, 9000, 8082 + 3478/udp, 8000, 3001) — scope them at the host firewall
 
 **Application-Level:**
 
@@ -106,7 +106,7 @@ docker compose ps  # All 9 should be "Up" and "healthy"
 - Images pinned (no :latest)
 - Secrets externalized (.env, from .env.example)
 - Health checks all services
-- Encrypted backups
+- Backups are a manual operator procedure (see HARDENING_SUMMARY.md); no backup mechanism ships in the compose
 
 ---
 

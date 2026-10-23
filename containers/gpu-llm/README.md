@@ -77,7 +77,8 @@ detected GPU and its VRAM at startup.
 
 ## 🚀 First start downloads about 31 GB of models
 
-On first start, the one-shot `model-init` service waits for Ollama to be
+On first start, the one-shot `model-init` service (which runs
+`model-init.sh` from this folder) waits for Ollama to be
 healthy, then pulls every model in `OLLAMA_MODELS` and exits. With the
 default list (the playbook's `required_models`) that is 30,944,883,012
 bytes, about 31 GB:

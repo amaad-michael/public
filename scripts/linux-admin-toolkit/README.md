@@ -2,20 +2,15 @@
 
 27 everyday Linux sysadmin tasks, each with two implementations:
 
-- **`<slug>-local.sh`** — standalone Bash script for one server. Auto-detects the
-  distro from `/etc/os-release` and works on RHEL-family (`dnf`/`yum`) and
-  Debian-family (`apt-get`). Run with `--help` for usage.
+- **`<slug>-local.sh`** — standalone Bash script for one server. Scripts that need distro-specific behavior auto-detect the distro from `/etc/os-release` and work on RHEL-family (`dnf`/`yum`) and Debian-family (`apt-get`); the rest use portable commands that behave the same on both families. Run with `--help` for usage.
 - **`<slug>-group.yml`** — Ansible playbook that does the same job across a fleet.
   Run with `-e target_group=<group>` (defaults to `all`).
 
 ## Version
 
-**v1.1** (2026-09-20) — fixed 6 minor bugs found by independent testing
-(see `TEST-REPORT-2026-09-20.md`):
+**v1.1** (2026-09-20) — fixed the 6 minor bugs found by independent testing, plus related follow-ups from the same pass (see `TEST-REPORT-2026-09-20.md`):
 
-- `update-report` / `system-update`: `apt-get update` now runs under
-  `timeout 120` and both scripts gained a `--no-refresh` flag; previously a
-  stalled mirror hung the script indefinitely.
+- `update-report` / `system-update`: `apt-get update` now runs under `timeout 120` where the `timeout` command is available (a bare run otherwise) and both scripts gained a `--no-refresh` flag; previously a stalled mirror hung the script indefinitely.
 - `password-policy` / `cockpit-install`: same `apt-get update` timeout fix
   (same bug class, found while patching).
 - `logrotate-check`: corrected a stale shellcheck directive (SC2053 →
@@ -32,6 +27,8 @@
   (RHEL branches executed; no RHEL-specific bugs found).
 
 **v1.0** (2026-09-16) — initial build: 27 tasks, Bash + Ansible per task.
+
+The current version is also recorded in this folder's `VERSION` file.
 
 ## Task index
 
@@ -61,15 +58,13 @@
 | 22 | Time sync | Check sync health; optionally fix via chrony/systemd-timesyncd | [22-time-sync/time-sync-local.sh](22-time-sync/time-sync-local.sh) | [22-time-sync/time-sync-group.yml](22-time-sync/time-sync-group.yml) |
 | 23 | Cert expiry | Scan common cert locations, warn on expiry within N days (read-only) | [23-cert-expiry/cert-expiry-local.sh](23-cert-expiry/cert-expiry-local.sh) | [23-cert-expiry/cert-expiry-group.yml](23-cert-expiry/cert-expiry-group.yml) |
 | 24 | Network inventory | Interfaces, IPs, default routes, DNS resolvers (read-only) | [24-net-inventory/net-inventory-local.sh](24-net-inventory/net-inventory-local.sh) | [24-net-inventory/net-inventory-group.yml](24-net-inventory/net-inventory-group.yml) |
-| 25 | Container hygiene | Prune stopped containers, dangling images, build cache (docker/podman) | [25-container-hygiene/container-hygiene-local.sh](25-container-hygiene/container-hygiene-local.sh) | [25-container-hygiene/container-hygiene-group.yml](25-container-hygiene/container-hygiene-group.yml) |
+| 25 | Container hygiene | Report container clutter; with `--yes`, prune stopped containers, dangling images, unused networks, build cache (docker/podman) | [25-container-hygiene/container-hygiene-local.sh](25-container-hygiene/container-hygiene-local.sh) | [25-container-hygiene/container-hygiene-group.yml](25-container-hygiene/container-hygiene-group.yml) |
 | 26 | Kernel cleanup | Remove old kernels, keep N newest, never the running one | [26-kernel-cleanup/kernel-cleanup-local.sh](26-kernel-cleanup/kernel-cleanup-local.sh) | [26-kernel-cleanup/kernel-cleanup-group.yml](26-kernel-cleanup/kernel-cleanup-group.yml) |
-| 27 | Cockpit install | Install cockpit, enable cockpit.socket, open 9090/tcp | [27-cockpit-install/cockpit-install-local.sh](27-cockpit-install/cockpit-install-local.sh) | Consolidated: [ansible/playbooks/cockpit/cockpit_setup.yml](../../ansible/playbooks/cockpit/cockpit_setup.yml) |
+| 27 | Cockpit install | Install cockpit, enable and start cockpit.socket, open 9090/tcp | [27-cockpit-install/cockpit-install-local.sh](27-cockpit-install/cockpit-install-local.sh) | Consolidated: [ansible/playbooks/cockpit/cockpit_setup.yml](../../ansible/playbooks/cockpit/cockpit_setup.yml) |
 
 ## Distro support
 
-- Scripts read `/etc/os-release` (`ID`/`ID_LIKE`) and pick the right package
-  manager and paths automatically: `dnf` (falling back to `yum`) on RHEL-family,
-  `apt-get` on Debian-family. Anything else fails with a clear message.
+- Scripts that branch on distro read `/etc/os-release` (`ID`/`ID_LIKE`) and pick the right package manager and paths automatically: `dnf` (falling back to `yum`) on RHEL-family, `apt-get` on Debian-family; anything else fails with a clear message. The remaining scripts (user add, sudo manage, user audit, log errors, logrotate check, ports audit, backup run, backup verify, cert expiry, net inventory) are distro-agnostic and never read `/etc/os-release`.
 - Playbooks branch on `ansible_facts['os_family']` (`RedHat` / `Debian`).
 - Service/tool differences are handled per task: firewalld vs ufw,
   chrony vs systemd-timesyncd, journalctl vs `/var/log/syslog|messages`,
@@ -102,8 +97,8 @@ ansible-playbook -i inventory 07-disk-audit/disk-audit-group.yml \
 
 - Every mutating script supports `--check` (dry run): it prints what it would do
   and changes nothing. Run `--check` before the real thing.
-- Read-only scripts (marked above) never change anything.
+- Read-only scripts (marked above) never change anything — except `update-report`, whose default Debian path refreshes the apt package lists (`apt-get update`; no packages change) unless `--no-refresh` is passed.
 - Scripts are idempotent where possible: running twice is safe.
-- No hardcoded usernames, hosts, or paths — everything is a flag or env var.
+- No hardcoded usernames or hosts. Values that vary per host are flags or env vars; fixed system paths (e.g. `/etc/sudoers.d`, the default cert directories) and Cockpit's port 9090 are constants in the scripts.
 - Playbooks use fully-qualified `ansible.builtin.` module names and
   `become: true` only where privilege is actually required.

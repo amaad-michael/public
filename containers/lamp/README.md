@@ -1,12 +1,6 @@
 # lamp — LAMP stack (httpd 2.4 + PHP-FPM 8.3 + MariaDB 10.11)
 
-The container form of `scripts/provisioning/lamp-install-rocky10.sh`
-and `lamp-install-debian13.sh` — the same stack the installers build
-on bare metal: httpd 2.4 in front, PHP-FPM (PHP 8.3) behind it,
-MariaDB 10.11 (the full-life stream the Rocky installer pins; it
-rejects other streams) underneath. Three services on a private
-network, hardened in the house style (cap_drop ALL,
-no-new-privileges, read_only, resource limits, healthchecks).
+The container form of `scripts/provisioning/lamp-install-rocky10.sh`, following that installer's pins: httpd 2.4 in front, PHP-FPM (PHP 8.3) behind it, MariaDB 10.11 (the full-life stream the Rocky installer pins; it rejects other streams) underneath. The Debian installer (`lamp-install-debian13.sh`) builds the same shape with its distro defaults instead (PHP-FPM 8.4, MariaDB 11.8), so this stack matches the Rocky versions, not the Debian ones. Three services on a private network, hardened in the house style (cap_drop ALL, no-new-privileges, read_only, resource limits, healthchecks).
 
 - `web` — httpd:2.4, the only published service (host port 8083).
   The monitoring stack already publishes 8080/8081/8082 and the

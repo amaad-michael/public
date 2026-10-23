@@ -17,16 +17,20 @@ scripts for my Raspberry Pi cluster and home network.*
 public/
 ├── ansible/      # playbook groups: accounts, cleanup, cockpit, firewall,
 │                 # healthchecks, LLM, monthly, motd, Pi-hole, Proxmox,
-│                 # reboots, vuln, workstation
+│                 # reboots, vuln
 ├── containers/   # ten Docker Compose stacks: monitoring, Pi-hole + Unbound,
 │                 # Gitea, LAMP, Cockpit, LLM inference, scanner,
 │                 # OptiPlex LLM, GPU LLM, neo1 observability (Docker)
 ├── scripts/      # Linux Admin Toolkit, ops toolkit, and backup, gaming,
 │                 # git, LLM, monitoring, network, Pi-hole, provisioning,
 │                 # security, and workstation scripts
-├── templates/    # bash script templates and the secure-ci CI template
+├── templates/    # bash script templates, the blank-note template, and
+│                 # the secure-ci CI template
 └── deprecated/   # retired files, kept for git history
 ```
+
+The repo root also carries `CODEOWNERS`, and `.github/` holds the
+Dependabot config, the PR template, and the CI and security workflows.
 
 ## 🔀 How this repo is maintained
 

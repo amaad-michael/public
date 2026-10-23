@@ -1,7 +1,6 @@
 # scripts/provisioning
 
-Bare-metal installers. Everything here runs as root on the target
-host, and each installer ends with its own verification pass.
+Bare-metal installers and tools; the scripts here run as root on the target host. The LAMP installers and the Gitea tighten scripts end with a verification pass; the Jenkins installer waits for Jenkins to answer on port 8080 before printing the initial admin password; the LUKS guardian has no verify mode (see below).
 
 ## 📦 Contents
 
@@ -10,6 +9,7 @@ host, and each installer ends with its own verification pass.
    - [Required order](#required-order)
    - [What the tighten scripts do](#what-the-tighten-scripts-do)
 - [🛠️ LAMP (bare metal)](#-lamp-bare-metal)
+- [🔭 neo1 observability (native systemd)](#-neo1-observability-native-systemd)
 - [🔒 LUKS Vault Guardian](#-luks-vault-guardian)
    - [Before running](#before-running)
    - [What one run does](#what-one-run-does)
@@ -34,17 +34,14 @@ checksum from dl.gitea.com and verify the SHA-256 before installing to
 `/usr/local/bin/gitea`. Both create a `git` system user with a nologin
 shell, seed `/etc/gitea/app.ini`, and write the same hardened systemd
 unit (sandboxing, `ProtectSystem=full`, empty capability bounding set,
-seccomp filter). Neither makes firewall changes; on firewalld systems
-the installer prints the `firewall-cmd` commands for ports 3000 and
-2222 at the end.
+seccomp filter). Neither makes firewall changes. The SD installer ends by printing the `firewall-cmd` commands for ports 3000 and 2222 for firewalld nodes; the standard installer prints no firewall commands, only a note that none were made.
 
 ### Which variant
 
 Use the SD variant on any node whose root filesystem is on an SD or
 MMC card. It detects that itself (it walks the root device's ancestor
 chain, so LUKS or LVM stacked on SD is caught), and
-`SD_OPTIMIZE=1` or `SD_OPTIMIZE=0` forces the behavior either way. On
-NVMe or SSD roots it behaves like the standard installer. Its flash
+`SD_OPTIMIZE=1` or `SD_OPTIMIZE=0` forces the behavior either way. On NVMe or SSD roots the flash measures below are skipped, but the SD installer still differs from the standard one there: it always seeds `app.ini` with SQLite WAL mode and the single console/Warn log sink, and always creates the `/var/lib/gitea/dump/` staging directory. Its flash
 measures are:
 
 - zram swap (1G, zstd when the kernel offers it) replacing disk swap,
@@ -163,7 +160,7 @@ and ntfy run as checksum-pinned static binaries; Grafana is on-demand
 only (never enabled, auto-stops after 6h); two timers pull nightly
 Pi-hole and Unbound backups from pi4/pi0. `scripts/install.sh` in the
 kit refuses to run with any pin blanked, installs promtool/amtool
-beside their daemons, and ends by enabling the always-on set. The
+beside their daemons, and ends by enabling the always-on set plus the two backup timers. The
 kit's own README carries the deploy order and the memory budget.
 
 The Docker form of the same design lives in

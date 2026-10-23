@@ -36,13 +36,9 @@ An interactive commit and push helper, run inside a working tree:
    detached HEAD.
 1. It prompts for a commit message.
 1. It stages everything (`git add .`) and commits with that message.
-1. It shows the push target, `origin/<branch>`, and asks for
-   confirmation. Anything other than `y` cancels the push and keeps
-   the commit locally.
+1. It shows the push target, `origin/<branch>`, and asks for confirmation. Anything other than `y` or `Y` cancels the push and keeps the commit locally.
 1. On confirmation it pushes the current branch.
 
-The push always goes to the currently checked-out branch; it never
-hardcodes main. Any failing step aborts the script with an error
-trap that reports the line number. Because step 3 stages every
+The push always goes to the currently checked-out branch; it never hardcodes main. Any failing step aborts the script: the git steps report their own error, and anything else trips an error trap that reports the line number. Because step 3 stages every
 change in the tree, check `git status` first if the tree holds work
 you do not want in the same commit.

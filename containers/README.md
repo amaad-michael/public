@@ -13,9 +13,7 @@ chmod 600. The pattern per project:
 
 - **monitoring**: three configs the compose mounts, created on the
   host and git-ignored by name (ntfy.conf, headscale.conf,
-  policy.hujson), plus a `.env` copied from `.env.example` holding
-  GRAFANA_ADMIN_PASSWORD and the TRAEFIK_AUTH_HASH line. Compose
-  refuses to start Grafana until the password variable is set.
+  policy.hujson), plus a `.env` copied from `.env.example` holding GRAFANA_ADMIN_PASSWORD, with a TRAEFIK_AUTH_HASH line added to it (generation: see the monitoring README). Compose refuses to start Grafana until the password variable is set.
 - **pihole**: a `.env` copied from `pi-dns-env.example`, holding the
   image pins (PIHOLE_TAG, UNBOUND_TAG) and PIHOLE_API_PASSWORD.
   Compose refuses to render until both tags are pinned.

@@ -19,7 +19,7 @@ throw away.
 One packaging difference: Debian bookworm marks the system python
 externally managed (PEP 668), so the pip packages live in a venv at
 `/opt/scanner-venv`, first on `PATH`. The packages are the same; on
-the node they sit in the system environment instead.
+the node they sit in the system environment instead. The image also installs `ca-certificates` and `python3-venv`, which the playbook does not need on a full host.
 
 ## ✅ Build and verify
 

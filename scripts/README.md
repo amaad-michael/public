@@ -1,7 +1,6 @@
 # scripts
 
-Utility scripts for the homelab, grouped by job. Each folder README is
-the usage guide for the scripts in that folder.
+Utility scripts for the homelab, grouped by job. Each folder's README is the usage guide for the scripts in that folder — except `backups/`, whose guide is the tool guide linked below.
 
 - [backups](backups/backup_integrity_tool_guide-v1.md): SHA-256
   manifest integrity for backup directories
@@ -26,8 +25,8 @@ the usage guide for the scripts in that folder.
 - [pihole](pihole/README.md): Pi-hole + Unbound DNS test suite, log
   cleanup, and blocklist initialization.
 - [provisioning](provisioning/README.md): Gitea, Jenkins, and LAMP
-  installers, the Gitea post-setup tightening scripts, and the LUKS
-  Vault Guardian.
+  installers, the Gitea post-setup tightening scripts, the LUKS
+  Vault Guardian, and the neo1 observability kit (native systemd form).
 - [security](security/README.md): the secure-server-init hardening
   family, SSH access tooling, and repo-public-check.
 - [workstation](workstation/README.md): Nobara setup, the GPU box
