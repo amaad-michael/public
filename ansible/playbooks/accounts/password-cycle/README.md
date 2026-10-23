@@ -57,3 +57,13 @@ shred -u ~/passwords.yml
 
 Keep the vars file until the whole fleet verifies. Re-running the cycle
 with the same values is safe: the effective passwords do not change.
+
+## Bash form
+
+`scripts/security/cycle-fleet-passwords.sh` performs the same cycle
+from the controller over SSH with the same safety semantics (runtime
+injected values from the same vars-file shape, fleet-wide pre-flight,
+create-if-missing accounts, visudo-validated sudo drop-ins, fail-fast,
+and the same post-cycle verification). Use either form; do not mix
+them mid-cycle. There is no Docker form: the cycle is a
+controller-side operation driven by vault-held secrets.
