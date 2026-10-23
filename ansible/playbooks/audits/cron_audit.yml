@@ -1,0 +1,221 @@
+---
+# cron_audit.yml — Ansible form of the fleet cron audit.
+#
+# Bash forms:
+#   scripts/monitoring/local_cron_checker.sh   (one host, run on the host)
+#   scripts/monitoring/remote_cron_checker.sh  (fleet, over SSH from one host)
+#
+# This playbook is the remote checker's workflow in Ansible form: it
+# collects the same material from every target host and assembles one
+# fleet report on the controller with the same sections and headers.
+# The admin toolkit's cron-inventory playbook
+# (scripts/linux-admin-toolkit/21-cron-inventory/) is a different
+# workflow — a per-host stdout inventory with no report file and no
+# findings — and is not what this mirrors.
+#
+# Per host it collects:
+#   - user crontabs for every account with UID >= 1000 and a bash or sh
+#     login shell (the local checker's filter; the remote checker omits
+#     the shell filter — the difference is inherited from the local
+#     checker on purpose, since Ansible executes on the host)
+#   - /etc/crontab
+#   - every file in /etc/cron.d/
+#   - listings of /etc/cron.hourly, /etc/cron.daily, /etc/cron.weekly,
+#     /etc/cron.monthly
+#   - systemd timer state (systemctl list-timers --all and the enabled
+#     timer unit files) — cron's modern counterpart; the bash checkers
+#     predate the fleet's timer-based jobs, so this section is an
+#     addition, marked as such in the report
+#
+# Findings (the report flags these; the bash checkers only collect):
+#   - FLAG world-writable: a world-writable file in the cron paths
+#   - FLAG tmp-exec: a cron entry that executes a path under /tmp,
+#     /var/tmp, or /dev/shm
+#
+# Report: one timestamped file on the controller,
+#   <cron_audit_report_dir>/cronjobs_full_YYYYMMDD_HHMMSS.log  (mode 0600)
+# mirroring the remote checker's /var/log/cron_audit naming.
+#
+# Usage:
+#   cd ansible
+#   ansible-playbook -i hosts playbooks/audits/cron_audit.yml
+#
+# Extra vars:
+#   cron_audit_report_dir=/var/log/cron_audit   (controller-side)
+#   cron_audit_fail_on_findings=true|false      (default false: flag in
+#     the report only; true also fails the run when any FLAG is raised)
+
+- name: Collect cron and timer state from each host
+  hosts: all
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: List audit-relevant users (UID >= 1000, bash or sh shell)
+      ansible.builtin.shell: "getent passwd | awk -F: '$3 >= 1000 && $7 ~ /bash|sh/ {print $1}'"
+      register: cron_audit_users
+      changed_when: false
+      failed_when: false
+
+    - name: Read each user's crontab
+      ansible.builtin.command: "crontab -l -u {{ item }}"
+      loop: "{{ cron_audit_users.stdout_lines | default([]) }}"
+      register: cron_audit_user_crontabs
+      changed_when: false
+      failed_when: false
+
+    - name: Read /etc/crontab
+      ansible.builtin.slurp:
+        src: /etc/crontab
+      register: cron_audit_etc_crontab
+      failed_when: false
+
+    - name: Find files in /etc/cron.d
+      ansible.builtin.find:
+        paths: /etc/cron.d
+        file_type: file
+      register: cron_audit_cron_d_files
+      failed_when: false
+
+    - name: Read /etc/cron.d files
+      ansible.builtin.slurp:
+        src: "{{ item.path }}"
+      loop: "{{ cron_audit_cron_d_files.files | default([]) }}"
+      register: cron_audit_cron_d_contents
+      failed_when: false
+      loop_control:
+        label: "{{ item.path }}"
+
+    - name: List the cron period directories
+      ansible.builtin.command: "ls -l /etc/cron.{{ item }}"
+      loop:
+        - hourly
+        - daily
+        - weekly
+        - monthly
+      register: cron_audit_period_dirs
+      changed_when: false
+      failed_when: false
+
+    - name: List systemd timers
+      ansible.builtin.command: systemctl list-timers --all --no-pager
+      register: cron_audit_timers
+      changed_when: false
+      failed_when: false
+
+    - name: List enabled timer units
+      ansible.builtin.command: systemctl list-unit-files --type=timer --no-pager
+      register: cron_audit_timer_units
+      changed_when: false
+      failed_when: false
+
+    - name: Find world-writable files in the cron paths
+      ansible.builtin.shell: "find /etc/crontab /etc/cron.d /var/spool/cron /var/spool/cron/crontabs -type f -perm -0002 2>/dev/null || true"
+      register: cron_audit_world_writable
+      changed_when: false
+      failed_when: false
+
+    - name: Find cron entries executing from temp paths
+      ansible.builtin.shell: >-
+        { grep -R -h -E '(^|[[:space:]])/(tmp|var/tmp|dev/shm)/' /etc/crontab /etc/cron.d /var/spool/cron /var/spool/cron/crontabs 2>/dev/null;
+        for u in {{ cron_audit_users.stdout_lines | default([]) | join(' ') }}; do crontab -l -u "$u" 2>/dev/null; done |
+        grep -E '(^|[[:space:]])/(tmp|var/tmp|dev/shm)/' || true; } || true
+      register: cron_audit_tmp_exec
+      changed_when: false
+      failed_when: false
+
+    - name: Build this host's report section
+      ansible.builtin.set_fact:
+        cron_audit_section: |
+          ========== {{ inventory_hostname }} ({{ ansible_host | default(inventory_hostname) }}) ==========
+          Hostname: {{ inventory_hostname }}
+
+          --- User Crontabs ---
+          {% for r in cron_audit_user_crontabs.results | default([]) %}
+          User: {{ r.item }}
+          {{ r.stdout if r.stdout | length > 0 else 'No crontab for ' ~ r.item }}
+
+          {% endfor %}
+          --- /etc/crontab ---
+          {{ (cron_audit_etc_crontab.content | b64decode) if cron_audit_etc_crontab.content is defined else 'No /etc/crontab found' }}
+
+          --- /etc/cron.d/ ---
+          {% for r in cron_audit_cron_d_contents.results | default([]) %}
+          File: {{ r.item.path }}
+          {{ r.content | b64decode if r.content is defined else '(unreadable)' }}
+
+          {% endfor %}
+          {% for r in cron_audit_period_dirs.results | default([]) %}
+          --- /etc/cron.{{ r.item }}/ ---
+          {{ r.stdout if r.rc == 0 else '/etc/cron.' ~ r.item ~ ' not found' }}
+
+          {% endfor %}
+          --- Systemd Timers (addition to the bash audit) ---
+          {{ cron_audit_timers.stdout if cron_audit_timers.rc == 0 else 'systemctl list-timers not available' }}
+
+          --- Enabled Timer Units ---
+          {{ cron_audit_timer_units.stdout if cron_audit_timer_units.rc == 0 else 'systemctl list-unit-files not available' }}
+
+          --- Findings ---
+          {% for f in cron_audit_world_writable.stdout_lines | default([]) %}
+          FLAG world-writable: {{ f }}
+          {% endfor %}
+          {% for f in cron_audit_tmp_exec.stdout_lines | default([]) %}
+          FLAG tmp-exec: {{ f }}
+          {% endfor %}
+          {% if (cron_audit_world_writable.stdout_lines | default([]) | length == 0) and (cron_audit_tmp_exec.stdout_lines | default([]) | length == 0) %}
+          none
+          {% endif %}
+        cron_audit_flag_count: "{{ (cron_audit_world_writable.stdout_lines | default([]) | length) + (cron_audit_tmp_exec.stdout_lines | default([]) | length) }}"
+
+- name: Assemble the fleet cron audit report on the controller
+  hosts: all
+  gather_facts: false
+  run_once: true
+
+  vars:
+    cron_audit_report_dir: /var/log/cron_audit
+    cron_audit_fail_on_findings: false
+
+  tasks:
+    - name: Stamp the report run
+      ansible.builtin.set_fact:
+        cron_audit_stamp: "{{ lookup('pipe', 'date +%Y%m%d_%H%M%S') }}"
+        cron_audit_now: "{{ lookup('pipe', 'date') }}"
+
+    - name: Ensure the report directory exists on the controller
+      ansible.builtin.file:
+        path: "{{ cron_audit_report_dir }}"
+        state: directory
+        mode: "0755"
+      delegate_to: localhost
+      become: true
+
+    - name: Write the fleet report
+      ansible.builtin.copy:
+        dest: "{{ cron_audit_report_dir }}/cronjobs_full_{{ cron_audit_stamp }}.log"
+        mode: "0600"
+        content: |
+          Collecting all cron jobs from remote servers...
+          Timestamp: {{ cron_audit_now }}
+          =========================================
+          {% for h in ansible_play_hosts %}
+          {{ hostvars[h].cron_audit_section }}
+          {% endfor %}
+          Cron job collection complete.
+      delegate_to: localhost
+      become: true
+
+    - name: Show the report location and flag total
+      ansible.builtin.debug:
+        msg: >-
+          Report: {{ cron_audit_report_dir }}/cronjobs_full_{{ cron_audit_stamp }}.log —
+          {{ ansible_play_hosts | map('extract', hostvars, 'cron_audit_flag_count') | map('int') | sum }}
+          FLAG(s) across {{ ansible_play_hosts | length }} host(s)
+
+    - name: Fail when findings exist and failing was requested
+      ansible.builtin.fail:
+        msg: "Cron audit raised FLAGs (see the report); cron_audit_fail_on_findings=true"
+      when:
+        - cron_audit_fail_on_findings | bool
+        - (ansible_play_hosts | map('extract', hostvars, 'cron_audit_flag_count') | map('int') | sum) > 0
