@@ -1,0 +1,37 @@
+---
+# Backup integrity — container form of
+# scripts/backups/backup_integrity_tool_v1.sh (Ansible form:
+# ansible/playbooks/backups/backup_integrity.yml).
+#
+# Run-on-demand tool, not a daemon: it generates or verifies the
+# SHA-256 manifest of the tree mounted at /data and exits with the
+# bash tool's exit codes (0 ok, 1 fatal/corruption). The tree path
+# comes from BACKUP_INTEGRITY_DIR so the same compose file serves
+# any tree; the default is a local ./data directory. Generate needs
+# the mount writable (the manifest is written into the tree);
+# verification works with a read-only mount — see README.md.
+services:
+  backup-integrity:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: backup-integrity:bookworm
+    container_name: backup-integrity
+    volumes:
+      - ${BACKUP_INTEGRITY_DIR:-./data}:/data
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
