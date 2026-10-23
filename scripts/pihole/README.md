@@ -5,6 +5,44 @@ Scripts for the containerized Pi-hole + Unbound pair in
 on the `pihole-backup` network, Unbound at 172.20.0.3 port 5335),
 plus one log cleanup script for a bare-metal Pi-hole host.
 
+## install-pihole-unbound.sh
+
+The bash deployment form for the container pair (the Ansible
+playbooks in `ansible/playbooks/pihole/` install the bare-metal form
+instead). Run it as root on the Docker host:
+
+```bash
+sudo ./install-pihole-unbound.sh
+sudo ./install-pihole-unbound.sh --dry-run
+sudo ./install-pihole-unbound.sh --with-blocklists
+```
+
+What it does, in order:
+
+- Checks the prerequisites: root, the docker CLI, and a compose
+  backend (`docker compose` plugin, or the standalone
+  `docker-compose` binary).
+- Validates `containers/pihole/.env` and fails closed: the file must
+  exist, it is tightened to mode 600 if needed, and `PIHOLE_TAG`,
+  `UNBOUND_TAG`, and `PIHOLE_API_PASSWORD` must all be set. The
+  `latest` tag is rejected for both images.
+- Renders the compose config and refuses to deploy if the rendered
+  `unbound` service publishes any host port. That is the v2 posture:
+  Unbound stays reachable only on the `pihole-backup` bridge network.
+- Runs `compose pull` and `compose up -d`.
+- Verifies the deployment: both containers report healthy, Unbound
+  publishes no host ports, `pi.hole` resolves to 172.20.0.2 through
+  Pi-hole, and an external name resolves through the Pi-hole to
+  Unbound path.
+
+`--dry-run` stops after the render and guard checks and prints the
+deploy commands instead of running them. `--compose-dir DIR` points
+at a different checkout of the compose project. `--with-blocklists`
+additionally runs `pihole-init-blocklists.sh` inside the Pi-hole
+container after a healthy start; without it the script prints the
+reminder to seed the blocklists manually. Deploy order is the compose
+header's: pi0 (secondary) first, verify, then pi4 (primary).
+
 ## DNS test suite
 
 Three variants of the same DNS checks. All run `dig` inside the
