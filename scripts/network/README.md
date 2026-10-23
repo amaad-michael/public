@@ -55,6 +55,40 @@ idempotent: re-running leaves the same rules in place.
 The port sets are fixed in each script; edit the `PORTS` or `RULES`
 array before running if a host's services differ.
 
+## fleet-firewall.sh
+
+The bash form of the fleet firewall playbooks in
+`ansible/playbooks/firewall/`. It runs on the host itself, as root,
+and picks the tool by OS family exactly as the playbooks do: UFW on
+the Debian family (pi0, pi2, pi4, neo1), firewalld on the RedHat
+family (pi1, pi3). Three profiles mirror the three playbooks:
+
+| Profile | Playbook | Rules |
+| --- | --- | --- |
+| `pi` (default) | `firewall_local_pi.yml` | TCP 53, 80, 443, 9090; UDP 53 |
+| `new` | `firewall_local_new.yml` | The pi list plus TCP 853 |
+| `baseline` | `default-firewalld.yml` | firewalld only: ssh, http, https services; 8080/tcp; 5000-5010/udp; cockpit removed; default zone public |
+
+On the UFW path, SSH (22/tcp) is allowed first, before the default
+policies (deny incoming, allow outgoing) are set, and UFW is
+force-enabled only after the rules are in place. On the firewalld
+path, rules are permanent and immediate in the zone (default
+`public`, `--zone` overrides) with one reload at the end when
+anything changed. Every rule is checked before it is added, so
+re-running changes nothing. After applying, an SSH lockout probe
+checks that port 22 is covered by the resulting ruleset; it warns
+by default and aborts with `--fail-on-probe-failure`.
+
+```bash
+sudo ./fleet-firewall.sh                  # apply the pi profile
+sudo ./fleet-firewall.sh --profile new    # apply the new profile
+sudo ./fleet-firewall.sh --verify         # diff live rules vs profile
+sudo ./fleet-firewall.sh --dry-run        # print changes, change nothing
+```
+
+Log: `/var/log/fleet-firewall.log`. There is no Docker form: this
+configures the host's own firewall.
+
 ## 🔍 nmap scans
 
 Three scripts scan the fixed subnet 192.168.0.0/24 at different
