@@ -38,10 +38,11 @@
     searxng_config_dir: /etc/searxng
     searxng_image: docker.io/searxng/searxng:latest
     webui_image: ghcr.io/open-webui/open-webui:v0.5.20
-    # Optional sha256 pin for the Ollama installer, mirroring the bash
-    # updater's OLLAMA_INSTALL_SHA256. Empty = run without a pin (the
-    # refresh warns, exactly like the bash updater).
-    ollama_install_sha256: ""
+    # Ollama release pinned for the step-3 binary refresh, mirroring
+    # the bash updater's OLLAMA_VERSION: the tarballs and their
+    # sha256sum.txt come from this exact GitHub release. Bump the
+    # version deliberately — never track a moving "latest".
+    ollama_version: "0.40.9"
     llm_models:
       - qwen2.5-coder:14b
       - qwen2.5-coder:7b
@@ -299,32 +300,224 @@
       when: (llm_stack_present | bool) and llm_lan_ip | length == 0
       tags: [llm]
 
-    # 7a. Ollama binary (update-gpu-box.sh step 3)
-    - name: Download the official Ollama installer
-      ansible.builtin.get_url:
-        url: https://ollama.com/install.sh
-        dest: /tmp/ollama-install.sh
-        mode: "0755"
-        checksum: "{{ ('sha256:' + ollama_install_sha256) if ollama_install_sha256 | length > 0 else omit }}"
+    # 7a. Ollama binary (update-gpu-box.sh step 3) — the version-pinned
+    # release tarballs, verified against the release's published
+    # sha256sum.txt before anything is extracted. ollama.com/install.sh
+    # is a moving, unpinned script and is no longer downloaded or run;
+    # the tasks below reproduce what it does on an AMD host: the base
+    # tarball, the ROCm tarball when an AMD GPU is present, the ollama
+    # user and groups, and the systemd unit it writes.
+    - name: Require zstd for the Ollama tarball extraction
+      ansible.builtin.command: zstd --version
+      register: ollama_zstd_result
+      changed_when: false
       when: llm_stack_present | bool
       tags: [llm]
 
-    - name: Warn if the Ollama installer checksum pin is not set
-      ansible.builtin.debug:
-        msg: "WARNING: ollama_install_sha256 not set — running ollama.com/install.sh without checksum verification"
-      when: (llm_stack_present | bool) and ollama_install_sha256 | length == 0
-      tags: [llm]
-
-    - name: Run the Ollama installer
-      ansible.builtin.command: bash /tmp/ollama-install.sh
-      register: ollama_install_result
-      changed_when: ollama_install_result.rc == 0
+    - name: Determine the Ollama bin directory (the installer's PATH rule)
+      ansible.builtin.shell: |
+        bindir=/bin
+        for d in /usr/local/bin /usr/bin /bin; do
+          bindir="$d"
+          case ":$PATH:" in
+            *":$d:"*) break ;;
+          esac
+        done
+        echo "$bindir"
+      register: ollama_bindir_result
+      changed_when: false
       when: llm_stack_present | bool
       tags: [llm]
 
-    - name: Remove the downloaded Ollama installer
+    - name: Set the Ollama install directory facts
+      ansible.builtin.set_fact:
+        ollama_bindir: "{{ ollama_bindir_result.stdout | trim }}"
+        ollama_install_dir: "{{ ollama_bindir_result.stdout | trim | dirname }}"
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    - name: Create the Ollama download directory
       ansible.builtin.file:
-        path: /tmp/ollama-install.sh
+        path: "/tmp/ollama-{{ ollama_version }}"
+        state: directory
+        mode: "0755"
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    - name: Download the Ollama release checksum file
+      ansible.builtin.get_url:
+        url: "https://github.com/ollama/ollama/releases/download/v{{ ollama_version }}/sha256sum.txt"
+        dest: "/tmp/ollama-{{ ollama_version }}/sha256sum.txt"
+        mode: "0644"
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    - name: Read the expected base tarball hash from the release sums
+      ansible.builtin.shell: >-
+        awk '$NF == "./ollama-linux-amd64.tar.zst" {print $1}'
+        "/tmp/ollama-{{ ollama_version }}/sha256sum.txt"
+      register: ollama_base_hash
+      changed_when: false
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    - name: Fail if the release sums lack the base tarball entry
+      ansible.builtin.fail:
+        msg: "sha256sum.txt for Ollama v{{ ollama_version }} has no ollama-linux-amd64.tar.zst entry"
+      when: (llm_stack_present | bool) and (ollama_base_hash.stdout | trim | length == 0)
+      tags: [llm]
+
+    - name: Download the Ollama base tarball (checksum-verified)
+      ansible.builtin.get_url:
+        url: "https://github.com/ollama/ollama/releases/download/v{{ ollama_version }}/ollama-linux-amd64.tar.zst"
+        dest: "/tmp/ollama-{{ ollama_version }}/ollama-linux-amd64.tar.zst"
+        mode: "0644"
+        checksum: "sha256:{{ ollama_base_hash.stdout | trim }}"
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    - name: Detect an AMD GPU (the installer's ROCm condition)
+      ansible.builtin.shell: |
+        if command -v lspci >/dev/null 2>&1; then
+          lspci -d '1002:' | grep -q 'AMD'
+        elif command -v lshw >/dev/null 2>&1; then
+          lshw -c display -numeric -disable network 2>/dev/null | grep -q 'vendor: .* \[1002\]'
+        else
+          exit 1
+        fi
+      register: ollama_amd_gpu
+      changed_when: false
+      failed_when: false
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    - name: Read the expected ROCm tarball hash from the release sums
+      ansible.builtin.shell: >-
+        awk '$NF == "./ollama-linux-amd64-rocm.tar.zst" {print $1}'
+        "/tmp/ollama-{{ ollama_version }}/sha256sum.txt"
+      register: ollama_rocm_hash
+      changed_when: false
+      when: (llm_stack_present | bool) and ollama_amd_gpu.rc == 0
+      tags: [llm]
+
+    - name: Download the Ollama ROCm tarball (checksum-verified)
+      ansible.builtin.get_url:
+        url: "https://github.com/ollama/ollama/releases/download/v{{ ollama_version }}/ollama-linux-amd64-rocm.tar.zst"
+        dest: "/tmp/ollama-{{ ollama_version }}/ollama-linux-amd64-rocm.tar.zst"
+        mode: "0644"
+        checksum: "sha256:{{ ollama_rocm_hash.stdout | trim }}"
+      when: (llm_stack_present | bool) and ollama_amd_gpu.rc == 0
+      tags: [llm]
+
+    - name: Remove the previous Ollama library directory (as the installer does)
+      ansible.builtin.file:
+        path: "{{ ollama_install_dir }}/lib/ollama"
+        state: absent
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    - name: Ensure the Ollama install directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ ollama_bindir }}"
+        - "{{ ollama_install_dir }}/lib/ollama"
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    - name: Extract the Ollama base tarball
+      ansible.builtin.shell: >-
+        zstd -dc "/tmp/ollama-{{ ollama_version }}/ollama-linux-amd64.tar.zst"
+        | tar -xf - -C "{{ ollama_install_dir }}"
+      register: ollama_extract_base
+      changed_when: ollama_extract_base.rc == 0
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    - name: Extract the Ollama ROCm tarball
+      ansible.builtin.shell: >-
+        zstd -dc "/tmp/ollama-{{ ollama_version }}/ollama-linux-amd64-rocm.tar.zst"
+        | tar -xf - -C "{{ ollama_install_dir }}"
+      register: ollama_extract_rocm
+      changed_when: ollama_extract_rocm.rc == 0
+      when: (llm_stack_present | bool) and ollama_amd_gpu.rc == 0
+      tags: [llm]
+
+    - name: Link ollama into the bin directory if the install bin differs
+      ansible.builtin.file:
+        src: "{{ ollama_install_dir }}/bin/ollama"
+        dest: "{{ ollama_bindir }}/ollama"
+        state: link
+        force: true
+      when: (llm_stack_present | bool) and (ollama_install_dir + '/bin' != ollama_bindir)
+      tags: [llm]
+
+    - name: Ensure the ollama group exists
+      ansible.builtin.group:
+        name: ollama
+        system: true
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    - name: Ensure the ollama user exists (as the installer creates it)
+      ansible.builtin.user:
+        name: ollama
+        group: ollama
+        system: true
+        shell: /bin/false
+        home: /usr/share/ollama
+        create_home: true
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    - name: Add the ollama user to the render and video groups when present
+      ansible.builtin.shell: |
+        for g in render video; do
+          if getent group "$g" >/dev/null 2>&1; then
+            usermod -a -G "$g" ollama
+          fi
+        done
+        usermod -a -G ollama "{{ ansible_user_id }}"
+      register: ollama_groups_result
+      changed_when: ollama_groups_result.rc == 0
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    - name: Install the Ollama systemd unit (the unit the installer writes)
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/ollama.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Ollama Service
+          After=network-online.target
+
+          [Service]
+          ExecStart={{ ollama_bindir }}/ollama serve
+          User=ollama
+          Group=ollama
+          Restart=always
+          RestartSec=3
+          Environment="PATH={{ ansible_env.PATH }}"
+
+          [Install]
+          WantedBy=default.target
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    - name: Reload systemd and enable the Ollama service
+      ansible.builtin.systemd:
+        name: ollama
+        daemon_reload: true
+        enabled: true
+      when: llm_stack_present | bool
+      tags: [llm]
+
+    - name: Remove the Ollama download directory
+      ansible.builtin.file:
+        path: "/tmp/ollama-{{ ollama_version }}"
         state: absent
       when: llm_stack_present | bool
       tags: [llm]

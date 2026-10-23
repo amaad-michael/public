@@ -39,7 +39,7 @@
 #
 # A config file (--config FILE, or $NANOPI_LLM_CONFIG) may set any of
 # ROLE, TIER, LLM_USER, SET_HOSTNAME, SERVER_PORT, LB_PORT, CTX_SIZE,
-# N_PREDICT, THREADS, MODEL_FILENAME, MODEL_URL, LAN_CIDR and NODES
+# N_PREDICT, THREADS, MODEL_FILENAME, MODEL_URL, MODEL_SHA256, LAN_CIDR and NODES
 # (space-separated). Command-line flags override the file.
 
 set -euo pipefail
@@ -55,6 +55,7 @@ N_PREDICT=512
 THREADS=""
 MODEL_FILENAME=""
 MODEL_URL=""
+MODEL_SHA256=""
 LAN_CIDR=""
 NODES="192.168.1.101 192.168.1.102"
 NODE_LABELS="4gb-heavy 2gb-light"
@@ -85,6 +86,8 @@ Server (llama.cpp inference node; Ansible llm-server-setup.yml):
   --threads N           Threads (default: nproc)
   --model-file NAME     Override the model filename
   --model-url URL       Override the model download URL
+  --model-sha256 HEX    SHA-256 a custom model must match (the built-in
+                        tier models are pinned and always verified)
   --skip-model          Do not download the model
 
 Load balancer (nginx; Ansible llm-lb-setup.yml):
@@ -138,6 +141,7 @@ while [[ $# -gt 0 ]]; do
     --threads) THREADS="${2:?--threads needs a value}"; shift 2 ;;
     --model-file) MODEL_FILENAME="${2:?--model-file needs a value}"; shift 2 ;;
     --model-url) MODEL_URL="${2:?--model-url needs a value}"; shift 2 ;;
+    --model-sha256) MODEL_SHA256="${2:?--model-sha256 needs a value}"; shift 2 ;;
     --nodes) NODES="${2:?--nodes needs a value}"; shift 2 ;;
     --node-labels) NODE_LABELS="${2:?--node-labels needs a value}"; shift 2 ;;
     --lan-cidr) LAN_CIDR="${2:?--lan-cidr needs a value}"; shift 2 ;;
@@ -172,12 +176,18 @@ validate() {
     [[ "$TIER" == "2gb" || "$TIER" == "4gb" ]] \
       || die "--role server needs --tier 2gb or --tier 4gb"
     if [[ -z "$MODEL_FILENAME" && -z "$MODEL_URL" ]]; then
+      # The default models are pinned twice: the URL names the repo
+      # commit (not the moving main branch) and MODEL_SHA256 is the
+      # file's SHA-256 as published by Hugging Face (its LFS hash,
+      # read from the HF API on 2026-10-23).
       if [[ "$TIER" == "4gb" ]]; then
         MODEL_FILENAME="qwen2.5-coder-7b-instruct-q4_k_m.gguf"
-        MODEL_URL="https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/qwen2.5-coder-7b-instruct-q4_k_m.gguf"
+        MODEL_URL="https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/13fb94bfda8c8cf22497dc57b78f391a9acb426a/qwen2.5-coder-7b-instruct-q4_k_m.gguf"
+        MODEL_SHA256="509287f78cb4d4cf6b3843734733b914b2c158e43e22a7f4bf5e963800894d3c"
       else
         MODEL_FILENAME="qwen2.5-coder-1.5b-instruct-q4_k_m.gguf"
-        MODEL_URL="https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf"
+        MODEL_URL="https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/f86cb2c1fa58255f8052cc32aeede1b7482d4361/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf"
+        MODEL_SHA256="cc324af070c2ecbfd324a30884d2f951a7ff756aba85cb811a6ec436933bb046"
       fi
     elif [[ -z "$MODEL_FILENAME" || -z "$MODEL_URL" ]]; then
       die "--model-file and --model-url must be overridden together"
@@ -377,8 +387,30 @@ server {
 EOF
 }
 
+# download_model — fetch the GGUF to a .part file, verify its SHA-256
+# when a pin is set, and only then move it into place. A mismatch
+# deletes the download and aborts: a model that fails verification is
+# never served. Reads do_server's locals (model_dir, MODEL_*) through
+# bash's dynamic scoping; called only from do_server.
+download_model() {
+  local part="$model_dir/$MODEL_FILENAME.part"
+  run_as_user "$LLM_USER" curl -fL --output "$part" "$MODEL_URL"
+  if [[ -n "$MODEL_SHA256" ]]; then
+    local actual_sha
+    actual_sha="$(run_as_user "$LLM_USER" sha256sum "$part" | awk '{print $1}')"
+    if [[ "$actual_sha" != "$MODEL_SHA256" ]]; then
+      run_as_user "$LLM_USER" rm -f "$part"
+      die "model SHA-256 mismatch for $MODEL_FILENAME: got $actual_sha, expected $MODEL_SHA256 — download deleted"
+    fi
+    log "model SHA-256 verified: $MODEL_FILENAME"
+  else
+    warn "no SHA-256 pin for $MODEL_FILENAME (custom --model-url without --model-sha256) — the model cannot be verified"
+  fi
+  run_as_user "$LLM_USER" mv "$part" "$model_dir/$MODEL_FILENAME"
+}
+
 do_server() {
-  local home llama_dir model_dir bin tmpunit
+  local home llama_dir model_dir bin tmpunit actual_model_sha
   home="$(llm_home)"
   llama_dir="$home/llama.cpp"
   model_dir="$home/models"
@@ -419,15 +451,22 @@ do_server() {
   if [[ "$SKIP_MODEL" -eq 1 ]]; then
     log "skipping model download (--skip-model)"
   elif [[ "$DRY_RUN" -eq 1 ]]; then
-    printf 'DRY-RUN: download %s to %s/%s (if missing)\n' \
+    printf 'DRY-RUN: download %s to %s/%s (if missing), verify its SHA-256 against the pin, then move it into place\n' \
       "$MODEL_URL" "$model_dir" "$MODEL_FILENAME"
   elif [[ -f "$model_dir/$MODEL_FILENAME" ]]; then
-    log "model already present: $model_dir/$MODEL_FILENAME"
+    if [[ -n "$MODEL_SHA256" ]]; then
+      actual_model_sha="$(run_as_user "$LLM_USER" sha256sum "$model_dir/$MODEL_FILENAME" | awk '{print $1}')"
+      if [[ "$actual_model_sha" == "$MODEL_SHA256" ]]; then
+        log "model already present and SHA-256 verified: $model_dir/$MODEL_FILENAME"
+      else
+        warn "the present model fails SHA-256 verification (got $actual_model_sha) — re-downloading"
+        download_model
+      fi
+    else
+      log "model already present: $model_dir/$MODEL_FILENAME"
+    fi
   else
-    run_as_user "$LLM_USER" curl -fL --output "$model_dir/$MODEL_FILENAME.part" \
-      "$MODEL_URL"
-    run_as_user "$LLM_USER" mv "$model_dir/$MODEL_FILENAME.part" \
-      "$model_dir/$MODEL_FILENAME"
+    download_model
   fi
 
   # systemd unit — the llama-server.service.j2 template, rendered

@@ -235,8 +235,38 @@ do_install() {
     local major="${VERSION_ID%%.*}"
     if [[ "$major" -ge 23 ]]; then repo_codename="bookworm"; else repo_codename="bullseye"; fi
   fi
-  run_cmd curl -fsSL -o "/etc/apt/trusted.gpg.d/proxmox-release-$repo_codename.gpg" \
-    "https://enterprise.proxmox.com/debian/proxmox-release-$repo_codename.gpg"
+  # The release key is a trust root — apt trusts everything it signs —
+  # so verify it against its pinned fingerprint before installing it.
+  # The fingerprints were computed from the key files served at the URL
+  # below and cross-checked against the release-key SHA-512 sums that
+  # Proxmox publishes in its wiki "Package Repositories" page; the trixie
+  # fingerprint is also carried by the wiki-hashed archive keyring,
+  # which contains the same key.
+  local pve_key_fpr=""
+  case "$repo_codename" in
+    bullseye) pve_key_fpr="28139A2F830BD68478A1A01FDD4BA3917E23BF59" ;;
+    bookworm) pve_key_fpr="F4E136C67CDCE41AE6DE6FC81140AF8F639E0C39" ;;
+    trixie) pve_key_fpr="24B30F06ECC1836A4E5EFECBA7BCD1420BFE778E" ;;
+    *) die "no pinned fingerprint for the Proxmox release key (codename: $repo_codename) — refusing to install an unverified repository key" ;;
+  esac
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    printf 'DRY-RUN: curl -fsSL -o <tmp key file> https://enterprise.proxmox.com/debian/proxmox-release-%s.gpg\n' "$repo_codename"
+    printf 'DRY-RUN: verify the key fingerprint equals %s, then install it as /etc/apt/trusted.gpg.d/proxmox-release-%s.gpg\n' "$pve_key_fpr" "$repo_codename"
+  else
+    local key_tmp key_actual_fpr
+    key_tmp="$(mktemp)"
+    curl -fsSL -o "$key_tmp" \
+      "https://enterprise.proxmox.com/debian/proxmox-release-$repo_codename.gpg" \
+      || die "could not download the Proxmox release key for $repo_codename"
+    key_actual_fpr="$(gpg --show-keys --with-colons "$key_tmp" 2>/dev/null | awk -F: '/^fpr:/ {print $10; exit}')"
+    if [[ "$key_actual_fpr" != "$pve_key_fpr" ]]; then
+      rm -f "$key_tmp"
+      die "Proxmox release key fingerprint mismatch for $repo_codename: got ${key_actual_fpr:-<none>}, expected $pve_key_fpr — refusing to trust this key"
+    fi
+    install -m 0644 "$key_tmp" "/etc/apt/trusted.gpg.d/proxmox-release-$repo_codename.gpg"
+    rm -f "$key_tmp"
+    log "installed the Proxmox release key for $repo_codename (fingerprint verified)"
+  fi
   printf 'deb http://download.proxmox.com/debian/pve %s pve-no-subscription\n' \
     "$repo_codename" | write_file /etc/apt/sources.list.d/pve-no-subscription.list 0644 root:root
   run_cmd rm -f /etc/apt/sources.list.d/pve-enterprise.list
@@ -578,6 +608,87 @@ PYEOF
 # ---------------------------------------------------------------------
 # templates-cloudinit — templates_cloudinit.yml
 # ---------------------------------------------------------------------
+# verify_cloud_image NAME URL LOCALFILE — fail-closed checksum
+# verification for one downloaded cloud image, against the checksum
+# file its upstream publishes beside the image:
+#   Debian (cloud.debian.org): SHA512SUMS, unsigned — fetched over HTTPS
+#     from the same directory as the image.
+#   Ubuntu (cloud-images.ubuntu.com): SHA256SUMS, GPG-signed with the
+#     UEC image signing key; the key is fetched from the Ubuntu
+#     keyserver and trusted only when its fingerprint matches the pin.
+# A mismatch deletes the image and aborts before any template is made.
+# In dry-run the steps are printed and nothing is fetched or checked.
+UBUNTU_CLOUD_KEY_FPR="D2EB44626FDDC30B513D5BB71A5D6C4C7DB87C81"
+
+verify_cloud_image() {
+  local name="$1" url="$2" file="$3"
+  local base="${url%/*}" remote="${url##*/}"
+  local sums="$TEMPLATE_TMPDIR/.sums.$$" sig gnupg_home key_tmp key_fpr
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    case "$url" in
+      *cloud.debian.org*)
+        printf 'DRY-RUN: fetch %s/SHA512SUMS and verify %s against it (sha512sum -c)\n' "$base" "$remote" ;;
+      *cloud-images.ubuntu.com*)
+        printf 'DRY-RUN: fetch %s/SHA256SUMS + .gpg, fetch the UEC signing key, verify its fingerprint equals %s, gpg --verify the sums, then verify %s (sha256sum -c)\n' "$base" "$UBUNTU_CLOUD_KEY_FPR" "$remote" ;;
+      *) printf 'DRY-RUN: no checksum verification defined for %s\n' "$url" ;;
+    esac
+    return 0
+  fi
+  case "$url" in
+    *cloud.debian.org*)
+      curl -fsSL -o "$sums" "$base/SHA512SUMS" \
+        || die "could not download SHA512SUMS for $name from $base"
+      awk -v r="$remote" '{n=$NF; sub(/^\*/, "", n); if (n == r) print}' \
+        "$sums" > "$sums.line"
+      [[ -s "$sums.line" ]] \
+        || { rm -f "$sums" "$sums.line"; die "SHA512SUMS at $base has no entry for $remote"; }
+      if ! (cd "$TEMPLATE_TMPDIR" && sha512sum -c "$sums.line") >/dev/null; then
+        rm -f "$sums" "$sums.line" "$file"
+        die "SHA-512 mismatch for $name ($remote) — image deleted, template not created"
+      fi
+      log "verified $name against the published SHA512SUMS"
+      ;;
+    *cloud-images.ubuntu.com*)
+      sig="$sums.gpg"
+      key_tmp="$sums.key"
+      curl -fsSL -o "$sums" "$base/SHA256SUMS" \
+        || die "could not download SHA256SUMS for $name from $base"
+      curl -fsSL -o "$sig" "$base/SHA256SUMS.gpg" \
+        || die "could not download SHA256SUMS.gpg for $name from $base"
+      curl -fsSL -o "$key_tmp" \
+        "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x$UBUNTU_CLOUD_KEY_FPR" \
+        || die "could not fetch the Ubuntu cloud-image signing key"
+      key_fpr="$(gpg --show-keys --with-colons "$key_tmp" 2>/dev/null | awk -F: '/^fpr:/ {print $10; exit}')"
+      if [[ "$key_fpr" != "$UBUNTU_CLOUD_KEY_FPR" ]]; then
+        rm -f "$sums" "$sig" "$key_tmp"
+        die "Ubuntu cloud-image signing key fingerprint mismatch: got ${key_fpr:-<none>}, expected $UBUNTU_CLOUD_KEY_FPR — refusing to trust SHA256SUMS"
+      fi
+      gnupg_home="$(mktemp -d)"
+      if ! GNUPGHOME="$gnupg_home" gpg --batch --quiet --import "$key_tmp"; then
+        rm -rf "$gnupg_home"; rm -f "$sums" "$sig" "$key_tmp"
+        die "could not import the Ubuntu cloud-image signing key"
+      fi
+      if ! GNUPGHOME="$gnupg_home" gpg --batch --verify "$sig" "$sums" 2>/dev/null; then
+        rm -rf "$gnupg_home"; rm -f "$sums" "$sig" "$key_tmp" "$file"
+        die "SHA256SUMS signature verification failed for $name — image deleted, template not created"
+      fi
+      rm -rf "$gnupg_home"; rm -f "$key_tmp"
+      awk -v r="$remote" '{n=$NF; sub(/^\*/, "", n); if (n == r) print}' \
+        "$sums" > "$sums.line"
+      [[ -s "$sums.line" ]] \
+        || { rm -f "$sums" "$sig" "$sums.line"; die "SHA256SUMS at $base has no entry for $remote"; }
+      if ! (cd "$TEMPLATE_TMPDIR" && sha256sum -c "$sums.line") >/dev/null; then
+        rm -f "$sums" "$sig" "$sums.line" "$file"
+        die "SHA-256 mismatch for $name ($remote) — image deleted, template not created"
+      fi
+      rm -f "$sig"
+      log "verified $name against the GPG-signed SHA256SUMS"
+      ;;
+    *) die "no checksum verification defined for $name ($url)" ;;
+  esac
+  rm -f "$sums" "$sums.line"
+}
+
 do_templates_cloudinit() {
   require_debian
   require_pve
@@ -594,7 +705,7 @@ do_templates_cloudinit() {
     printf '%s\n' "$SSH_PUBLIC_KEY" | write_file "$keyfile" 0600 root:root
   fi
 
-  local i id name
+  local i id name local_file
   for i in "${!ids[@]}"; do
     id="${ids[$i]}"
     name="${names[$i]}"
@@ -605,11 +716,13 @@ do_templates_cloudinit() {
     if [[ "$DRY_RUN" -eq 1 ]]; then
       printf 'DRY-RUN: qm status %s (skip if it exists)\n' "$id"
     fi
-    run_cmd curl -fL --output "$TEMPLATE_TMPDIR/$name.qcow2" "${urls[$i]}"
+    local_file="$TEMPLATE_TMPDIR/${urls[$i]##*/}"
+    run_cmd curl -fL --output "$local_file" "${urls[$i]}"
+    verify_cloud_image "$name" "${urls[$i]}" "$local_file"
     run_cmd qm create "$id" --name "$name" --memory "$TEMPLATE_MEMORY" \
       --cores "$TEMPLATE_CORES" --net0 "virtio,bridge=$BRIDGE_NAME" \
       --ostype l26 --agent enabled=1 --serial0 socket --vga serial0
-    run_cmd qm importdisk "$id" "$TEMPLATE_TMPDIR/$name.qcow2" "$TEMPLATE_STORAGE"
+    run_cmd qm importdisk "$id" "$local_file" "$TEMPLATE_STORAGE"
     run_cmd qm set "$id" --scsihw virtio-scsi-pci \
       --scsi0 "$TEMPLATE_STORAGE:vm-$id-disk-0" \
       --ide2 "$TEMPLATE_STORAGE:cloudinit" --boot c --bootdisk scsi0 \
@@ -619,7 +732,7 @@ do_templates_cloudinit() {
     fi
     run_cmd_ok qm resize "$id" scsi0 "$TEMPLATE_DISK_SIZE"
     run_cmd qm template "$id"
-    run_cmd rm -f "$TEMPLATE_TMPDIR/$name.qcow2"
+    run_cmd rm -f "$local_file"
     log "VMID $id — $name: created"
   done
   run_cmd rm -f "$keyfile"

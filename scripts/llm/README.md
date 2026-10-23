@@ -162,7 +162,10 @@ if asked, dist-upgrades, installs the build toolchain plus
 `prometheus-node-exporter`, stops Bluetooth and Avahi where present,
 clones llama.cpp into the user's home and builds it natively
 (skipped while the binary exists), downloads the tier's GGUF model
-into `~/models`, renders the `llama-server` systemd unit (port
+into `~/models` (the URL is pinned to the model repo's commit and
+the file is verified against Hugging Face's published SHA-256,
+including when a copy is already present), renders the
+`llama-server` systemd unit (port
 8080, context 2048, n-predict 512, threads = CPU count) and enables
 it, then configures UFW: OpenSSH allowed, the server port allowed
 from the local /24 only, default deny.

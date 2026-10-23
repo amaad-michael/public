@@ -18,6 +18,11 @@ DRY_RUN="${DRY_RUN:-false}"
 NOBARA_SYNC_FLAGS="--no-reboot"
 # NOBARA_SYNC_FLAGS="--no-reboot --skip-kernel"
 
+# Ollama release pinned for the step-3 binary refresh: the tarballs
+# and their sha256sum.txt come from this exact GitHub release. Bump
+# the version deliberately — never track a moving "latest".
+OLLAMA_VERSION="0.40.9"
+
 # Ports
 OLLAMA_PORT="11434"
 WEBUI_PORT="8080"
@@ -134,18 +139,67 @@ fi
 log ""
 log ">>> Step 3: Updating Ollama..."
 if [[ "$DRY_RUN" == "true" ]]; then
-    log "[DRY-RUN] download ollama install.sh, verify sha256 if OLLAMA_INSTALL_SHA256 is set, then run"
+    log "[DRY-RUN] download the Ollama v${OLLAMA_VERSION} release tarballs, verify them against the release sha256sum.txt, install, refresh the systemd unit, then restart"
 else
-    _ollama_installer="$(mktemp)"
-    run_cmd curl -fsSL -o "$_ollama_installer" https://ollama.com/install.sh
-    if [[ -n "${OLLAMA_INSTALL_SHA256:-}" ]]; then
-        echo "${OLLAMA_INSTALL_SHA256}  $_ollama_installer" | sha256sum -c - \
-            || error "Ollama installer checksum mismatch — refusing to run"
-    else
-        warn "OLLAMA_INSTALL_SHA256 not set — running ollama.com/install.sh without checksum verification"
+    # The tarball form of the official install: the same artifacts
+    # ollama.com/install.sh fetches, but from the pinned GitHub release
+    # and verified against the release's published sha256sum.txt before
+    # anything is extracted. install.sh itself is a moving, unpinned
+    # script and is no longer downloaded or executed.
+    command -v zstd >/dev/null 2>&1 || error "zstd is required to extract the Ollama release tarballs — install zstd and re-run"
+    _ollama_sudo=""
+    if [[ "$(id -u)" -ne 0 ]]; then _ollama_sudo="sudo"; fi
+    _ollama_bindir="/bin"
+    for _cand in /usr/local/bin /usr/bin /bin; do
+        _ollama_bindir="$_cand"
+        if [[ ":$PATH:" == *":$_cand:"* ]]; then break; fi
+    done
+    _ollama_dir="$(dirname "$_ollama_bindir")"
+    _ollama_tmp="$(mktemp -d)"
+    _ollama_base="https://github.com/ollama/ollama/releases/download/v${OLLAMA_VERSION}"
+    run_cmd curl -fsSL -o "$_ollama_tmp/sha256sum.txt" "$_ollama_base/sha256sum.txt"
+    run_cmd curl -fsSL -o "$_ollama_tmp/ollama-linux-amd64.tar.zst" "$_ollama_base/ollama-linux-amd64.tar.zst"
+    _ollama_assets=("ollama-linux-amd64.tar.zst")
+    if command -v lspci >/dev/null 2>&1 && lspci -d '1002:' 2>/dev/null | grep -q 'AMD'; then
+        run_cmd curl -fsSL -o "$_ollama_tmp/ollama-linux-amd64-rocm.tar.zst" "$_ollama_base/ollama-linux-amd64-rocm.tar.zst"
+        _ollama_assets+=("ollama-linux-amd64-rocm.tar.zst")
     fi
-    run_cmd bash "$_ollama_installer"
-    rm -f "$_ollama_installer"
+    for _asset in "${_ollama_assets[@]}"; do
+        awk -v r="./$_asset" '$NF == r' "$_ollama_tmp/sha256sum.txt" > "$_ollama_tmp/verify.txt"
+        [[ -s "$_ollama_tmp/verify.txt" ]] || error "the Ollama v${OLLAMA_VERSION} sha256sum.txt has no entry for $_asset"
+        (cd "$_ollama_tmp" && sha256sum -c verify.txt >/dev/null) \
+            || error "Ollama $_asset failed SHA-256 verification against the v${OLLAMA_VERSION} release sums — refusing to install"
+        log "Verified $_asset against the Ollama v${OLLAMA_VERSION} release sha256sum.txt"
+    done
+    if [[ -d "$_ollama_dir/lib/ollama" ]]; then
+        run_cmd $_ollama_sudo rm -rf "$_ollama_dir/lib/ollama"
+    fi
+    run_cmd $_ollama_sudo install -o 0 -g 0 -m 755 -d "$_ollama_bindir"
+    run_cmd $_ollama_sudo install -o 0 -g 0 -m 755 -d "$_ollama_dir/lib/ollama"
+    for _asset in "${_ollama_assets[@]}"; do
+        zstd -dc "$_ollama_tmp/$_asset" | $_ollama_sudo tar -xf - -C "$_ollama_dir" \
+            || error "extracting $_asset failed"
+    done
+    if [[ "$_ollama_dir/bin/ollama" != "$_ollama_bindir/ollama" ]]; then
+        run_cmd $_ollama_sudo ln -sf "$_ollama_dir/bin/ollama" "$_ollama_bindir/ollama"
+    fi
+    # The ollama user, groups, and systemd unit, exactly as the
+    # official installer creates them.
+    if ! id ollama >/dev/null 2>&1; then
+        run_cmd $_ollama_sudo useradd -r -s /bin/false -U -m -d /usr/share/ollama ollama
+    fi
+    if getent group render >/dev/null 2>&1; then
+        run_cmd $_ollama_sudo usermod -a -G render ollama
+    fi
+    if getent group video >/dev/null 2>&1; then
+        run_cmd $_ollama_sudo usermod -a -G video ollama
+    fi
+    run_cmd $_ollama_sudo usermod -a -G ollama "$(whoami)"
+    printf '[Unit]\nDescription=Ollama Service\nAfter=network-online.target\n\n[Service]\nExecStart=%s/ollama serve\nUser=ollama\nGroup=ollama\nRestart=always\nRestartSec=3\nEnvironment="PATH=%s"\n\n[Install]\nWantedBy=default.target\n' "$_ollama_bindir" "$PATH" > "$_ollama_tmp/ollama.service"
+    run_cmd $_ollama_sudo install -o 0 -g 0 -m 644 "$_ollama_tmp/ollama.service" /etc/systemd/system/ollama.service
+    run_cmd $_ollama_sudo systemctl daemon-reload
+    run_cmd $_ollama_sudo systemctl enable ollama
+    rm -rf "$_ollama_tmp"
     run_cmd systemctl restart ollama
     log "Ollama restarted."
 fi
