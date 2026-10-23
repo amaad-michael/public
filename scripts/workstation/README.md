@@ -136,6 +136,13 @@ Use this updater only on a host set up the home-directory way.
 
 ## Ansible counterpart
 
+`ansible/playbooks/workstation/nobara_first_boot.yml` is the
+Ansible form of the first-boot setup above
+(`new-nobara-setup-v1.1.sh`): the same discrete-AMD-GPU detection
+and high-performance lock, the nobara-sync update with the dnf
+fallback, the Cinnamon desktop group install, and the placeholder
+wallpaper. Its usage header is the guide.
+
 `ansible/playbooks/workstation/nobara_patch.yml` patches Nobara
 desktops through Ansible instead of by hand (target group `nobara`,
 `become: true`):

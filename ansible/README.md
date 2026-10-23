@@ -61,8 +61,10 @@ the usage guide for its playbooks:
   toolkit form.
 - [vuln](playbooks/vuln/README.md): the scanner node setup and the
   Nmap scan playbook.
-- [workstation](playbooks/workstation/): the single Nobara patching
-  playbook (`nobara_patch.yml`); its usage header is the guide.
+- [workstation](playbooks/workstation/): the Nobara playbooks —
+  first-boot setup (`nobara_first_boot.yml`, the Ansible form of
+  the bash first-boot script) and recurring patching
+  (`nobara_patch.yml`); their usage headers are the guide.
 
 ---
 Copyright (c) Michael Tatum.
