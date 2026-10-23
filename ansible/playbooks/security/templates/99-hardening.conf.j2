@@ -1,0 +1,90 @@
+{% if secure_init_variant == 'legacy' %}
+# SSH Hardening - Legacy Systems (Password Auth Compatible)
+
+# === Authentication ===
+PermitRootLogin no
+PasswordAuthentication yes
+PubkeyAuthentication yes
+KbdInteractiveAuthentication no
+AuthenticationMethods password publickey
+MaxAuthTries 5
+MaxSessions 3
+LoginGraceTime 30
+AllowUsers {{ secure_init_user }}
+PermitEmptyPasswords no
+UsePAM yes
+
+# === Cryptography - Legacy (RSA-4096 + Standard AES) ===
+HostKey /etc/ssh/ssh_host_rsa_key
+PubkeyAcceptedAlgorithms ssh-rsa,rsa-sha2-512,rsa-sha2-256
+HostKeyAlgorithms ssh-rsa,rsa-sha2-512,rsa-sha2-256
+KexAlgorithms diffie-hellman-group-exchange-sha256,diffie-hellman-group14-sha256
+Ciphers aes256-ctr,aes192-ctr,aes128-ctr
+MACs hmac-sha2-512,hmac-sha2-256
+{% elif secure_init_variant == 'conservative' %}
+# SSH Hardening - Bernstein Crypto Stack (Conservative) + Security Best Practices
+
+# === Authentication ===
+PermitRootLogin prohibit-password
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+AuthenticationMethods publickey
+MaxAuthTries 4
+MaxSessions 3
+LoginGraceTime 30
+AllowUsers {{ secure_init_user }}
+PermitEmptyPasswords no
+
+# === Cryptography - Bernstein Stack (Conservative) ===
+HostKey /etc/ssh/ssh_host_ed25519_key
+PubkeyAcceptedAlgorithms ssh-ed25519
+HostKeyAlgorithms ssh-ed25519
+KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org
+Ciphers chacha20-poly1305@openssh.com
+MACs hmac-sha2-256-etm@openssh.com,hmac-sha2-256
+{% else %}
+# SSH Hardening - Bernstein Crypto Stack + Security Best Practices
+
+# === Authentication ===
+PermitRootLogin no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+AuthenticationMethods publickey
+MaxAuthTries 3
+MaxSessions 3
+LoginGraceTime 20
+AllowUsers {{ secure_init_user }}
+
+# === Cryptography - Bernstein Stack ===
+HostKey /etc/ssh/ssh_host_ed25519_key
+PubkeyAcceptedAlgorithms ssh-ed25519
+HostKeyAlgorithms ssh-ed25519
+KexAlgorithms sntrup761x25519-sha512@openssh.com,curve25519-sha256
+Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com
+MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com
+{% endif %}
+
+# === Network ===
+Port {{ secure_init_ssh_port }}
+AddressFamily inet
+ListenAddress 0.0.0.0
+TCPKeepAlive yes
+ClientAliveInterval 300
+ClientAliveCountMax 2
+
+# === Restrictions ===
+DisableForwarding yes
+PermitTunnel no
+PermitUserEnvironment no
+{% if secure_init_variant in ['conservative', 'legacy'] %}
+X11Forwarding no
+AllowAgentForwarding no
+AllowTcpForwarding no
+{% endif %}
+
+# === Logging ===
+LogLevel INFO
+SyslogFacility AUTH
+PrintMotd yes

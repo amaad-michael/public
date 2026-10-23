@@ -1,0 +1,14 @@
+[DEFAULT]
+bantime = {{ secure_init_fail2ban_default_bantime }}
+findtime = 600
+maxretry = 5
+destemail = root@localhost
+sendername = fail2ban
+
+[sshd]
+enabled = true
+port = {{ secure_init_ssh_port }}
+filter = sshd
+logpath = {{ secure_init_auth_log }}
+maxretry = {{ secure_init_fail2ban_sshd_maxretry }}
+bantime = {{ secure_init_fail2ban_sshd_bantime }}

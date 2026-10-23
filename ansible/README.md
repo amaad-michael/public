@@ -56,6 +56,9 @@ the usage guide for its playbooks:
   hardening, and template builds on a bare Debian host.
 - [reboots](playbooks/reboots/README.md): simple and complex fleet
   reboot playbooks.
+- [security](playbooks/security/README.md): the secure-server-init
+  hardening baseline as a single playbook, plus the SSH access
+  toolkit form.
 - [vuln](playbooks/vuln/README.md): the scanner node setup and the
   Nmap scan playbook.
 - [workstation](playbooks/workstation/): the single Nobara patching
