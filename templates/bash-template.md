@@ -19,6 +19,7 @@ uptime
 
 main() {
   # Your main script logic here.
+  :
 }
 
 # Execute main function
