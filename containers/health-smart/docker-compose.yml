@@ -1,0 +1,37 @@
+---
+# Fleet health + SMART collector — one-shot container form.
+#
+# HOST-DEVICE ACCESS (read this; there is no honest way around it):
+# SMART queries are ioctls against the host's physical drives. A
+# container can only issue them with ALL of the following, which is
+# why this project looks different from the repo's other stacks:
+#   - privileged: true — device ioctls (SG_IO / NVMe admin) are not
+#     grantable through cap_add alone for arbitrary host drives.
+#   - /dev mounted through from the host — the drive nodes must
+#     exist inside the container; smartctl opens them read-write.
+#   - pid: host — the harvest names its report after the hostname
+#     and the health check reads host /proc state; without the host
+#     pid namespace both would describe the container, not the host.
+# Run this collector only on a host you trust it with, one-shot,
+# and remove it after:  docker compose run --rm health-smart
+# An optional /dev/sdX argument limits the harvest to one drive:
+#   docker compose run --rm health-smart /dev/sda
+#
+# The repo scripts are bind-mounted read-only from the checkout
+# (../../scripts/... relative to this file), so the container runs
+# exactly the repo's code — the same pattern as the neo1 Docker
+# kit's backup-runner. Reports land in ./reports/ on the host.
+
+services:
+  health-smart:
+    build: .
+    image: homelab/health-smart:local
+    container_name: health-smart
+    privileged: true
+    pid: host
+    volumes:
+      - /dev:/dev
+      - ./reports:/reports
+      - ../../scripts/monitoring/smart-harvest.sh:/opt/repo-scripts/smart-harvest.sh:ro
+      - ../../scripts/linux-admin-toolkit/08-health-check/health-check-local.sh:/opt/repo-scripts/health-check-local.sh:ro
+    restart: "no"
