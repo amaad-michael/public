@@ -1,0 +1,170 @@
+---
+# NAME: deploy-monitoring.yml
+# WHAT: Ansible deploy playbook for the cluster standby monitoring
+#       stack (containers/monitoring/: Prometheus 2.45, Grafana 10.2,
+#       Alertmanager 0.26, Traefik, ntfy, step-ca, Headscale,
+#       Vaultwarden, Uptime Kuma on standby-net). Validates the
+#       host-side files on the target, renders the compose project,
+#       pulls the pinned images, brings the stack up, and verifies
+#       every service reports healthy.
+# WHY:  The stack is Docker-native by design; this playbook is the
+#       playbook-run form of its deployment — the same checks and
+#       steps as the bash wrapper
+#       (scripts/monitoring/deploy-monitoring-stack.sh), driven
+#       against a fleet host instead of run locally.
+# HOW:  cd ansible && ansible-playbook -i hosts \
+#         playbooks/monitoring/deploy-monitoring.yml -l <host> \
+#         -e monitoring_project_dir=/path/to/repo/containers/monitoring
+#
+# The playbook deploys the checkout that already exists on the
+# target host at monitoring_project_dir; it does not clone the repo.
+# Docker with the Compose v2 plugin must already be installed there.
+
+- name: Deploy the standby monitoring stack (compose project wrapper)
+  hosts: all
+  become: true
+  gather_facts: false
+
+  vars:
+    monitoring_project_dir: ""
+    monitoring_dry_run: false
+    monitoring_skip_pull: false
+    monitoring_wait_seconds: 120
+    monitoring_host_configs:
+      - ntfy.conf
+      - headscale.conf
+      - policy.hujson
+
+  tasks:
+    - name: Require the project directory on the target
+      ansible.builtin.assert:
+        that:
+          - monitoring_project_dir | length > 0
+        fail_msg: "Set monitoring_project_dir to the containers/monitoring checkout on the target, e.g. -e monitoring_project_dir=/home/michael/git/public/containers/monitoring"
+
+    - name: Check the compose file exists on the target
+      ansible.builtin.stat:
+        path: "{{ monitoring_project_dir }}/docker-compose.yml"
+      register: monitoring_compose_stat
+
+    - name: Fail loudly when the compose project is absent
+      ansible.builtin.fail:
+        msg: "No docker-compose.yml in {{ monitoring_project_dir }} — check out the repo on the target first."
+      when: not monitoring_compose_stat.stat.exists
+
+    - name: Check docker and the Compose v2 plugin on the target
+      ansible.builtin.command: docker compose version
+      register: monitoring_compose_version
+      changed_when: false
+      failed_when: monitoring_compose_version.rc != 0
+
+    - name: Check the host-side .env exists
+      ansible.builtin.stat:
+        path: "{{ monitoring_project_dir }}/.env"
+      register: monitoring_env_stat
+
+    - name: Fail loudly when .env is missing
+      ansible.builtin.fail:
+        msg: ".env missing in {{ monitoring_project_dir }} — create it from .env.example (chmod 600) and set GRAFANA_ADMIN_PASSWORD plus the TRAEFIK_AUTH_HASH line; see containers/monitoring/SECRETS_MANAGEMENT.md."
+      when: not monitoring_env_stat.stat.exists
+
+    - name: Check .env for leftover placeholders
+      ansible.builtin.command: grep -q REPLACE_ME {{ monitoring_project_dir }}/.env
+      register: monitoring_env_placeholder
+      changed_when: false
+      failed_when: false
+
+    - name: Fail loudly when .env still has placeholders
+      ansible.builtin.fail:
+        msg: ".env in {{ monitoring_project_dir }} still contains REPLACE_ME placeholders — set real values before deploying."
+      when: monitoring_env_placeholder.rc == 0
+
+    - name: Check .env sets a Grafana admin password value
+      ansible.builtin.command: grep -qE '^GRAFANA_ADMIN_PASSWORD=.+' {{ monitoring_project_dir }}/.env
+      register: monitoring_env_password
+      changed_when: false
+      failed_when: false
+
+    - name: Fail loudly when the Grafana password value is empty
+      ansible.builtin.fail:
+        msg: ".env in {{ monitoring_project_dir }} has no GRAFANA_ADMIN_PASSWORD value — .env.example ships it empty; set a real one (generate: openssl rand -base64 32)."
+      when: monitoring_env_password.rc != 0
+
+    - name: Check the host-local configs the compose mounts
+      ansible.builtin.stat:
+        path: "{{ monitoring_project_dir }}/{{ item }}"
+      register: monitoring_host_config_stats
+      loop: "{{ monitoring_host_configs }}"
+
+    - name: Fail loudly when a host-local config is missing
+      ansible.builtin.fail:
+        msg: "Host-local config {{ item.item }} missing in {{ monitoring_project_dir }} — create it from COMPLETE_DEPLOYMENT_GUIDE.md (Docker would otherwise create a directory at the mount path)."
+      loop: "{{ monitoring_host_config_stats.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: not item.stat.exists
+
+    - name: Render the compose project (validation gate)
+      ansible.builtin.command: docker compose config -q
+      args:
+        chdir: "{{ monitoring_project_dir }}"
+      changed_when: false
+
+    - name: List the services the compose project defines
+      ansible.builtin.command: docker compose config --services
+      args:
+        chdir: "{{ monitoring_project_dir }}"
+      register: monitoring_services
+      changed_when: false
+
+    - name: Show the dry-run plan and stop
+      ansible.builtin.debug:
+        msg: "dry-run: would pull (unless skipped) and 'docker compose up -d' these services in {{ monitoring_project_dir }}: {{ monitoring_services.stdout_lines | join(', ') }}"
+      when: monitoring_dry_run | bool
+
+    - name: End the play for a dry run
+      ansible.builtin.meta: end_play
+      when: monitoring_dry_run | bool
+
+    - name: Pull the pinned images
+      ansible.builtin.command: docker compose pull
+      args:
+        chdir: "{{ monitoring_project_dir }}"
+      register: monitoring_pull
+      changed_when: "'Downloaded newer image' in monitoring_pull.stdout or 'Pull complete' in monitoring_pull.stdout"
+      when: not monitoring_skip_pull | bool
+
+    - name: Bring the stack up
+      ansible.builtin.command: docker compose up -d
+      args:
+        chdir: "{{ monitoring_project_dir }}"
+      register: monitoring_up
+      changed_when: "'Creating' in monitoring_up.stderr or 'Recreating' in monitoring_up.stderr or 'Starting' in monitoring_up.stderr"
+
+    - name: Verify every service reports healthy
+      ansible.builtin.shell: |
+        set -o pipefail
+        ps_out=$(docker compose ps)
+        total=$(docker compose config --services | wc -l)
+        healthy=$(printf '%s\n' "$ps_out" | grep -c '(healthy)' || true)
+        printf 'healthy=%s total=%s\n' "$healthy" "$total"
+        [ "$healthy" -ge "$total" ]
+      args:
+        chdir: "{{ monitoring_project_dir }}"
+        executable: /bin/bash
+      register: monitoring_health
+      changed_when: false
+      retries: "{{ (monitoring_wait_seconds | int / 10) | int }}"
+      delay: 10
+      until: monitoring_health.rc == 0
+
+    - name: Show the final stack state
+      ansible.builtin.command: docker compose ps
+      args:
+        chdir: "{{ monitoring_project_dir }}"
+      register: monitoring_ps
+      changed_when: false
+
+    - name: Report the deployment
+      ansible.builtin.debug:
+        msg: "{{ monitoring_ps.stdout_lines }}"

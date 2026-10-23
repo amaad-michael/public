@@ -37,6 +37,9 @@ the usage guide for its playbooks:
   and load balancer), plus the two full deployment guides,
   [gpu-box-llm-setup-v2.1.md](playbooks/llm/gpu-box-llm-setup-v2.1.md)
   and [optiplex-llm-v2.3.md](playbooks/llm/optiplex-llm-v2.3.md).
+- [monitoring](playbooks/monitoring/README.md): the deploy playbook
+  for the standby monitoring stack in `containers/monitoring/`
+  (a wrapper around its compose project, not a re-implementation).
 - [observability](playbooks/observability/README.md): the neo1
   observability stack (Prometheus, Alertmanager, blackbox_exporter,
   node_exporter, ntfy, on-demand Grafana) — the Ansible form of the

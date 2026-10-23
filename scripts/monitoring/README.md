@@ -1,9 +1,37 @@
 # scripts/monitoring
 
-Three standalone checkers. Two collect cron configuration (one host at
-a time, or the whole fleet over SSH); the third verifies backup
-integrity with SHA-256 manifests. None of them change anything on the
-hosts they inspect.
+Three standalone checkers and one deploy wrapper. Two checkers collect
+cron configuration (one host at a time, or the whole fleet over SSH);
+the third verifies backup integrity with SHA-256 manifests. The
+checkers change nothing on the hosts they inspect; the deploy wrapper
+is the one script here that changes state, and only on the host it
+runs on.
+
+## deploy-monitoring-stack.sh
+
+Bash deploy wrapper for the cluster standby monitoring stack in
+`containers/monitoring/` (Prometheus, Grafana, Alertmanager, Traefik,
+ntfy, step-ca, Headscale, Vaultwarden, Uptime Kuma). The stack is
+Docker-native by design; this is the local-run form of its
+deployment, and the Ansible form is
+`ansible/playbooks/monitoring/deploy-monitoring.yml`.
+
+```bash
+./deploy-monitoring-stack.sh              # validate, pull, up, verify
+./deploy-monitoring-stack.sh --dry-run    # validate and render only
+```
+
+- Gates, in order, each failing loudly before anything starts:
+  Docker with the Compose v2 plugin present, `.env` present with
+  mode 600 expected, no `REPLACE_ME` placeholder left, and a
+  non-empty `GRAFANA_ADMIN_PASSWORD` value, the three
+  host-local configs (`ntfy.conf`, `headscale.conf`,
+  `policy.hujson`) present, and `docker compose config` renders.
+- Then: `docker compose pull` (unless `--skip-pull`), `docker
+  compose up -d`, and a health loop that requires every service to
+  report `(healthy)` within `--wait` seconds (default 120).
+- `--project-dir DIR` deploys a checkout elsewhere; by default the
+  project is `containers/monitoring/` relative to this script.
 
 ## local_cron_checker.sh
 
