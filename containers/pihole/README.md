@@ -26,6 +26,12 @@ and pi0 the secondary.
 - `unbound.conf`: the Unbound configuration, bind-mounted read-only
   into the Unbound container at its compiled-in config path,
   `/usr/local/unbound/unbound.conf`.
+- `legacy/docker-compose.yml` and `legacy/unbound.conf`: the pre-v2
+  stack as deployed on pi0 and pi4 (`:latest` tags, Unbound published
+  on host port 5053, the `/etc/unbound` config layout), kept as the
+  rollback failsafe and the as-built record. The legacy Unbound
+  config predates the current keyword set; it is preserved exactly
+  as deployed, not modernized.
 
 ## ⚙️ The .env file (required)
 
