@@ -1,0 +1,14 @@
+#!/bin/bash
+echo "▄▀▄     █▄ ▄█ █ ▄▀▀ █▄█ ▄▀▄ ██▀ █      ▀█▀ ▄▀▄ ▀█▀ █ █ █▄ ▄█"
+echo "█▀█ ▄   █ ▀ █ █ ▀▄▄ █ █ █▀█ █▄▄ █▄▄     █  █▀█  █  ▀▄█ █ ▀ █"
+echo ""
+echo "## local subnet"
+{% for host in secure_init_cluster_hosts %}
+echo "{{ host.ip }}   {{ host.name }}"
+{% endfor %}
+echo ""
+if command -v fastfetch &>/dev/null; then
+    fastfetch --logo small --color-keys blue --color-title yellow
+elif command -v neofetch &>/dev/null; then
+    neofetch
+fi

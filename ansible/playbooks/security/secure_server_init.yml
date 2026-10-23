@@ -1,0 +1,668 @@
+---
+# secure_server_init.yml
+# Ansible form of the secure-server-init family
+# (scripts/security/secure-server-init-v1.1.sh and its conservative
+# and legacy v1.1 variants): one playbook that applies the whole
+# hardening baseline as a unit, in the bash scripts' own order:
+# system update with automatic patching disabled, the admin user and
+# its sudoers drop-in, the sshd hardening drop-in, a whitelist
+# firewall (port 22 only), fail2ban, auditd, log rotation, lynis,
+# the mandatory-access-control status report, the Pi cluster
+# /etc/hosts entries and fastfetch MOTD, and IPv6 disabled by sysctl.
+#
+# Docker form: not applicable. This baseline hardens the host itself
+# (sshd, the host firewall, auditd, sysctl); a container cannot apply
+# it to its host, so no containers/ project exists for this family.
+#
+# Variant selection mirrors the three bash variants. The interactive
+# choices the scripts bake in are variables here, with the scripts'
+# own values as defaults:
+#   secure_init_variant: standard (default) | conservative | legacy
+#     standard     secure-server-init-v1.1.sh: post-quantum hybrid
+#                  key exchange, password auth off, root login off.
+#     conservative secure-server-init-conservative-v1.1.sh:
+#                  Curve25519 only, root login key-only.
+#     legacy       secure-server-init-legacy-v1.1.sh: password auth
+#                  kept, RSA-4096 host key, pwquality + pam_faillock.
+#   secure_init_user: michael (the scripts' baked-in user)
+#
+# PRE-FLIGHT (same warning as the bash scripts): the standard and
+# conservative variants disable SSH password authentication. Confirm
+# key-based login as {{ secure_init_user }} works BEFORE running
+# this playbook, or the target locks you out of SSH and recovery
+# needs physical or console access.
+#
+# Usage:
+#   ansible-playbook -i ansible/hosts secure_server_init.yml --limit <host>
+#   ansible-playbook -i ansible/hosts secure_server_init.yml --limit <host> -e secure_init_variant=conservative
+#
+# Test switches (used by the chroot equivalence runs; leave at the
+# defaults on real hosts): secure_init_install_packages,
+# secure_init_manage_services, secure_init_manage_firewall and
+# secure_init_apply_sysctl can each be set to false to skip the one
+# layer a sandbox cannot provide (package network, systemd, a live
+# firewall, sysctl writes) while every file-writing task still runs.
+
+- name: Apply the secure-server-init hardening baseline as a unit
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    secure_init_variant: standard
+    secure_init_user: michael
+    secure_init_ssh_port: 22
+    secure_init_install_packages: true
+    secure_init_manage_services: true
+    secure_init_manage_firewall: true
+    secure_init_apply_sysctl: true
+    secure_init_cluster_hosts:
+      - { ip: "192.168.0.100", name: pi0 }
+      - { ip: "192.168.0.101", name: pi1 }
+      - { ip: "192.168.0.102", name: pi2 }
+      - { ip: "192.168.0.103", name: pi3 }
+      - { ip: "192.168.0.104", name: pi4 }
+      - { ip: "192.168.0.105", name: neo1 }
+    secure_init_is_debian: "{{ ansible_os_family == 'Debian' }}"
+    secure_init_auth_log: "{{ '/var/log/auth.log' if ansible_os_family == 'Debian' else '/var/log/secure' }}"
+    secure_init_log_owner: "{{ 'syslog adm' if ansible_os_family == 'Debian' else 'root root' }}"
+    secure_init_hostkey_type: "{{ 'rsa' if secure_init_variant == 'legacy' else 'ed25519' }}"
+    secure_init_fail2ban_default_bantime: "{{ 900 if secure_init_variant == 'legacy' else 600 }}"
+    secure_init_fail2ban_sshd_maxretry: "{{ 5 if secure_init_variant == 'legacy' else 3 }}"
+    secure_init_fail2ban_sshd_bantime: "{{ 1800 if secure_init_variant == 'legacy' else 1200 }}"
+
+  tasks:
+    - name: Validate the requested variant
+      ansible.builtin.assert:
+        that:
+          - secure_init_variant in ['standard', 'conservative', 'legacy']
+          - ansible_os_family in ['Debian', 'RedHat']
+        fail_msg: "secure_init_variant must be standard, conservative or legacy, on a Debian- or RedHat-family host."
+
+    # 1. System updates (no automatic patching) — bash section 1
+    - name: Update all packages (Debian family)
+      ansible.builtin.apt:
+        upgrade: true
+        update_cache: true
+      when:
+        - secure_init_is_debian
+        - secure_init_install_packages | bool
+
+    - name: Update all packages (RedHat family)
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+        update_cache: true
+      when:
+        - not secure_init_is_debian
+        - secure_init_install_packages | bool
+
+    - name: Remove unattended-upgrades (Debian family)
+      ansible.builtin.apt:
+        name: unattended-upgrades
+        state: absent
+      when:
+        - secure_init_is_debian
+        - secure_init_install_packages | bool
+
+    - name: Ensure the apt config directory exists (Debian family)
+      ansible.builtin.file:
+        path: /etc/apt/apt.conf.d
+        state: directory
+        mode: "0755"
+      when: secure_init_is_debian
+
+    - name: Disable periodic apt updates (Debian family)
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/50unattended-upgrades
+        mode: "0644"
+        content: |
+          APT::Periodic::Update-Package-Lists "0";
+          APT::Periodic::Download-Upgradeable-Packages "0";
+          APT::Periodic::AutocleanInterval "0";
+          APT::Periodic::Unattended-Upgrade "0";
+      when: secure_init_is_debian
+
+    - name: Remove dnf-automatic (RedHat family)
+      ansible.builtin.dnf:
+        name: dnf-automatic
+        state: absent
+      when:
+        - not secure_init_is_debian
+        - secure_init_install_packages | bool
+
+    - name: Disable the dnf-automatic install timer (RedHat family)
+      ansible.builtin.systemd:
+        name: dnf-automatic-install.timer
+        enabled: false
+      failed_when: false
+      when:
+        - not secure_init_is_debian
+        - secure_init_manage_services | bool
+
+    # 2. Admin user and sudoers drop-in — bash section 2
+    - name: Ensure the sudoers drop-in directory mode matches the script
+      ansible.builtin.file:
+        path: /etc/sudoers.d
+        state: directory
+        mode: "0750"
+
+    - name: Create the admin user if missing
+      ansible.builtin.user:
+        name: "{{ secure_init_user }}"
+        shell: /bin/bash
+        create_home: true
+        state: present
+
+    - name: Install the NOPASSWD sudoers drop-in
+      ansible.builtin.copy:
+        dest: "/etc/sudoers.d/{{ secure_init_user }}"
+        mode: "0440"
+        content: "{{ secure_init_user }} ALL=(ALL) NOPASSWD:ALL\n"
+
+    # Legacy only, before sshd: RSA-4096 host key — legacy bash section 3
+    - name: Check the RSA host key size (legacy variant)
+      ansible.builtin.command: "ssh-keygen -l -f /etc/ssh/ssh_host_rsa_key"
+      register: secure_init_rsa_key_check
+      changed_when: false
+      failed_when: false
+      when: secure_init_variant == 'legacy'
+
+    - name: Generate an RSA-4096 host key if missing or undersized (legacy variant)
+      ansible.builtin.command: >-
+        ssh-keygen -t rsa -b 4096 -f /etc/ssh/ssh_host_rsa_key -N '' -C "host-key-{{ ansible_hostname }}"
+      changed_when: true
+      when:
+        - secure_init_variant == 'legacy'
+        - "'4096' not in (secure_init_rsa_key_check.stdout | default(''))"
+
+    - name: Set RSA host key modes (legacy variant)
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: /etc/ssh/ssh_host_rsa_key, mode: "0600" }
+        - { path: /etc/ssh/ssh_host_rsa_key.pub, mode: "0644" }
+      when: secure_init_variant == 'legacy'
+
+    # 3. SSH hardening drop-in — bash section 3
+    - name: Ensure the sshd drop-in directory exists
+      ansible.builtin.file:
+        path: /etc/ssh/sshd_config.d
+        state: directory
+        mode: "0755"
+
+    - name: Install the sshd hardening drop-in
+      ansible.builtin.template:
+        src: 99-hardening.conf.j2
+        dest: /etc/ssh/sshd_config.d/99-hardening.conf
+        mode: "0644"
+      notify: Restart ssh
+
+    - name: Validate the sshd configuration
+      ansible.builtin.command: sshd -t
+      changed_when: false
+      when: secure_init_manage_services | bool
+
+    # Legacy only: password policy and account lockout — legacy bash sections 4-5.
+    # The Debian pam_faillock wiring edits /etc/pam.d/common-auth and
+    # common-account with the same insertions the script's sed makes;
+    # the RedHat path prefers authselect exactly as the script does.
+    - name: Install pwquality support (legacy, Debian family)
+      ansible.builtin.apt:
+        name: libpam-pwquality
+        state: present
+      when:
+        - secure_init_variant == 'legacy'
+        - secure_init_is_debian
+        - secure_init_install_packages | bool
+
+    - name: Install pwquality support (legacy, RedHat family)
+      ansible.builtin.dnf:
+        name:
+          - cracklib
+          - cracklib-dicts
+          - python3-libpwquality
+        state: present
+      when:
+        - secure_init_variant == 'legacy'
+        - not secure_init_is_debian
+        - secure_init_install_packages | bool
+
+    - name: Back up pwquality.conf once (legacy variant)
+      ansible.builtin.copy:
+        src: /etc/security/pwquality.conf
+        dest: /etc/security/pwquality.conf.bak
+        remote_src: true
+        force: false
+        mode: "0644"
+      failed_when: false
+      when: secure_init_variant == 'legacy'
+
+    - name: Write the pwquality policy (legacy variant)
+      ansible.builtin.copy:
+        dest: /etc/security/pwquality.conf
+        mode: "0644"
+        content: |
+          minlen = 14
+          dcredit = -1
+          ucredit = -1
+          ocredit = -1
+          lcredit = -1
+          difok = 3
+          maxrepeat = 3
+          usercheck = 1
+          enforcing = 1
+      when: secure_init_variant == 'legacy'
+
+    - name: Check whether pam_faillock is already wired (legacy variant)
+      ansible.builtin.command: >-
+        grep -q pam_faillock {{ '/etc/pam.d/common-auth' if secure_init_is_debian else '/etc/pam.d/system-auth' }}
+      register: secure_init_faillock_check
+      changed_when: false
+      failed_when: false
+      when: secure_init_variant == 'legacy'
+
+    - name: Enable faillock through authselect (legacy, RedHat family)
+      ansible.builtin.command: authselect enable-feature with-faillock
+      changed_when: true
+      failed_when: false
+      register: secure_init_authselect
+      when:
+        - secure_init_variant == 'legacy'
+        - not secure_init_is_debian
+        - secure_init_faillock_check.rc != 0
+
+    - name: Wire pam_faillock preauth and authfail lines (legacy variant)
+      ansible.builtin.lineinfile:
+        path: "{{ '/etc/pam.d/common-auth' if secure_init_is_debian else '/etc/pam.d/system-auth' }}"
+        insertafter: '^auth.*pam_unix\.so'
+        line: "{{ item }}"
+      loop:
+        - "auth required pam_faillock.so preauth audit silent deny=5 unlock_time=900"
+        - "auth [default=die] pam_faillock.so authfail audit deny=5 unlock_time=900"
+      when:
+        - secure_init_variant == 'legacy'
+        - secure_init_faillock_check.rc != 0
+        - secure_init_is_debian or (secure_init_authselect.rc | default(0)) != 0
+
+    - name: Wire the pam_faillock account line (legacy variant)
+      ansible.builtin.lineinfile:
+        path: "{{ '/etc/pam.d/common-account' if secure_init_is_debian else '/etc/pam.d/system-auth' }}"
+        insertafter: '^account'
+        line: "account required pam_faillock.so"
+      when:
+        - secure_init_variant == 'legacy'
+        - secure_init_faillock_check.rc != 0
+
+    # 4. Firewall, whitelist, port 22 only — bash section 4
+    - name: Install UFW (Debian family)
+      ansible.builtin.apt:
+        name: ufw
+        state: present
+      when:
+        - secure_init_is_debian
+        - secure_init_install_packages | bool
+
+    - name: Reset UFW to defaults (Debian family)
+      community.general.ufw:
+        state: reset
+      when:
+        - secure_init_is_debian
+        - secure_init_manage_firewall | bool
+
+    - name: Set UFW default policies (Debian family)
+      community.general.ufw:
+        direction: "{{ item.direction }}"
+        policy: "{{ item.policy }}"
+      loop:
+        - { direction: incoming, policy: deny }
+        - { direction: outgoing, policy: allow }
+      when:
+        - secure_init_is_debian
+        - secure_init_manage_firewall | bool
+
+    - name: Allow SSH through UFW (Debian family)
+      community.general.ufw:
+        rule: allow
+        port: "{{ secure_init_ssh_port }}"
+        proto: tcp
+      notify: Enable UFW
+      when:
+        - secure_init_is_debian
+        - secure_init_manage_firewall | bool
+
+    - name: Install firewalld (RedHat family)
+      ansible.builtin.dnf:
+        name: firewalld
+        state: present
+      when:
+        - not secure_init_is_debian
+        - secure_init_install_packages | bool
+
+    - name: Start and enable firewalld (RedHat family)
+      ansible.builtin.systemd:
+        name: firewalld
+        state: started
+        enabled: true
+      when:
+        - not secure_init_is_debian
+        - secure_init_manage_services | bool
+
+    - name: Set the firewalld default zone to public (RedHat family)
+      ansible.builtin.command: firewall-cmd --set-default-zone=public
+      changed_when: true
+      when:
+        - not secure_init_is_debian
+        - secure_init_manage_firewall | bool
+
+    - name: Remove dhcpv6-client from the public zone (RedHat family)
+      ansible.posix.firewalld:
+        service: dhcpv6-client
+        zone: public
+        permanent: true
+        state: disabled
+      failed_when: false
+      when:
+        - not secure_init_is_debian
+        - secure_init_manage_firewall | bool
+
+    - name: Allow SSH in the public zone (RedHat family)
+      ansible.posix.firewalld:
+        service: ssh
+        zone: public
+        permanent: true
+        immediate: true
+        state: enabled
+      when:
+        - not secure_init_is_debian
+        - secure_init_manage_firewall | bool
+
+    - name: Reload firewalld (RedHat family)
+      ansible.builtin.command: firewall-cmd --reload
+      changed_when: true
+      when:
+        - not secure_init_is_debian
+        - secure_init_manage_firewall | bool
+
+    # 5. fail2ban — bash section 5
+    - name: Install fail2ban (Debian family)
+      ansible.builtin.apt:
+        name: fail2ban
+        state: present
+      when:
+        - secure_init_is_debian
+        - secure_init_install_packages | bool
+
+    - name: Install fail2ban (RedHat family)
+      ansible.builtin.dnf:
+        name:
+          - fail2ban
+          - fail2ban-systemd
+        state: present
+      when:
+        - not secure_init_is_debian
+        - secure_init_install_packages | bool
+
+    - name: Ensure the fail2ban directory exists
+      ansible.builtin.file:
+        path: /etc/fail2ban
+        state: directory
+        mode: "0755"
+
+    - name: Install the fail2ban jail
+      ansible.builtin.template:
+        src: jail.local.j2
+        dest: /etc/fail2ban/jail.local
+        mode: "0644"
+      notify: Restart fail2ban
+
+    # 6. auditd — bash section 6
+    - name: Install auditd (Debian family)
+      ansible.builtin.apt:
+        name:
+          - auditd
+          - audispd-plugins
+        state: present
+      when:
+        - secure_init_is_debian
+        - secure_init_install_packages | bool
+
+    - name: Install auditd (RedHat family)
+      ansible.builtin.dnf:
+        name:
+          - audit
+          - audit-libs
+        state: present
+      when:
+        - not secure_init_is_debian
+        - secure_init_install_packages | bool
+
+    # The old Restart auditd handler also carried enabled: true; that
+    # side-effect is kept here as an enable-only task. Enabling is not
+    # a manual start/stop, so the stock unit accepts it (see the
+    # handler comment below for why auditd is never restarted).
+    - name: Enable auditd
+      ansible.builtin.systemd:
+        name: auditd
+        enabled: true
+      when: secure_init_manage_services | bool
+
+    - name: Ensure the audit rules directory exists
+      ansible.builtin.file:
+        path: /etc/audit/rules.d
+        state: directory
+        mode: "0755"
+
+    - name: Install the auditd hardening rules
+      ansible.builtin.template:
+        src: hardening.rules.j2
+        dest: /etc/audit/rules.d/hardening.rules
+        mode: "0640"
+      notify: Apply audit rules
+
+    # 7. Log rotation — bash section 7 (v1.1: 14 days, mode 600)
+    - name: Install auth log rotation
+      ansible.builtin.copy:
+        dest: /etc/logrotate.d/auth-hardening
+        mode: "0644"
+        content: |
+          {{ secure_init_auth_log }} {
+              daily
+              rotate 14
+              compress
+              delaycompress
+              missingok
+              notifempty
+              create 600 {{ secure_init_log_owner }}
+              postrotate
+                  systemctl reload rsyslog > /dev/null 2>&1 || systemctl reload auditd > /dev/null 2>&1 || true
+              endscript
+          }
+
+    - name: Install audit log rotation
+      ansible.builtin.copy:
+        dest: /etc/logrotate.d/audit-hardening
+        mode: "0644"
+        content: |
+          /var/log/audit/audit.log {
+              daily
+              rotate 14
+              compress
+              delaycompress
+              missingok
+              notifempty
+              create 600 root root
+              postrotate
+                  systemctl restart auditd > /dev/null 2>&1 || true
+              endscript
+          }
+
+    # 8. lynis — bash section 8
+    - name: Install lynis
+      ansible.builtin.package:
+        name: lynis
+        state: present
+      when: secure_init_install_packages | bool
+
+    # 9. Mandatory access control status — bash section 9 (report only)
+    - name: Report AppArmor status (Debian family)
+      ansible.builtin.command: aa-status
+      register: secure_init_mac_status
+      changed_when: false
+      failed_when: false
+      when: secure_init_is_debian
+
+    - name: Report SELinux status (RedHat family)
+      ansible.builtin.command: getenforce
+      register: secure_init_mac_status_rhel
+      changed_when: false
+      failed_when: false
+      when: not secure_init_is_debian
+
+    - name: Show the MAC status
+      ansible.builtin.debug:
+        msg: >-
+          {{ (secure_init_mac_status.stdout_lines | default(['unknown']))[0]
+             if secure_init_is_debian
+             else (secure_init_mac_status_rhel.stdout | default('unknown')) }}
+
+    # 10. Pi cluster /etc/hosts entries — bash section 10
+    - name: Add the cluster comment to /etc/hosts
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        line: "## local subnet"
+        state: present
+
+    - name: Add the Pi cluster entries to /etc/hosts
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        regexp: '\s{{ host.name }}$'
+        line: "{{ host.ip }}   {{ host.name }}"
+        state: present
+      loop: "{{ secure_init_cluster_hosts }}"
+      loop_control:
+        loop_var: host
+
+    # 11. fastfetch MOTD and noise removal — bash section 11
+    # Split per tool (2026-10-22 fix): the combined task carried
+    # failed_when: false, so a tool missing from the repos (neofetch
+    # is absent from the Rocky 10 / EPEL repos) was silently masked
+    # behind an ok for the pair. Each tool now reports its own result.
+    - name: Install fastfetch
+      ansible.builtin.package:
+        name: fastfetch
+        state: present
+      when: secure_init_install_packages | bool
+
+    # neofetch is only the MOTD fallback for when fastfetch is absent
+    # (see templates/05-system-info.j2), so its failure must not abort
+    # the run — but it must be visible: ignore_errors keeps the FAILED
+    # result in the output and counts it as ignored in the recap,
+    # instead of failed_when: false re-labelling it ok.
+    - name: Install neofetch
+      ansible.builtin.package:
+        name: neofetch
+        state: present
+      ignore_errors: true
+      when: secure_init_install_packages | bool
+
+    - name: Disable noisy MOTD scripts (Debian family)
+      # chmod -x exactly as the script does; a file module task would
+      # create an empty file where a noise script is absent.
+      ansible.builtin.command: "chmod -x /etc/update-motd.d/{{ item }}"
+      changed_when: false
+      failed_when: false
+      loop:
+        - 80-esm-announce
+        - 91-contract-ua-esm-status
+        - 50-motd-news
+        - 10-help-text
+        - 80-livepatch
+        - 95-hwe-eol
+        - 98-fsck-at-reboot
+      when: secure_init_is_debian
+
+    - name: Ensure the MOTD directory exists (RedHat family)
+      ansible.builtin.file:
+        path: /etc/motd.d
+        state: directory
+        mode: "0755"
+      when: not secure_init_is_debian
+
+    - name: Install the cluster fastfetch MOTD
+      ansible.builtin.template:
+        src: 05-system-info.j2
+        dest: "{{ '/etc/update-motd.d/05-system-info' if secure_init_is_debian else '/etc/motd.d/05-system-info' }}"
+        mode: "0755"
+
+    # 12. Disable IPv6 — bash section 12
+    # The sysctl is applied by the direct task below, not by a handler
+    # (2026-10-22 fix): as the last handler in definition order, the
+    # old Apply disable-IPv6 sysctl handler was starved whenever an
+    # earlier handler failed (in the 2026-10-22 real-systemd re-run
+    # the auditd handler's failure meant it never ran, and the next
+    # run did not re-notify it because the file was unchanged, so the
+    # values were never applied). A direct task gated on the drop-in
+    # actually changing runs here, before any handler is flushed, so
+    # no handler failure can block it; it stays idempotent because an
+    # unchanged drop-in skips it.
+    - name: Install the disable-IPv6 sysctl drop-in
+      ansible.builtin.copy:
+        dest: /etc/sysctl.d/99-disable-ipv6.conf
+        mode: "0644"
+        content: |
+          net.ipv6.conf.all.disable_ipv6 = 1
+          net.ipv6.conf.default.disable_ipv6 = 1
+          net.ipv6.conf.lo.disable_ipv6 = 1
+      register: secure_init_sysctl_dropin
+
+    - name: Apply the disable-IPv6 sysctl
+      ansible.builtin.command: sysctl -p /etc/sysctl.d/99-disable-ipv6.conf
+      changed_when: true
+      when:
+        - secure_init_apply_sysctl | bool
+        - secure_init_sysctl_dropin.changed
+
+    - name: Flush handlers so service state matches the files
+      ansible.builtin.meta: flush_handlers
+
+  handlers:
+    - name: Restart ssh
+      ansible.builtin.service:
+        name: "{{ 'ssh' if ansible_os_family == 'Debian' else 'sshd' }}"
+        state: restarted
+      failed_when: false
+      when: secure_init_manage_services | bool
+
+    - name: Enable UFW
+      community.general.ufw:
+        state: enabled
+      when: secure_init_manage_firewall | bool
+
+    - name: Restart fail2ban
+      ansible.builtin.service:
+        name: fail2ban
+        state: restarted
+        enabled: true
+      when: secure_init_manage_services | bool
+
+    # auditd is never restarted (2026-10-22 fix): the stock Rocky 10
+    # unit (audit 4.0.3) ships RefuseManualStop=yes and no ExecReload,
+    # so systemctl restart is refused ("Operation refused, unit
+    # auditd.service may be requested by dependency only", exit 4)
+    # and systemctl reload is not applicable ("Job type reload is
+    # not applicable for unit auditd.service", exit 3) — both probed
+    # against real systemd in the container. What changed here is a
+    # rules.d drop-in, and the vendor's own mechanism for applying
+    # rules.d files is augenrules --load: it is the ExecStart of the
+    # stock audit-rules.service, which auditd.service Wants. It
+    # compiles rules.d into /etc/audit/audit.rules and loads them
+    # with auditctl, without asking systemd to stop or start the
+    # daemon. (The logrotate audit-hardening postrotate line still
+    # says systemctl restart auditd exactly as the bash script ships
+    # it; it is guarded there with || true.)
+    - name: Apply audit rules
+      ansible.builtin.command: /usr/sbin/augenrules --load
+      changed_when: true
+      when: secure_init_manage_services | bool
