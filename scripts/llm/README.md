@@ -132,13 +132,61 @@ script's header usage examples name the file
 `setup_open_terminal-v1_2_hardened.sh`; the shipped filename is
 `setup_open_terminal-v1_2.sh`.
 
+## nanopi-llm-setup.sh
+
+The bash form of the NanoPi inference pool — the same deployment as
+`ansible/playbooks/llm/llm-server-setup.yml` and
+`llm-lb-setup.yml`, derived from them step for step. One script, two
+roles, run as root on the board itself:
+
+```bash
+# Inference node (pick the tier for the board's RAM):
+./nanopi-llm-setup.sh --role server --tier 4gb
+./nanopi-llm-setup.sh --role server --tier 2gb
+# Load balancer board:
+./nanopi-llm-setup.sh --role lb --nodes "192.168.1.101 192.168.1.102"
+```
+
+The Ansible inventory groups map onto flags: `llm_4gb` is
+`--role server --tier 4gb` (Qwen2.5-Coder-7B-Instruct Q4_K_M),
+`llm_2gb` is `--role server --tier 2gb` (the 1.5B model), and
+`llm_lb` is `--role lb`, with the playbook's `llm_nodes` variable
+becoming `--nodes` (the defaults are the playbook's: 192.168.1.101
+labelled `4gb-heavy`, 192.168.1.102 labelled `2gb-light`, port
+8080). The connection user (`ansible_user`) becomes `--user`, and
+the inventory hostname becomes `--hostname`. A `--config` file can
+carry the same settings for repeat runs.
+
+What a server run does, in the playbook's order: sets the hostname
+if asked, dist-upgrades, installs the build toolchain plus
+`prometheus-node-exporter`, stops Bluetooth and Avahi where present,
+clones llama.cpp into the user's home and builds it natively
+(skipped while the binary exists), downloads the tier's GGUF model
+into `~/models`, renders the `llama-server` systemd unit (port
+8080, context 2048, n-predict 512, threads = CPU count) and enables
+it, then configures UFW: OpenSSH allowed, the server port allowed
+from the local /24 only, default deny.
+
+A load balancer run installs nginx, removes the default site,
+renders the same `llm-lb.conf` the Jinja template produces
+(`least_conn` upstream, `/lb-health` answering `llm-lb ok`, 300s
+proxy timeouts, buffering off), validates it with `nginx -t`,
+enables nginx, and applies the same UFW shape for port 80.
+
+Re-runs are idempotent: services restart or reload only when the
+rendered unit or config actually changed. `--dry-run` prints every
+changing command and changes nothing; `--print-config` prints the
+rendered unit or nginx site and exits. The boards are ARM64; the
+script warns on other architectures instead of refusing, because
+the native build works the same way.
+
 ## Which form of each stack
 
 | Stack | This folder (shell) | Ansible | Containers |
 | --- | --- | --- | --- |
 | GPU box (Ollama + Open WebUI + SearXNG) | `gpu-box-llm-setup-v1.9.sh` | `ansible/playbooks/llm/gpu-box-llm-setup-v1.9.yml` | `containers/gpu-llm` |
 | OptiPlex (llama.cpp) | `optiplex-llm-setup-v2.1.sh` | `ansible/playbooks/llm/optiplex-llm-setup-v2.1.yml` | `containers/optiplex-llm` |
-| NanoPi inference pool (llama.cpp servers + nginx LB) | No shell form | `ansible/playbooks/llm/llm-server-setup.yml` + `llm-lb-setup.yml` | `containers/llm` |
+| NanoPi inference pool (llama.cpp servers + nginx LB) | `nanopi-llm-setup.sh` | `ansible/playbooks/llm/llm-server-setup.yml` + `llm-lb-setup.yml` | `containers/llm` |
 
 Differences that decide the choice:
 
@@ -150,6 +198,11 @@ Differences that decide the choice:
   CPU and runs it under systemd. The container stack uses the
   official image, verifies the model against a pinned SHA-256 on
   every start, and runs on any x86_64 Docker host.
+- The NanoPi shell script and the playbooks are the same
+  deployment in two runners: the script runs on the board itself,
+  the playbooks drive the fleet from a control node. The container
+  stack swaps the source build for the pinned llama.cpp image and
+  moves the load balancer's published port to 8090.
 - Pick the shell script for a single host set up by hand, the
   playbook for the same result managed through Ansible, and the
   container stack for a portable deployment with no source build and
