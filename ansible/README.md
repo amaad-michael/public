@@ -28,6 +28,9 @@ the usage guide for its playbooks:
   and its tighten script (not the mirror container).
 - [healthchecks](playbooks/healthchecks/README.md): the fleet health
   checks and the SMART harvest.
+- [lamp](playbooks/lamp/README.md): the LAMP stack (Apache, PHP-FPM,
+  MariaDB) on the Debian and RHEL families — the Ansible form of the
+  two `scripts/provisioning/lamp-install-*.sh` installers.
 - [jenkins](playbooks/jenkins/README.md): the Jenkins LTS install
   playbook, mirroring `scripts/provisioning/install-jenkins-rocky.sh`.
 - [llm](playbooks/llm/README.md): the NanoPi inference fleet (server

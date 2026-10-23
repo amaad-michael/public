@@ -147,7 +147,10 @@ installer wants. The verification block enforces it: the run fails if
 also runs `restorecon` on its probe page and prints `getenforce` as
 part of verification.
 
-For the container form of the same stack, see `containers/lamp/`.
+For the Ansible form of the same stack, see
+`ansible/playbooks/lamp/` (one playbook, distro-conditional tasks
+reconciling both installers). For the container form, see
+`containers/lamp/`.
 
 ## 🔭 neo1 observability (native systemd)
 
