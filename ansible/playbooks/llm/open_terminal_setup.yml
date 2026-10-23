@@ -1,0 +1,144 @@
+---
+# open_terminal_setup.yml
+# Ansible form of scripts/llm/setup_open_terminal-v1_2.sh: deploy
+# the hardened Open Terminal file I/O service the way the bash
+# script does, in the script's own order - workspace and log
+# directories at mode 0700 (workspace owned 1000:1000), the API key
+# generated once and kept at mode 0600, then the container with
+# every hardening flag of the script's docker run:
+#   loopback-only publish 127.0.0.1:9000 -> 8000, read-only rootfs,
+#   ipc none, tmpfs /tmp /run /home (noexec, nosuid, sized), the
+#   /workspace bind mount (rw, Z), cap_drop ALL with only SETUID,
+#   SETGID and CHOWN added back, no-new-privileges, the four
+#   OPEN_TERMINAL_* environment variables, 256m / 1.0 CPU / 50 PID
+#   limits, the curl /health healthcheck (30s/10s/3 retries/10s
+#   start period) and json-file logging capped at 10m x 3 files.
+# The script sets no --user, so this form sets none either; the
+# container runs as the image's own user in both forms.
+#
+# The script's other actions do not translate and are not faked:
+# its pre-flight checks (Docker installed and running, port 9000
+# free) stay pre-flight checks on a real run - the docker_container
+# task fails plainly when Docker is absent; and its post-deploy
+# curl verification is the operator's canary (see the compose
+# project's README, Verification section). The --uninstall path
+# stays bash-only: it deletes the workspace, logs and API key,
+# while this playbook and `docker compose down` only manage the
+# container and its host preparation.
+#
+# Docker form: containers/open-terminal/ (compose project extracted
+# from this same docker run).
+#
+# Usage:
+#   ansible-playbook -i ansible/hosts playbooks/llm/open_terminal_setup.yml --limit <host>
+#
+# Test switch: open_terminal_deploy_container=false runs every
+# host-preparation task (directories, ownership, API key) and skips
+# only the container task, for sandboxes with no Docker daemon.
+
+- name: Deploy Open Terminal (hardened file I/O service)
+  hosts: all
+  become: true
+  gather_facts: false
+
+  vars:
+    open_terminal_container_name: open-terminal
+    open_terminal_image: ghcr.io/open-webui/open-terminal:slim
+    open_terminal_port: 9000
+    open_terminal_workspace_dir: /tmp/open-terminal-workspace
+    open_terminal_log_dir: /var/log/open-terminal
+    open_terminal_api_key_file: /var/lib/open-terminal/api_key.txt
+    open_terminal_deploy_container: true
+
+  tasks:
+    - name: Create the workspace directory (mode 0700, as the script)
+      ansible.builtin.file:
+        path: "{{ open_terminal_workspace_dir }}"
+        state: directory
+        mode: "0700"
+        owner: "1000"
+        group: "1000"
+
+    - name: Create the log directory (mode 0700, as the script)
+      ansible.builtin.file:
+        path: "{{ open_terminal_log_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Ensure the API key directory exists
+      ansible.builtin.file:
+        path: "{{ open_terminal_api_key_file | dirname }}"
+        state: directory
+        mode: "0755"
+
+    - name: Check for an existing API key
+      ansible.builtin.stat:
+        path: "{{ open_terminal_api_key_file }}"
+      register: open_terminal_api_key_stat
+
+    - name: Generate the API key on first run only (openssl rand -base64 32, as the script)
+      ansible.builtin.shell: |
+        set -o pipefail
+        umask 077
+        openssl rand -base64 32 | tr -d '\n' > {{ open_terminal_api_key_file }}
+        echo >> {{ open_terminal_api_key_file }}
+      args:
+        executable: /bin/bash
+      changed_when: true
+      when: not open_terminal_api_key_stat.stat.exists
+
+    - name: Enforce the API key file mode (0600, as the script)
+      ansible.builtin.file:
+        path: "{{ open_terminal_api_key_file }}"
+        mode: "0600"
+
+    - name: Read the API key for the container environment
+      ansible.builtin.slurp:
+        src: "{{ open_terminal_api_key_file }}"
+      register: open_terminal_api_key_slurp
+      no_log: true
+
+    - name: Deploy the hardened container
+      community.docker.docker_container:
+        name: "{{ open_terminal_container_name }}"
+        image: "{{ open_terminal_image }}"
+        state: started
+        restart_policy: unless-stopped
+        published_ports:
+          - "127.0.0.1:{{ open_terminal_port }}:8000"
+        read_only: true
+        ipc_mode: none
+        tmpfs:
+          - /tmp:rw,noexec,nosuid,size=256m
+          - /run:rw,noexec,nosuid,size=256m
+          - /home:rw,noexec,nosuid,size=128m
+        volumes:
+          - "{{ open_terminal_workspace_dir }}:/workspace:rw,Z"
+        cap_drop:
+          - ALL
+        capabilities:
+          - SETUID
+          - SETGID
+          - CHOWN
+        security_opts:
+          - no-new-privileges:true
+        env:
+          OPEN_TERMINAL_WORKSPACE: /workspace
+          OPEN_TERMINAL_API_LISTEN: "0.0.0.0:8000"
+          OPEN_TERMINAL_MAX_FILE_SIZE: "10485760"
+          OPEN_TERMINAL_API_KEY: "{{ open_terminal_api_key_slurp.content | b64decode | trim }}"
+        memory: 256m
+        cpus: 1.0
+        pids_limit: 50
+        healthcheck:
+          test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+          interval: 30s
+          timeout: 10s
+          retries: 3
+          start_period: 10s
+        log_driver: json-file
+        log_options:
+          max-size: "10m"
+          max-file: "3"
+      when: open_terminal_deploy_container | bool
+      no_log: true

@@ -1,0 +1,52 @@
+---
+services:
+  # Open Terminal - hardened file I/O service for the LLM stack.
+  # Compose form of the hardened `docker run` embedded in
+  # scripts/llm/setup_open_terminal-v1_2.sh: same image, same
+  # loopback-only publish, same hardening. The flag-by-flag
+  # translation is in README.md. The bash script also creates the
+  # host directories and generates the API key file before it runs
+  # the container; those host-side steps are the Ansible form's job
+  # (ansible/playbooks/llm/open_terminal_setup.yml) or a manual
+  # one-time preparation - see README.md.
+  open-terminal:
+    image: ghcr.io/open-webui/open-terminal:slim
+    container_name: open-terminal
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9000:8000"
+    read_only: true
+    ipc: none
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m
+      - /run:rw,noexec,nosuid,size=256m
+      - /home:rw,noexec,nosuid,size=128m
+    volumes:
+      - ${OPEN_TERMINAL_WORKSPACE:-/tmp/open-terminal-workspace}:/workspace:rw,Z
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+      - CHOWN
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - OPEN_TERMINAL_WORKSPACE=/workspace
+      - OPEN_TERMINAL_API_LISTEN=0.0.0.0:8000
+      - OPEN_TERMINAL_MAX_FILE_SIZE=10485760
+      - OPEN_TERMINAL_API_KEY=${OPEN_TERMINAL_API_KEY:?set OPEN_TERMINAL_API_KEY in .env}
+    mem_limit: 256m
+    cpus: 1.0
+    pids_limit: 50
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

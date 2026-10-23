@@ -1,0 +1,16 @@
+# Open Terminal compose environment - copy to .env and fill in.
+# Keep the real .env at chmod 600; it is never committed.
+
+# API key the service requires on every request (Bearer token).
+# The bash script generates this on first run and stores it at
+# /var/lib/open-terminal/api_key.txt; when switching forms, reuse
+# that value so existing Open WebUI registrations keep working:
+#   sudo cat /var/lib/open-terminal/api_key.txt
+# On a fresh host, generate one the same way the script does:
+#   openssl rand -base64 32
+OPEN_TERMINAL_API_KEY=
+
+# Host directory bind-mounted to /workspace in the container.
+# The bash script's default; it creates the directory at mode 0700
+# owned by 1000:1000. The Ansible form creates it the same way.
+OPEN_TERMINAL_WORKSPACE=/tmp/open-terminal-workspace

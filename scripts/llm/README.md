@@ -187,6 +187,7 @@ the native build works the same way.
 | GPU box (Ollama + Open WebUI + SearXNG) | `gpu-box-llm-setup-v1.9.sh` | `ansible/playbooks/llm/gpu-box-llm-setup-v1.9.yml` | `containers/gpu-llm` |
 | OptiPlex (llama.cpp) | `optiplex-llm-setup-v2.1.sh` | `ansible/playbooks/llm/optiplex-llm-setup-v2.1.yml` | `containers/optiplex-llm` |
 | NanoPi inference pool (llama.cpp servers + nginx LB) | `nanopi-llm-setup.sh` | `ansible/playbooks/llm/llm-server-setup.yml` + `llm-lb-setup.yml` | `containers/llm` |
+| Open Terminal file service | `setup_open_terminal-v1_2.sh` | `ansible/playbooks/llm/open_terminal_setup.yml` | `containers/open-terminal` |
 
 Differences that decide the choice:
 
