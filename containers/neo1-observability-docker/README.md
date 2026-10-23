@@ -7,8 +7,11 @@ bare-metal form in `scripts/provisioning/neo1-observability-native/` —
 the runtime is swapped to Docker, nothing else.
 
 This is the single-node variant. The multi-service standby stack for
-the cluster lives in `containers/monitoring/`; this project is what
-runs on neo1 itself, sized to fit beside its other duties.
+the cluster lives in `containers/monitoring/`. As of 2026-10-18, neo1
+itself runs the native systemd form
+(`scripts/provisioning/neo1-observability-native/`); this Docker form
+is the alternative on the same ports, is not deployed, and would
+replace the native form on a host rather than run beside it.
 
 **Always-on (6 containers):** prometheus, alertmanager, blackbox,
 node_exporter, ntfy, backup-runner
