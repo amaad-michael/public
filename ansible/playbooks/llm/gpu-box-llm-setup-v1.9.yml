@@ -107,7 +107,7 @@
 
     - name: Install Ollama via official install script (ROCm build)
       shell: |
-        set -o pipefail
+        set -eo pipefail
         tmp_installer=$(mktemp)
         trap 'rm -f "$tmp_installer"' EXIT
         curl -fsSL -o "$tmp_installer" https://ollama.com/install.sh

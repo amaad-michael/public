@@ -4,7 +4,7 @@ Five Ansible deployments live in this folder. Two of them, the GPU box and the O
 
 | Playbook | Target | Guide |
 |---|---|---|
-| `gpu-box-llm-setup-v1.9.yml` | Nobara GPU box, Ollama and Open WebUI | [gpu-box-llm-setup-v2.1.md](gpu-box-llm-setup-v2.1.md) |
+| `gpu-box-llm-setup-v1.9.yml` | Nobara GPU box, Ollama and Open WebUI | [gpu-box-llm-setup-v2.2.md](gpu-box-llm-setup-v2.2.md) |
 | `optiplex-llm-setup-v2.1.yml` | Dell OptiPlex, llama.cpp | [optiplex-llm-v2.3.md](optiplex-llm-v2.3.md) |
 | `llm-server-setup.yml` | NanoPi boards, llama.cpp inference | This README |
 | `llm-lb-setup.yml` | NanoPi board, nginx load balancer | This README |

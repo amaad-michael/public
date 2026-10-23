@@ -1,4 +1,4 @@
-# GPU Box LLM Deployment v2.1
+# GPU Box LLM Deployment v2.2
 
 > **Target:** Nobara (Fedora-based GPU box), **AMD GPU only (ROCm)**, Ollama + Open WebUI
 > **Models:** Qwen 2.5 Coder 14B, Qwen 2.5 Coder 7B, DeepSeek-R1 14B, LLaVA 13B, nomic-embed-text (5 total)
@@ -7,6 +7,10 @@
 > **Status:** Idempotent. Container images run on floating `:latest` tags by explicit decision — see *Known Risk Register*.
 
 ---
+
+## Change Control — v2.1 → v2.2
+
+Enforcement fix (2026-10-17), found by the deep test of the packaged digital products. The v2.1 change made the Ansible playbook download the Ollama installer to a temporary file and verify its SHA-256 before running it, but the install block ran without `set -e` and nothing guarded the run step: on a checksum mismatch the verification printed FAILED and the installer executed anyway. The Bash script path enforced correctly from the start (it refuses on mismatch and exits). The playbook block now runs as `set -eo pipefail`, so a checksum mismatch, or a failed download, aborts the block and fails the task before the installer runs. With no pin configured the block still warns loudly and proceeds, exactly as v2.1 documented. Applied to the playbook, to the embedded copy in this guide, and to the canonical guide in the same change. No other behaviour changes.
 
 ## Change Control — v2.0 → v2.1
 
@@ -838,7 +842,7 @@ ansible-playbook -i <gpu-box-ip>, -u <user> -K gpu-box-llm-setup-v1.9.yml
 
     - name: Install Ollama via official install script (ROCm build)
       shell: |
-        set -o pipefail
+        set -eo pipefail
         tmp_installer=$(mktemp)
         trap 'rm -f "$tmp_installer"' EXIT
         curl -fsSL -o "$tmp_installer" https://ollama.com/install.sh
