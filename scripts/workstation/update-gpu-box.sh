@@ -119,7 +119,12 @@ else
         # Only fallback to dnf distro-sync if it's a dependency conflict, not network
         if [[ $exit_code -eq 1 ]]; then
             warn "Attempting fallback: dnf distro-sync --refresh"
-            run_cmd dnf distro-sync --refresh -y || error "Both nobara-sync and dnf distro-sync failed"
+            # run_cmd() cannot be used here either: it exits via its own
+            # error() on failure, so the intended message would never print.
+            log "Executing: dnf distro-sync --refresh -y"
+            if ! dnf distro-sync --refresh -y; then
+                error "Both nobara-sync and dnf distro-sync failed"
+            fi
         else
             error "nobara-sync failed with non-conflict error. Aborting."
         fi
@@ -132,7 +137,12 @@ log ">>> Step 2: Updating Repository Keys..."
 if [[ "$DRY_RUN" == "true" ]]; then
     log "[DRY-RUN] dnf update -y nobara-repos nobara-gpg-keys fedora-repos"
 else
-    run_cmd dnf update -y nobara-repos nobara-gpg-keys fedora-repos || warn "Repo key update skipped"
+    # run_cmd() cannot be used here: it exits via error() on failure,
+    # so a repo-key failure would abort the run instead of warning.
+    log "Executing: dnf update -y nobara-repos nobara-gpg-keys fedora-repos"
+    if ! dnf update -y nobara-repos nobara-gpg-keys fedora-repos; then
+        warn "Repo key update skipped"
+    fi
 fi
 
 # 3. Ollama Binary
@@ -293,7 +303,14 @@ for model in "${MODELS[@]}"; do
     if [[ "$DRY_RUN" == "true" ]]; then
         log "[DRY-RUN] ollama pull $model"
     else
-        run_cmd OLLAMA_HOST="${LAN_IP}:11434" ollama pull "$model" || warn "Failed to update $model"
+        # run_cmd() cannot be used here: the env assignment would become
+        # argv[1] and be executed as a command name. Call ollama directly
+        # so OLLAMA_HOST is set in its environment, and read the exit
+        # code so a failed pull warns and the loop continues.
+        log "Executing: OLLAMA_HOST=${LAN_IP}:11434 ollama pull $model"
+        if ! OLLAMA_HOST="${LAN_IP}:11434" ollama pull "$model"; then
+            warn "Failed to update $model"
+        fi
     fi
 done
 
