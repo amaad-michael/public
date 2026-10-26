@@ -29,9 +29,19 @@ and pi0 the secondary.
 - `legacy/docker-compose.yml` and `legacy/unbound.conf`: the pre-v2
   stack as deployed on pi0 and pi4 (`:latest` tags, Unbound published
   on host port 5053, the `/etc/unbound` config layout), kept as the
-  rollback failsafe and the as-built record. The legacy Unbound
-  config predates the current keyword set; it is preserved exactly
-  as deployed, not modernized.
+  as-built record only — not a deployable rollback. Two facts,
+  verified 2026-10-25, govern its status. First, the image starts
+  Unbound with its own built-in config (its entrypoint runs
+  `unbound -c /usr/local/unbound/unbound.conf`); the config this
+  compose mounts at `/etc/unbound/unbound.conf` is never read, so
+  the running resolver uses the image's defaults and this file's
+  settings are not in effect. Second, the file could not be loaded
+  if it were read: every published madnuttah/unbound build from
+  1.16.3 through 1.26.2 rejects it — five lines no current build
+  accepts (two removed legacy keywords, and three lines that were
+  never Unbound keywords), plus a trust-anchor path in the legacy
+  `/opt/unbound` layout. The file is preserved exactly as deployed,
+  not modernized. For a rollback, deploy the main stack above.
 
 ## ⚙️ The .env file (required)
 
