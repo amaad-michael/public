@@ -62,6 +62,16 @@ stack for the cluster is `containers/monitoring/`.
 1. `sudo scripts/verify.sh` — 14 automated checks + manual alert
    round-trip.
 
+## 🔁 Day-2 operation
+
+`scripts/neo1-observability-stack.sh` brings the stack up or
+down as a unit: `up [--with-grafana]`, `down`, `restart`, and
+`status` (exit 1 when a core unit is down; Grafana is started
+only with `--with-grafana` and is always stopped by `down`).
+It starts and stops units only — it never enables or disables
+them, so boot behaviour stays exactly as install.sh left it.
+`--dry-run` prints the systemctl commands without running them.
+
 ## 📌 Open items (tracked, deliberate)
 
 - **Dead-man's switch:** an always-firing Watchdog alert routed to an
