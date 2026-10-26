@@ -94,7 +94,12 @@ if [[ "$DRY_RUN" == "true" ]]; then
     log "[DRY-RUN] apt update && apt upgrade -y"
 else
     run_cmd apt-get update -qq
-    run_cmd apt-get upgrade -y || warn "OS update failed."
+    # run_cmd() cannot be used for the upgrade: it exits via error() on
+    # failure, so an upgrade failure would abort instead of warning.
+    log "Executing: apt-get upgrade -y"
+    if ! apt-get upgrade -y; then
+        warn "OS update failed."
+    fi
 fi
 
 # 2. llama.cpp Update (Source)
