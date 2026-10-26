@@ -86,7 +86,7 @@ model, caches the hash beside it, and warns. Paste the value into the
 script to turn on real verification on later runs. Log file:
 `/var/log/optiplex-llm-setup.log`. The full deployment and tuning
 guide for this script and the matching playbook is
-`ansible/playbooks/llm/optiplex-llm-v2.3.md`.
+`ansible/playbooks/llm/optiplex-llm-v2.4.md`.
 
 ## deploy-llama-ui-raw.sh
 

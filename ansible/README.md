@@ -41,7 +41,7 @@ Playbooks are grouped by job under `playbooks/`. Most groups have a README that 
 - [llm](playbooks/llm/README.md): the NanoPi inference fleet (server
   and load balancer), plus the two full deployment guides,
   [gpu-box-llm-setup-v2.3.md](playbooks/llm/gpu-box-llm-setup-v2.3.md)
-  and [optiplex-llm-v2.3.md](playbooks/llm/optiplex-llm-v2.3.md).
+  and [optiplex-llm-v2.4.md](playbooks/llm/optiplex-llm-v2.4.md).
 - [monitoring](playbooks/monitoring/README.md): the deploy playbook
   for the standby monitoring stack in `containers/monitoring/`
   (a wrapper around its compose project, not a re-implementation).

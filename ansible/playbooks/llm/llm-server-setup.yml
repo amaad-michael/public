@@ -11,6 +11,7 @@
     llm_user: "{{ ansible_user }}"
     llm_home: "/home/{{ ansible_user }}"
     llama_dir: "{{ llm_home }}/llama.cpp"
+    llama_cpp_ref: b11907
     model_dir: "{{ llm_home }}/models"
     llama_server_bin: "{{ llama_dir }}/build/bin/llama-server"
     server_port: 8080
@@ -84,8 +85,9 @@
 
     - name: Clone llama.cpp
       git:
-        repo: https://github.com/ggerganov/llama.cpp
+        repo: https://github.com/ggml-org/llama.cpp
         dest: "{{ llama_dir }}"
+        version: "{{ llama_cpp_ref }}"
         depth: 1
         update: yes
       become_user: "{{ llm_user }}"
