@@ -1,4 +1,4 @@
-# OptiPlex llama.cpp Deployment & Tuning v2.3.0
+# OptiPlex llama.cpp Deployment & Tuning v2.4.0
 
 > **Supersedes:** `optiplex-llm-setup-v1.5.md`, `optiplex-llm-setup-v1.5.sh`, `optiplex-cpu-optimization-v1.0.md`
 > **Target:** Dell OptiPlex 790 (`OptiPlex790-LLM`), Intel Core i5-2400 (Sandy Bridge, 4C/4T), **8GB as 4 × 2GB DDR3, dual channel, clamped to 1067 MT/s by one mismatched module**, no GPU
@@ -20,7 +20,7 @@
 - [Change Control — v1.5 + v1.0 → v2.0.x](#change-control--v15--v10--v20x)
    - [Corrections to verified defects](#corrections-to-verified-defects)
    - [[DECISION] Behaviour changes](#decision-behaviour-changes)
-   - [RISK-1 — llama.cpp pinned to a moving branch (OPEN, accepted)](#risk-1--llamacpp-pinned-to-a-moving-branch-open-accepted)
+   - [RISK-1 — llama.cpp pinned to a moving branch (CLOSED 2026-10-26)](#risk-1--llamacpp-pinned-to-a-moving-branch-closed-2026-10-26)
 - [Security posture](#security-posture)
 - [Prerequisites](#prerequisites)
 - [Deployment Script](#deployment-script)
@@ -200,9 +200,9 @@ Everything in the old optimization guide's Section 12 added up to a claimed 10�
 | D | Install paths moved to `/opt/llama.cpp` + `/var/lib/llm` | — | — |
 | E | BLAS not built by default | `ENABLE_BLAS="no"` | `ENABLE_BLAS="yes"` (helps prompt ingestion only) |
 
-### RISK-1 — llama.cpp pinned to a moving branch (OPEN, accepted)
+### RISK-1 — llama.cpp pinned to a moving branch (CLOSED 2026-10-26)
 
-`LLAMA_CPP_REF` defaults to `master`. Every run records the resolved commit to the log, so the exact tree that produced a working binary is always recoverable. To pin, set `LLAMA_CPP_REF` to a release tag (`git ls-remote --tags --sort=-v:refname https://github.com/ggml-org/llama.cpp | head -20` — plain `ls-remote | tail` sorts lexicographically, so it returns `b9xx`, not the newest build) and re-run.
+`LLAMA_CPP_REF` now defaults to the pinned release tag `b11907` in both forms (the script default and the playbook's `llama_cpp_ref`), so a run no longer advances to whatever `master` happens to be that day. Every run still records the resolved commit to the log, so the exact tree that produced a working binary is always recoverable. To bump, change the one default in each form to a newer release tag (`git ls-remote --tags --sort=-v:refname https://github.com/ggml-org/llama.cpp | head -20` — plain `ls-remote | tail` sorts lexicographically, so it returns `b9xx`, not the newest build) and re-run; an existing checkout fetches and checks out the new tag. A per-run override (`LLAMA_CPP_REF=<tag>` in the environment, `-e llama_cpp_ref=<tag>` for the playbook) still wins over the pinned default.
 
 ---
 
@@ -286,9 +286,10 @@ ENABLE_BLAS="no"
 # of making everything else the first thing evicted.
 USE_MLOCK="${USE_MLOCK:-}"
 
-# TODO(RISK-1): moving branch. Pin to a release tag once one is selected.
+# RISK-1 closed 2026-10-26: pinned to a release tag instead of the moving
+# master branch. Bump deliberately — change this one default and re-run.
 # The resolved commit is written to $LOG_FILE on every run.
-LLAMA_CPP_REF="${LLAMA_CPP_REF:-master}"
+LLAMA_CPP_REF="${LLAMA_CPP_REF:-b11907}"
 LLAMA_CPP_REPO="https://github.com/ggml-org/llama.cpp"
 
 case "$MODEL_PRESET" in
@@ -795,7 +796,7 @@ ansible-galaxy collection install community.general
     bind_addr: "127.0.0.1"
     require_api_key: true
     enable_blas: false
-    llama_cpp_ref: master            # TODO(RISK-1): pin to a release tag
+    llama_cpp_ref: b11907             # RISK-1 closed 2026-10-26: pinned release tag; bump deliberately
     model_preset: llama3.2-3b
     # OPEN-1: no upstream checksum manifest exists; capture from a known-good
     # download and paste the hash here to enable verification.
@@ -1253,7 +1254,7 @@ sudo rm -f /var/log/optiplex-llm-setup.log
 
 | ID | Item | Resolution |
 |---|---|---|
-| RISK-1 | `llama.cpp` tracks `master` | Pin `LLAMA_CPP_REF` to a release tag. Resolved commit is logged every run |
+| ~~RISK-1~~ | ~~`llama.cpp` tracks `master`~~ | **CLOSED 2026-10-26** — both forms now default to the pinned release tag `b11907` (script `LLAMA_CPP_REF`, playbook `llama_cpp_ref`). Resolved commit is logged every run; bump by changing the one default in each form and re-running |
 | OPEN-1 | `MODEL_SHA256` / `model_sha256` unset | 3B preset RESOLVED 2026-10-17: `Llama-3.2-3B-Instruct-Q4_K_M.gguf` (2,019,377,696 bytes) SHA-256 `6c1a2b41161032677be168d354123594c0e6e67d2b9227c84f296ad037c728ff`, captured from the verified download used for the OptiPlex container stack and matching the Hugging Face published hash for the file — paste it into both the script and the playbook to enable verification on the 3B preset. 8B preset still uncaptured: no upstream checksum manifest exists for these GGUF files, so capture the hash from a first known-good download. Until then both paths warn and proceed |
 | OPEN-2 | Ceiling table is derived, not measured | Run `llama-bench` and replace the table's estimates with real `tg` figures for this box |
 | ~~OPEN-3~~ | ~~Actual RAM unconfirmed~~ | **CLOSED** — 8GB measured (7821 MiB total). Budget table added; `--mlock` defaults now derive from it |
@@ -1266,6 +1267,7 @@ sudo rm -f /var/log/optiplex-llm-setup.log
 
 ## Version History
 
+- **v2.4 (2026-10-26):** RISK-1 closed: llama.cpp is pinned to the ggml-org release tag `b11907` by default in both the deployment script and the Ansible playbook (previously both tracked the moving `master` branch). A bump is a deliberate one-line change per form. The embedded script and playbook in this guide are updated to match.
 - **v2.3 (2026-10-17):** OPEN-1 updated for the 3B preset: the model's SHA-256 was captured from the verified download used for the OptiPlex container stack (see Open items). No deployment changes; scripts and procedures unchanged.
 - **v2.2 (2026-10-07):** Added table of contents. No deployment changes; scripts and procedures unchanged.
 

@@ -46,9 +46,10 @@ ENABLE_BLAS="no"
 # of making everything else the first thing evicted.
 USE_MLOCK="${USE_MLOCK:-}"
 
-# TODO(RISK-1): moving branch. Pin to a release tag once one is selected.
+# RISK-1 closed 2026-10-26: pinned to a release tag instead of the moving
+# master branch. Bump deliberately — change this one default and re-run.
 # The resolved commit is written to $LOG_FILE on every run.
-LLAMA_CPP_REF="${LLAMA_CPP_REF:-master}"
+LLAMA_CPP_REF="${LLAMA_CPP_REF:-b11907}"
 LLAMA_CPP_REPO="https://github.com/ggml-org/llama.cpp"
 
 case "$MODEL_PRESET" in

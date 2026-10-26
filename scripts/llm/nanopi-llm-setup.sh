@@ -39,7 +39,7 @@
 #
 # A config file (--config FILE, or $NANOPI_LLM_CONFIG) may set any of
 # ROLE, TIER, LLM_USER, SET_HOSTNAME, SERVER_PORT, LB_PORT, CTX_SIZE,
-# N_PREDICT, THREADS, MODEL_FILENAME, MODEL_URL, MODEL_SHA256, LAN_CIDR and NODES
+# N_PREDICT, THREADS, MODEL_FILENAME, MODEL_URL, MODEL_SHA256, LLAMA_CPP_REF, LAN_CIDR and NODES
 # (space-separated). Command-line flags override the file.
 
 set -euo pipefail
@@ -56,6 +56,7 @@ THREADS=""
 MODEL_FILENAME=""
 MODEL_URL=""
 MODEL_SHA256=""
+LLAMA_CPP_REF="b11907"
 LAN_CIDR=""
 NODES="192.168.1.101 192.168.1.102"
 NODE_LABELS="4gb-heavy 2gb-light"
@@ -432,10 +433,14 @@ do_server() {
 
   # llama.cpp — clone and native build, as the playbook's git + shell tasks
   if [[ -d "$llama_dir/.git" ]]; then
-    run_as_user "$LLM_USER" git -C "$llama_dir" pull --ff-only
+    run_as_user "$LLM_USER" git -C "$llama_dir" fetch --depth 1 origin tag "$LLAMA_CPP_REF"
+    run_as_user "$LLM_USER" git -C "$llama_dir" checkout --quiet "$LLAMA_CPP_REF"
   else
-    run_as_user "$LLM_USER" git clone --depth 1 \
-      https://github.com/ggerganov/llama.cpp "$llama_dir"
+    run_as_user "$LLM_USER" git clone --depth 1 --branch "$LLAMA_CPP_REF" \
+      https://github.com/ggml-org/llama.cpp "$llama_dir"
+  fi
+  if [[ "$DRY_RUN" -eq 0 && -d "$llama_dir/.git" ]]; then
+    log "llama.cpp checkout: $(run_as_user "$LLM_USER" git -C "$llama_dir" rev-parse HEAD) (pinned $LLAMA_CPP_REF)"
   fi
   if [[ "$DRY_RUN" -eq 1 ]]; then
     printf 'DRY-RUN: build llama.cpp in %s unless %s exists\n' "$llama_dir" "$bin"

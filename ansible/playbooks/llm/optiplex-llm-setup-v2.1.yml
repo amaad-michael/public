@@ -14,7 +14,7 @@
     bind_addr: "127.0.0.1"
     require_api_key: true
     enable_blas: false
-    llama_cpp_ref: master            # TODO(RISK-1): pin to a release tag
+    llama_cpp_ref: b11907             # RISK-1 closed 2026-10-26: pinned release tag; bump deliberately
     model_preset: llama3.2-3b
     # OPEN-1: no upstream checksum manifest exists; capture from a known-good
     # download and paste the hash here to enable verification.
