@@ -10,7 +10,7 @@ points at that inventory by default. Collection requirements are in
 ansible-galaxy collection install -r ansible/requirements.yml
 ```
 
-Playbooks are grouped by job under `playbooks/`. Most groups have a README that is the usage guide for its playbooks (motd is the exception — see its entry below):
+Playbooks are grouped by job under `playbooks/`. Most groups have a README that is the usage guide for its playbooks (motd and workstation are the exceptions — see their entries below):
 
 - [accounts](playbooks/accounts/README.md): credential cycling and
   account removal. The fleet password-cycle kit has its own guide at
@@ -23,8 +23,9 @@ Playbooks are grouped by job under `playbooks/`. Most groups have a README that 
 - [cleanup](playbooks/cleanup/README.md): log cleanup, update
   disabling, and the uninstall playbooks (Jenkins, Pi-hole). These
   remove things; read the guide first.
-- [cockpit](playbooks/cockpit/README.md): Cockpit install and the PCP
-  performance collection setup.
+- [cockpit](playbooks/cockpit/README.md): Cockpit install and the
+  console firewall port (PCP deliberately not installed — see the
+  group guide).
 - [firewall](playbooks/firewall/README.md): the firewalld playbooks
   and which hosts each one targets.
 - [gitea](playbooks/gitea/README.md): the primary-host Gitea install

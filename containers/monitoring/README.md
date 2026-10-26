@@ -97,7 +97,7 @@ docker compose ps  # All 9 should be "Up" and "healthy"
 
 - Prometheus: Admin API disabled
 - Grafana: Sign-up disabled, secure cookies
-- Vaultwarden: HTTPS, no signups
+- Vaultwarden: No signups; plain HTTP on 8000 (no TLS in the service — terminate externally)
 - Ntfy: deny-all auth
 - Headscale: DB encryption, ACL
 
