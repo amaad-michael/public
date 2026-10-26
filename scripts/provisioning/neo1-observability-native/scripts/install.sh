@@ -36,7 +36,21 @@ for v in PROM_VERSION PROM_SHA256 AM_VERSION AM_SHA256 BB_VERSION BB_SHA256 \
 done
 
 ARCH=armv7
-DL=/tmp/neo1-dl && mkdir -p "$DL"
+# Download directory: ${TMPDIR:-/tmp}/neo1-dl. TMPDIR is honored
+# because a small tmpfs /tmp cannot hold the download set — neo1's
+# /tmp is 243 MB, while the six pinned tarballs total ~602 MiB
+# (630,675,418 bytes, measured 2026-10-25) before extraction. With
+# TMPDIR unset the path is /tmp/neo1-dl, exactly as before.
+DL="${TMPDIR:-/tmp}/neo1-dl"
+mkdir -p "$DL"
+# Fail early — before any download or system change — when the
+# filesystem holding DL cannot hold the set plus extraction room.
+DL_AVAIL_KB=$(df -Pk "$DL" | awk 'NR==2 {print $4}')
+if [ "$DL_AVAIL_KB" -lt 716800 ]; then
+  echo "ERROR: $DL sits on a filesystem with only ${DL_AVAIL_KB} KB free; the download set alone is ~602 MiB." >&2
+  echo "Re-run with TMPDIR on a filesystem with at least 700 MB free, e.g.: sudo TMPDIR=/var/tmp scripts/install.sh" >&2
+  exit 1
+fi
 
 fetch() { # url sha256 outfile
   curl -fsSL -o "$3" "$1"

@@ -1,4 +1,4 @@
-# neo1 Observability Node — v2.6.1 (native systemd, ARMv7/512MB)
+# neo1 Observability Node — v2.6.2 (native systemd, ARMv7/512MB)
 
 The bare-metal form of the neo1 observability node: the monitoring
 design for one 512 MB ARMv7 box (neo1, 192.168.0.105, Armbian) as
@@ -28,7 +28,11 @@ stack for the cluster is `containers/monitoring/`.
    if any is blanked. To bump a component, update its version and
    sha256 together from the same release's checksum file.
 1. `sudo scripts/install.sh` (it locates the kit root itself; run as
-   root). It creates the service users, installs the checksum-verified
+   root). Downloads stage in `${TMPDIR:-/tmp}/neo1-dl`; the six
+   tarballs total ~602 MiB, so the installer checks free space on
+   that filesystem before downloading and fails early if the set
+   cannot fit. On neo1, whose /tmp is a 243 MB tmpfs, run it as
+   `sudo TMPDIR=/var/tmp scripts/install.sh`. It creates the service users, installs the checksum-verified
    binaries (promtool and amtool alongside their daemons), the backup
    scripts, the configs, and the units, then enables the always-on set plus the two backup timers — grafana deliberately excluded.
 1. Provision ntfy auth (deny-all is default-on):
