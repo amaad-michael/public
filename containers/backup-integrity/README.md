@@ -12,9 +12,9 @@ the primary implementation — copied, not re-written. Byte
 compatibility follows from that: on the same tree, this image and
 the bash tool produce byte-identical manifests, and each form
 verifies the other's manifest. (A second bash implementation,
-`scripts/monitoring/local_backups_checker.sh`, uses a different
-interface and a single `backup.manifest` name; this image follows
-the primary tool.)
+`scripts/monitoring/local_backups_checker.sh`, formerly used a
+different interface and a single `backup.manifest` name; it was
+removed on 2026-10-22, and this image follows the primary tool.)
 
 ## ✅ Build and verify
 

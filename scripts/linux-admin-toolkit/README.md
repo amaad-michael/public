@@ -4,7 +4,7 @@
 
 - **`<slug>-local.sh`** — standalone Bash script for one server. Scripts that need distro-specific behavior auto-detect the distro from `/etc/os-release` and work on RHEL-family (`dnf`/`yum`) and Debian-family (`apt-get`); the rest use portable commands that behave the same on both families. Run with `--help` for usage.
 - **`<slug>-group.yml`** — Ansible playbook that does the same job across a fleet.
-  Run with `-e target_group=<group>` (defaults to `all`).
+  Run with `-e target_group=<group>` (defaults to `all`). Task 27 is the exception: its fleet form is the consolidated `ansible/playbooks/cockpit/cockpit_setup.yml`, not an in-folder `<slug>-group.yml`.
 
 ## Version
 

@@ -33,7 +33,9 @@ public/
 └── deprecated/   # retired files, kept for git history
 ```
 
-The repo root also carries `CODEOWNERS`, and `.github/` holds the
+The repo root also carries `CODEOWNERS` and the shared config
+dotfiles (`.gitignore`, `.gitattributes`, `.editorconfig`, `.mdlrc`,
+`.yamllint`, `.pre-commit-config.yaml`), and `.github/` holds the
 Dependabot config, the PR template, and the CI and security workflows.
 
 ## 🔀 How this repo is maintained

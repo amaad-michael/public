@@ -11,7 +11,8 @@ Utility scripts for the homelab, grouped by job. Each folder's README is the usa
   helper.
 - [linux-admin-toolkit](linux-admin-toolkit/README.md): 27 everyday
   admin tasks, each as a local Bash script and a fleet Ansible
-  playbook.
+  playbook (task 27's playbook is the consolidated
+  `ansible/playbooks/cockpit/cockpit_setup.yml`).
 - [llm](llm/README.md): bare-metal LLM installers for the GPU box,
   the OptiPlex, and the NanoPi pool, a llama-ui container deploy, and
   the Open Terminal file service.

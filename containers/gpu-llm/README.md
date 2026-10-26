@@ -155,9 +155,9 @@ follows the playbook.
   Ollama and the loopback SearXNG. Here all three services share the
   project network and WebUI uses the service names `ollama` and
   `searxng`; the environment values are otherwise the playbook's, verbatim.
-- The playbook pulls models through the Ollama API from an Ansible wait
-  task; here the `model-init` one-shot service does it with the Ollama
-  CLI.
+- The playbook pulls models with `ollama pull` command tasks (async,
+  awaited with `async_status`); here the `model-init` one-shot service
+  does the same with the Ollama CLI.
 - The playbook's floating `:latest` tags (its own TODO(RISK-1) flags
   them) are replaced by the pinned tags and digests above.
 

@@ -29,13 +29,13 @@ The bash form it mirrors is the primary tool,
   bash tool's own SUCCESS/FATAL messages and exit semantics: the play
   fails on any host whose tree does not match its manifest.
 
-A second bash implementation exists,
-`scripts/monitoring/local_backups_checker.sh`, with a different
-interface (`--generate`/`--verify`, a single `backup.manifest` name, a
-hand-rolled verification loop, `verify_*.log` files). This playbook
-follows the primary tool only; the two bash tools' manifests are the
-same sha256sum format but their naming differs, and the monitoring
-checker remains the form to use when its log files are wanted.
+A second bash implementation,
+`scripts/monitoring/local_backups_checker.sh`, formerly existed with
+a different interface (`--generate`/`--verify`, a single
+`backup.manifest` name, a hand-rolled verification loop,
+`verify_*.log` files); it was removed on 2026-10-22 because the two
+tools wrote incompatible manifests. This playbook follows the
+primary tool only.
 
 The backup **run** itself (rsync into timestamped directories) is a
 different function; its forms live in
