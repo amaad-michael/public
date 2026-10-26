@@ -40,11 +40,18 @@ Dependabot config, the PR template, and the CI and security workflows.
 
 ## 🔀 How this repo is maintained
 
-Changes here are built, tested, and packaged by an AI agent, then
-reviewed, committed, and merged by me. The full routine, the record
-keeping, and the standing rules are documented in
-[git-repo-workflow.md](git-repo-workflow.md), with worked examples of
-the commands themselves.
+This repo runs human in the loop, deliberately. An AI agent builds,
+tests, and packages each change, but the analysis is mine: I set the
+direction, audit the findings, challenge the claims, and verify the
+evidence before anything is accepted. Nothing lands on the agent's
+say-so. The agent gets no connections into my systems: no accounts,
+no server access, and no push rights. Changes arrive as tested
+packages and reach this repo the old fashioned way, applied by hand.
+Every change is reviewed, committed, and merged by me.
+
+The full routine, the record keeping, and the standing rules are
+documented in [git-repo-workflow.md](git-repo-workflow.md), with
+worked examples of the commands themselves.
 
 ## ⚠️ Note
 
