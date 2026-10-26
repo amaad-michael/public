@@ -19,6 +19,12 @@
 #   VMID 9000 — debian-12-cloudinit   (Debian 12 Bookworm generic cloud image)
 #   VMID 9001 — ubuntu-2404-cloudinit (Ubuntu 24.04 LTS cloud image)
 #
+# VERIFICATION: every image is verified before import against the
+# checksum file its upstream publishes beside it — Debian against
+# SHA512SUMS, Ubuntu against SHA256SUMS after GPG-verifying the sums
+# with the pinned UEC signing key. A mismatch aborts the run before
+# any template is created.
+#
 # RE-RUN SAFE: skips any template VMID that already exists.
 #
 # CLONE A VM FROM TEMPLATE:
@@ -40,9 +46,22 @@
       - id: 9000
         name: debian-12-cloudinit
         url: https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2
+        sums_url: https://cloud.debian.org/images/cloud/bookworm/latest/SHA512SUMS
+        sums_algo: sha512
       - id: 9001
         name: ubuntu-2404-cloudinit
         url: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
+        sums_url: https://cloud-images.ubuntu.com/noble/current/SHA256SUMS
+        sums_algo: sha256
+        sums_sig_url: https://cloud-images.ubuntu.com/noble/current/SHA256SUMS.gpg
+
+    # Ubuntu cloud-image signing key (UEC) fingerprint. SHA256SUMS is
+    # trusted only after its signature verifies against the key
+    # fetched from the Ubuntu keyserver, and that key is trusted only
+    # when its fingerprint matches this pin. Taken from the signature
+    # on the live SHA256SUMS; same pin as
+    # scripts/provisioning/proxmox-setup.sh.
+    ubuntu_cloud_key_fpr: "D2EB44626FDDC30B513D5BB71A5D6C4C7DB87C81"
 
     pve_template_storage: local-lvm   # where the disk images are imported
     pve_template_tmpdir: /var/tmp/pve-templates
@@ -100,14 +119,141 @@
       when: item.rc == 0
 
     # -------------------------------------------------------------------------
-    # Download images only for templates that don't exist yet
+    # Download + verify images for templates that don't exist yet.
+    # Fail-closed, the same design as proxmox-setup.sh: each image is
+    # verified against the checksum file its upstream publishes beside
+    # it (Debian: SHA512SUMS; Ubuntu: SHA256SUMS, GPG-verified first),
+    # and get_url applies the expected checksum itself, so a mismatch
+    # fails the run and the image never lands in the temp dir. Images
+    # are downloaded under their upstream filenames, as in the script.
     # -------------------------------------------------------------------------
-    - name: Download cloud images (new templates only)
+    - name: Download checksum files (new templates only)
+      ansible.builtin.get_url:
+        url: "{{ item.item.sums_url }}"
+        dest: "{{ pve_template_tmpdir }}/.{{ item.item.name }}.sums"
+        mode: '0600'
+        force: true
+        timeout: 600
+      loop: "{{ qm_status_results.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when: item.rc != 0
+
+    - name: Download the Ubuntu sums signature (new templates only)
+      ansible.builtin.get_url:
+        url: "{{ item.item.sums_sig_url }}"
+        dest: "{{ pve_template_tmpdir }}/.{{ item.item.name }}.sums.gpg"
+        mode: '0600'
+        force: true
+        timeout: 600
+      loop: "{{ qm_status_results.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when:
+        - item.rc != 0
+        - item.item.sums_sig_url is defined
+
+    - name: Download the Ubuntu cloud-image signing key (new templates only)
+      ansible.builtin.get_url:
+        url: "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x{{ ubuntu_cloud_key_fpr }}"
+        dest: "{{ pve_template_tmpdir }}/.{{ item.item.name }}.uec.key"
+        mode: '0600'
+        force: true
+        timeout: 600
+      loop: "{{ qm_status_results.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when:
+        - item.rc != 0
+        - item.item.sums_sig_url is defined
+
+    - name: Read the Ubuntu signing key fingerprints (new templates only)
+      ansible.builtin.shell: |
+        gpg --show-keys --with-colons "{{ pve_template_tmpdir }}/.{{ item.item.name }}.uec.key" 2>/dev/null | awk -F: '/^fpr:/ {print $10; exit}'
+      register: uec_key_fingerprint_results
+      loop: "{{ qm_status_results.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when:
+        - item.rc != 0
+        - item.item.sums_sig_url is defined
+      changed_when: false
+
+    - name: Refuse if an Ubuntu signing key fingerprint does not match the pin
+      ansible.builtin.fail:
+        msg: "Ubuntu cloud-image signing key fingerprint mismatch: got {{ (item.stdout | trim) or '<none>' }}, expected {{ ubuntu_cloud_key_fpr }} — refusing to trust SHA256SUMS"
+      loop: "{{ uec_key_fingerprint_results.results }}"
+      loop_control:
+        label: "{{ item.item.item.name }}"
+      when:
+        - item.item.rc != 0
+        - item.stdout is defined
+        - (item.stdout | trim) != ubuntu_cloud_key_fpr
+
+    - name: Create GnuPG homes for sums verification (new templates only)
+      ansible.builtin.file:
+        path: "{{ pve_template_tmpdir }}/.gnupg-{{ item.item.name }}"
+        state: directory
+        mode: '0700'
+      loop: "{{ qm_status_results.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when:
+        - item.rc != 0
+        - item.item.sums_sig_url is defined
+
+    - name: Verify the Ubuntu sums signatures (new templates only)
+      ansible.builtin.shell: |
+        set -e
+        gpg --batch --quiet --import "{{ pve_template_tmpdir }}/.{{ item.item.name }}.uec.key"
+        gpg --batch --verify "{{ pve_template_tmpdir }}/.{{ item.item.name }}.sums.gpg" "{{ pve_template_tmpdir }}/.{{ item.item.name }}.sums"
+      environment:
+        GNUPGHOME: "{{ pve_template_tmpdir }}/.gnupg-{{ item.item.name }}"
+      loop: "{{ qm_status_results.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when:
+        - item.rc != 0
+        - item.item.sums_sig_url is defined
+      changed_when: false
+
+    - name: Extract the expected image hashes from the checksum files
+      ansible.builtin.shell: |
+        awk -v r="{{ item.item.url.split('/')[-1] }}" '{n=$NF; sub(/^\*/, "", n); if (n == r) print $1}' "{{ pve_template_tmpdir }}/.{{ item.item.name }}.sums"
+      register: image_hash_results
+      loop: "{{ qm_status_results.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when: item.rc != 0
+      changed_when: false
+
+    - name: Build the expected image hash map
+      ansible.builtin.set_fact:
+        pve_image_hashes: "{{ pve_image_hashes | default({}) | combine({item.item.item.id: (item.stdout | trim)}) }}"
+      loop: "{{ image_hash_results.results }}"
+      loop_control:
+        label: "{{ item.item.item.name }}"
+      when: item.item.rc != 0
+
+    - name: Refuse if a checksum file has no entry for its image
+      ansible.builtin.fail:
+        msg: "Checksum file for {{ item.item.item.name }} has no entry for {{ item.item.item.url.split('/')[-1] }} — refusing to use an unverified image"
+      loop: "{{ image_hash_results.results }}"
+      loop_control:
+        label: "{{ item.item.item.name }}"
+      when:
+        - item.item.rc != 0
+        - item.stdout is defined
+        - (item.stdout | trim | length) == 0
+
+    - name: Download cloud images (new templates only, checksum-verified)
       ansible.builtin.get_url:
         url: "{{ item.item.url }}"
-        dest: "{{ pve_template_tmpdir }}/{{ item.item.name }}.qcow2"
+        dest: "{{ pve_template_tmpdir }}/{{ item.item.url.split('/')[-1] }}"
         mode: '0600'
+        force: true
         timeout: 600
+        checksum: "{{ item.item.sums_algo }}:{{ pve_image_hashes[item.item.id] }}"
       loop: "{{ qm_status_results.results }}"
       loop_control:
         label: "{{ item.item.name }}"
@@ -146,7 +292,7 @@
     - name: Import cloud disk into storage
       ansible.builtin.command: >
         qm importdisk {{ item.item.id }}
-        {{ pve_template_tmpdir }}/{{ item.item.name }}.qcow2
+        {{ pve_template_tmpdir }}/{{ item.item.url.split('/')[-1] }}
         {{ pve_template_storage }}
       loop: "{{ qm_status_results.results }}"
       loop_control:
@@ -202,7 +348,25 @@
     # -------------------------------------------------------------------------
     - name: Remove downloaded cloud images
       ansible.builtin.file:
-        path: "{{ pve_template_tmpdir }}/{{ item.item.name }}.qcow2"
+        path: "{{ pve_template_tmpdir }}/{{ item.item.url.split('/')[-1] }}"
+        state: absent
+      loop: "{{ qm_status_results.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when: item.rc != 0
+
+    - name: Remove checksum verification artifacts
+      ansible.builtin.file:
+        path: "{{ pve_template_tmpdir }}/.{{ item.0.item.name }}{{ item.1 }}"
+        state: absent
+      loop: "{{ qm_status_results.results | product(['.sums', '.sums.gpg', '.uec.key']) | list }}"
+      loop_control:
+        label: "{{ item.0.item.name }}{{ item.1 }}"
+      when: item.0.rc != 0
+
+    - name: Remove sums verification GnuPG homes
+      ansible.builtin.file:
+        path: "{{ pve_template_tmpdir }}/.gnupg-{{ item.item.name }}"
         state: absent
       loop: "{{ qm_status_results.results }}"
       loop_control:

@@ -1,4 +1,4 @@
-# GPU Box LLM Deployment v2.2
+# GPU Box LLM Deployment v2.3
 
 > **Target:** Nobara (Fedora-based GPU box), **AMD GPU only (ROCm)**, Ollama + Open WebUI
 > **Models:** Qwen 2.5 Coder 14B, Qwen 2.5 Coder 7B, DeepSeek-R1 14B, LLaVA 13B, nomic-embed-text (5 total)
@@ -7,6 +7,10 @@
 > **Status:** Idempotent. Container images run on floating `:latest` tags by explicit decision — see *Known Risk Register*.
 
 ---
+
+## Change Control — v2.2 → v2.3
+
+Security fix (2026-10-25), applied to the Ansible playbook and to the embedded copy in this guide. The Ansible path no longer downloads or runs ollama.com/install.sh at all: the warn-and-run pin pattern documented under v2.0 → v2.1 is retired for this path. The playbook now installs the version-pinned Ollama release tarballs (`ollama_version`, 0.40.9) from the GitHub release, each verified against the release's published sha256sum.txt before extraction, reproducing the installer's bin-dir rule, the ollama user and groups, and the systemd unit it writes — the same pattern the workstation updater and the monthly Nobara playbook adopted on 2026-10-23. The block runs only when the ollama binary is absent, preserving the old install task's `creates:` behaviour. The Bash script path is unchanged: it still runs install.sh behind the optional `OLLAMA_INSTALL_SHA256` pin (warn loudly when unset, refuse on mismatch). No other behaviour changes.
 
 ## Change Control — v2.1 → v2.2
 
@@ -750,11 +754,11 @@ ansible-playbook -i <gpu-box-ip>, -u <user> -K gpu-box-llm-setup-v1.9.yml
     openwebui_image: "ghcr.io/open-webui/open-webui:latest"
     searxng_image: "docker.io/searxng/searxng:latest"
     ollama_dropin_dir: "/etc/systemd/system/ollama.service.d"
-    # Optional pin for the Ollama installer (same pattern as F2 in
-    # scripts/workstation/update-gpu-box.sh): when set, the downloaded
-    # installer is verified against this SHA-256 before it runs; when
-    # empty, the install task warns that it is running unverified.
-    ollama_install_sha256: ""
+    # Ollama release pinned for the install: the tarballs and their
+    # sha256sum.txt come from this exact GitHub release. Bump the
+    # version deliberately — never track a moving "latest". Same
+    # pattern (and version) as update-gpu-box.sh's OLLAMA_VERSION.
+    ollama_version: "0.40.9"
     required_models:
       - "qwen2.5-coder:14b"
       - "qwen2.5-coder:7b"
@@ -840,21 +844,207 @@ ansible-playbook -i <gpu-box-ip>, -u <user> -K gpu-box-llm-setup-v1.9.yml
         - "'firewalld.service' in ansible_facts.services"
         - ansible_facts.services['firewalld.service'].state == 'running'
 
-    - name: Install Ollama via official install script (ROCm build)
+    - name: Check whether Ollama is already installed
+      stat:
+        path: /usr/local/bin/ollama
+      register: ollama_binary
+
+    # Ollama is installed from the version-pinned GitHub release
+    # tarballs, verified against the release's published sha256sum.txt
+    # before anything is extracted — the same pattern as
+    # update-gpu-box.sh step 3 and the monthly Nobara playbook.
+    # ollama.com/install.sh is a moving, unpinned script and is no
+    # longer downloaded or run; the tasks below reproduce what it does
+    # on an AMD host: the base tarball, the ROCm tarball (this
+    # playbook targets AMD hosts only — see the /dev/kfd assertion in
+    # pre_tasks), the ollama user and groups, and the systemd unit it
+    # writes. The block runs only when the binary is absent, which
+    # preserves the old install task's `creates:` behaviour.
+    - name: Require zstd for the Ollama tarball extraction
+      command: zstd --version
+      register: ollama_zstd_result
+      changed_when: false
+      when: not ollama_binary.stat.exists
+
+    - name: Determine the Ollama bin directory (the installer's PATH rule)
       shell: |
-        set -eo pipefail
-        tmp_installer=$(mktemp)
-        trap 'rm -f "$tmp_installer"' EXIT
-        curl -fsSL -o "$tmp_installer" https://ollama.com/install.sh
-        {% if ollama_install_sha256 | length > 0 %}
-        echo "{{ ollama_install_sha256 }}  $tmp_installer" | sha256sum -c -
-        {% else %}
-        echo "WARNING: ollama_install_sha256 is not set — running ollama.com/install.sh without checksum verification" >&2
-        {% endif %}
-        sh "$tmp_installer"
-      args:
-        executable: /bin/bash
-        creates: /usr/local/bin/ollama
+        bindir=/bin
+        for d in /usr/local/bin /usr/bin /bin; do
+          bindir="$d"
+          case ":$PATH:" in
+            *":$d:"*) break ;;
+          esac
+        done
+        echo "$bindir"
+      register: ollama_bindir_result
+      changed_when: false
+      when: not ollama_binary.stat.exists
+
+    - name: Set the Ollama install directory facts
+      set_fact:
+        ollama_bindir: "{{ ollama_bindir_result.stdout | trim }}"
+        ollama_install_dir: "{{ ollama_bindir_result.stdout | trim | dirname }}"
+      when: not ollama_binary.stat.exists
+
+    - name: Create the Ollama download directory
+      file:
+        path: "/tmp/ollama-{{ ollama_version }}"
+        state: directory
+        mode: '0755'
+      when: not ollama_binary.stat.exists
+
+    - name: Download the Ollama release checksum file
+      get_url:
+        url: "https://github.com/ollama/ollama/releases/download/v{{ ollama_version }}/sha256sum.txt"
+        dest: "/tmp/ollama-{{ ollama_version }}/sha256sum.txt"
+        mode: '0644'
+        force: true
+      when: not ollama_binary.stat.exists
+
+    - name: Read the expected base tarball hash from the release sums
+      shell: >-
+        awk '$NF == "./ollama-linux-amd64.tar.zst" {print $1}'
+        "/tmp/ollama-{{ ollama_version }}/sha256sum.txt"
+      register: ollama_base_hash
+      changed_when: false
+      when: not ollama_binary.stat.exists
+
+    - name: Fail if the release sums lack the base tarball entry
+      fail:
+        msg: "sha256sum.txt for Ollama v{{ ollama_version }} has no ollama-linux-amd64.tar.zst entry"
+      when:
+        - not ollama_binary.stat.exists
+        - (ollama_base_hash.stdout | trim | length) == 0
+
+    - name: Download the Ollama base tarball (checksum-verified)
+      get_url:
+        url: "https://github.com/ollama/ollama/releases/download/v{{ ollama_version }}/ollama-linux-amd64.tar.zst"
+        dest: "/tmp/ollama-{{ ollama_version }}/ollama-linux-amd64.tar.zst"
+        mode: '0644'
+        force: true
+        checksum: "sha256:{{ ollama_base_hash.stdout | trim }}"
+      when: not ollama_binary.stat.exists
+
+    - name: Read the expected ROCm tarball hash from the release sums
+      shell: >-
+        awk '$NF == "./ollama-linux-amd64-rocm.tar.zst" {print $1}'
+        "/tmp/ollama-{{ ollama_version }}/sha256sum.txt"
+      register: ollama_rocm_hash
+      changed_when: false
+      when: not ollama_binary.stat.exists
+
+    - name: Fail if the release sums lack the ROCm tarball entry
+      fail:
+        msg: "sha256sum.txt for Ollama v{{ ollama_version }} has no ollama-linux-amd64-rocm.tar.zst entry"
+      when:
+        - not ollama_binary.stat.exists
+        - (ollama_rocm_hash.stdout | trim | length) == 0
+
+    - name: Download the Ollama ROCm tarball (checksum-verified)
+      get_url:
+        url: "https://github.com/ollama/ollama/releases/download/v{{ ollama_version }}/ollama-linux-amd64-rocm.tar.zst"
+        dest: "/tmp/ollama-{{ ollama_version }}/ollama-linux-amd64-rocm.tar.zst"
+        mode: '0644'
+        force: true
+        checksum: "sha256:{{ ollama_rocm_hash.stdout | trim }}"
+      when: not ollama_binary.stat.exists
+
+    - name: Remove the previous Ollama library directory (as the installer does)
+      file:
+        path: "{{ ollama_install_dir }}/lib/ollama"
+        state: absent
+      when: not ollama_binary.stat.exists
+
+    - name: Ensure the Ollama install directories exist
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ ollama_bindir }}"
+        - "{{ ollama_install_dir }}/lib/ollama"
+      when: not ollama_binary.stat.exists
+
+    - name: Extract the Ollama base tarball
+      shell: >-
+        zstd -dc "/tmp/ollama-{{ ollama_version }}/ollama-linux-amd64.tar.zst"
+        | tar -xf - -C "{{ ollama_install_dir }}"
+      register: ollama_extract_base
+      changed_when: ollama_extract_base.rc == 0
+      when: not ollama_binary.stat.exists
+
+    - name: Extract the Ollama ROCm tarball
+      shell: >-
+        zstd -dc "/tmp/ollama-{{ ollama_version }}/ollama-linux-amd64-rocm.tar.zst"
+        | tar -xf - -C "{{ ollama_install_dir }}"
+      register: ollama_extract_rocm
+      changed_when: ollama_extract_rocm.rc == 0
+      when: not ollama_binary.stat.exists
+
+    - name: Link ollama into the bin directory if the install bin differs
+      file:
+        src: "{{ ollama_install_dir }}/bin/ollama"
+        dest: "{{ ollama_bindir }}/ollama"
+        state: link
+        force: true
+      when:
+        - not ollama_binary.stat.exists
+        - (ollama_install_dir + '/bin') != ollama_bindir
+
+    - name: Ensure the ollama group exists
+      group:
+        name: ollama
+        system: true
+      when: not ollama_binary.stat.exists
+
+    - name: Ensure the ollama user exists (as the installer creates it)
+      user:
+        name: ollama
+        group: ollama
+        system: true
+        shell: /bin/false
+        home: /usr/share/ollama
+        create_home: true
+      when: not ollama_binary.stat.exists
+
+    - name: Add the ollama user to the render and video groups when present
+      shell: |
+        for g in render video; do
+          if getent group "$g" >/dev/null 2>&1; then
+            usermod -a -G "$g" ollama
+          fi
+        done
+        usermod -a -G ollama "{{ ansible_user_id }}"
+      register: ollama_groups_result
+      changed_when: ollama_groups_result.rc == 0
+      when: not ollama_binary.stat.exists
+
+    - name: Install the Ollama systemd unit (the unit the installer writes)
+      copy:
+        dest: /etc/systemd/system/ollama.service
+        mode: '0644'
+        content: |
+          [Unit]
+          Description=Ollama Service
+          After=network-online.target
+
+          [Service]
+          ExecStart={{ ollama_bindir }}/ollama serve
+          User=ollama
+          Group=ollama
+          Restart=always
+          RestartSec=3
+          Environment="PATH={{ ansible_env.PATH }}"
+
+          [Install]
+          WantedBy=default.target
+      when: not ollama_binary.stat.exists
+
+    - name: Remove the Ollama download directory
+      file:
+        path: "/tmp/ollama-{{ ollama_version }}"
+        state: absent
+      when: not ollama_binary.stat.exists
 
     - name: Create Ollama systemd drop-in directory
       file:
@@ -862,7 +1052,7 @@ ansible-playbook -i <gpu-box-ip>, -u <user> -K gpu-box-llm-setup-v1.9.yml
         state: directory
         mode: '0755'
 
-    # A drop-in survives the installer rewriting ollama.service on upgrade.
+    # A drop-in survives ollama.service being rewritten on upgrade.
     - name: Write Ollama systemd drop-in
       copy:
         dest: "{{ ollama_dropin_dir }}/10-gpu-box.conf"
@@ -1283,6 +1473,7 @@ sudo rm -f /var/log/gpu-box-llm-setup.log
 
 | Version | Date | Summary |
 |---------|------|---------|
+| 2.3 | 2026-10-25 | Ansible path: Ollama installed from the version-pinned GitHub release tarballs, verified against the release's sha256sum.txt; ollama.com/install.sh no longer downloaded or run, retiring the warn-and-run pin for this path. Bash path unchanged. Applied together with the playbook and the embedded copy in this guide |
 | 2.1 | 2026-10-15 | Ollama installer verification: the bash script and the Ansible playbook download the installer to a temp file and check it against an optional pinned SHA-256 (warn loudly when unset, refuse on mismatch) instead of piping curl into sh as root. Applied together with the public repo copies (PR #25) |
 | 2.0 | 2026-10-07 | Added table of contents. No behaviour changes |
 | 1.9 | 2026-09 | Verification corrections: SEARXNG_PORT honoured on current images (only SEARXNG_BIND_ADDRESS and settings.yml server.port/bind_address inert); HSA_OVERRIDE_GFX_VERSION values flagged as community-sourced; Nobara firewalld default unverified; WEB_SEARCH_CONCURRENT_REQUESTS semantics noted. No behaviour changes |

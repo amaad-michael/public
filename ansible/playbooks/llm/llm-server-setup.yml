@@ -25,11 +25,21 @@
         if inventory_hostname in groups['llm_4gb']
         else 'qwen2.5-coder-1.5b-instruct-q4_k_m.gguf'
       }}
+    # Model downloads are pinned twice, as in nanopi-llm-setup.sh:
+    # the URL names the model repo's commit instead of the moving
+    # main branch, and get_url verifies the file against Hugging
+    # Face's published SHA-256 for that commit.
     model_url: >-
       {{
-        'https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/qwen2.5-coder-7b-instruct-q4_k_m.gguf'
+        'https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/13fb94bfda8c8cf22497dc57b78f391a9acb426a/qwen2.5-coder-7b-instruct-q4_k_m.gguf'
         if inventory_hostname in groups['llm_4gb']
-        else 'https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf'
+        else 'https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/f86cb2c1fa58255f8052cc32aeede1b7482d4361/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf'
+      }}
+    model_sha256: >-
+      {{
+        '509287f78cb4d4cf6b3843734733b914b2c158e43e22a7f4bf5e963800894d3c'
+        if inventory_hostname in groups['llm_4gb']
+        else 'cc324af070c2ecbfd324a30884d2f951a7ff756aba85cb811a6ec436933bb046'
       }}
 
   tasks:
@@ -105,6 +115,7 @@
         mode: '0644'
         owner: "{{ llm_user }}"
         timeout: 3600
+        checksum: "sha256:{{ model_sha256 }}"
       become_user: "{{ llm_user }}"
 
     # ── systemd service ───────────────────────────────────────────────────────
