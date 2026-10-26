@@ -58,7 +58,7 @@ tags, a recorded and accepted risk (TODO RISK-1 in the script); the
 resolved image digests are written to the log on every run.
 
 The full deployment guide for this script and the matching playbook
-is `ansible/playbooks/llm/gpu-box-llm-setup-v2.2.md`.
+is `ansible/playbooks/llm/gpu-box-llm-setup-v2.3.md`.
 
 ## optiplex-llm-setup-v2.1.sh
 

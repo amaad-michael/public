@@ -40,7 +40,7 @@ Playbooks are grouped by job under `playbooks/`. Most groups have a README that 
   playbook, mirroring `scripts/provisioning/install-jenkins-rocky.sh`.
 - [llm](playbooks/llm/README.md): the NanoPi inference fleet (server
   and load balancer), plus the two full deployment guides,
-  [gpu-box-llm-setup-v2.2.md](playbooks/llm/gpu-box-llm-setup-v2.2.md)
+  [gpu-box-llm-setup-v2.3.md](playbooks/llm/gpu-box-llm-setup-v2.3.md)
   and [optiplex-llm-v2.3.md](playbooks/llm/optiplex-llm-v2.3.md).
 - [monitoring](playbooks/monitoring/README.md): the deploy playbook
   for the standby monitoring stack in `containers/monitoring/`

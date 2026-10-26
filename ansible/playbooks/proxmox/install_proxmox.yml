@@ -49,6 +49,20 @@
     pve_api_user: ansible@pam
     pve_api_token_name: ansible-token
 
+    # Proxmox release-key fingerprints. The release key is a trust
+    # root — apt trusts everything it signs — so the downloaded key
+    # is verified against the pin for the target codename before it
+    # is installed, and a codename with no pin refuses. Computed from
+    # the key files served at the download URL and cross-checked
+    # against the release-key SHA-512 sums Proxmox publishes in its
+    # wiki "Package Repositories" page (the trixie fingerprint is
+    # also carried by the wiki-hashed archive keyring). Same pins as
+    # scripts/provisioning/proxmox-setup.sh.
+    pve_release_key_fingerprints:
+      bullseye: "28139A2F830BD68478A1A01FDD4BA3917E23BF59"
+      bookworm: "F4E136C67CDCE41AE6DE6FC81140AF8F639E0C39"
+      trixie: "24B30F06ECC1836A4E5EFECBA7BCD1420BFE778E"
+
     # SSH hardening
     ssh_permit_root_login: "no"
     ssh_password_auth: "no"
@@ -124,11 +138,49 @@
         pve_repo_codename: "{{ 'bookworm' if ansible_distribution_version is version('23', '>=') else 'bullseye' }}"
       when: ansible_distribution == "Ubuntu"
 
-    - name: Add Proxmox GPG key
+    - name: Refuse if no pinned fingerprint for the Proxmox release key
+      ansible.builtin.fail:
+        msg: "No pinned fingerprint for the Proxmox release key (codename: {{ pve_repo_codename }}) — refusing to install an unverified repository key"
+      when: pve_repo_codename not in pve_release_key_fingerprints
+
+    - name: Create a temp file for the Proxmox release key download
+      ansible.builtin.tempfile:
+        state: file
+        suffix: .gpg
+      register: pve_key_tmpfile
+
+    - name: Download the Proxmox release key
       ansible.builtin.get_url:
         url: https://enterprise.proxmox.com/debian/proxmox-release-{{ pve_repo_codename }}.gpg
-        dest: /etc/apt/trusted.gpg.d/proxmox-release-{{ pve_repo_codename }}.gpg
+        dest: "{{ pve_key_tmpfile.path }}"
         mode: '0644'
+        force: true
+
+    - name: Read the downloaded release key's fingerprint
+      ansible.builtin.shell: |
+        gpg --show-keys --with-colons "{{ pve_key_tmpfile.path }}" 2>/dev/null | awk -F: '/^fpr:/ {print $10; exit}'
+      register: pve_key_fingerprint
+      changed_when: false
+
+    - name: Refuse if the release key fingerprint does not match the pin
+      ansible.builtin.fail:
+        msg: >-
+          Proxmox release key fingerprint mismatch for {{ pve_repo_codename }}:
+          got {{ (pve_key_fingerprint.stdout | trim) or '<none>' }},
+          expected {{ pve_release_key_fingerprints[pve_repo_codename] }} — refusing to trust this key
+      when: (pve_key_fingerprint.stdout | trim) != pve_release_key_fingerprints[pve_repo_codename]
+
+    - name: Install the verified Proxmox release key
+      ansible.builtin.copy:
+        src: "{{ pve_key_tmpfile.path }}"
+        dest: /etc/apt/trusted.gpg.d/proxmox-release-{{ pve_repo_codename }}.gpg
+        remote_src: true
+        mode: '0644'
+
+    - name: Remove the temp release key file
+      ansible.builtin.file:
+        path: "{{ pve_key_tmpfile.path }}"
+        state: absent
 
     - name: Add Proxmox no-subscription repo
       ansible.builtin.apt_repository:
