@@ -7,13 +7,6 @@ SearXNG as containers; this stack runs all three as containers, with every
 image pinned to a version tag and digest, and replicates the playbook's
 wiring, model list, and port posture.
 
-## See it running
-
-The stack running at home: Open WebUI fronting Ollama, with
-deepseek-r1:14b loaded. Screenshot from my own deployment, May 2026.
-
-![Open WebUI fronting Ollama with deepseek-r1:14b on this stack](open-webui-screenshot-2026-05-28.webp)
-
 ## Services
 
 | Service | Image | Role |
