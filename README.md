@@ -53,6 +53,21 @@ The full routine, the record keeping, and the standing rules are
 documented in [git-repo-workflow.md](git-repo-workflow.md), with
 worked examples of the commands themselves.
 
+## ✅ Proof it runs
+
+Claims are cheap, so here is the evidence: both LLM stacks in this
+repo, running in my home lab, built and deployed by me.
+
+![llama-ui serving Meta-Llama-3.1 8B Instruct](containers/optiplex-llm/llama-ui-screenshot-2026-05-29.png)
+
+*The [OptiPlex llama.cpp stack](containers/optiplex-llm/), serving
+Meta-Llama-3.1 8B Instruct from llama-ui. May 2026.*
+
+![Open WebUI fronting Ollama with deepseek-r1:14b](containers/gpu-llm/open-webui-screenshot-2026-05-28.webp)
+
+*The [GPU Ollama stack](containers/gpu-llm/), Open WebUI with
+deepseek-r1:14b loaded. May 2026.*
+
 ## ⚠️ Note
 
 IP addresses and hostnames are examples from my lab. Replace them with
