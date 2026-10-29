@@ -11,6 +11,7 @@ the three forms so you can pick the right one.
 - [deploy-llama-ui-raw.sh](#deploy-llama-ui-rawsh)
 - [setup_open_terminal-v1_2.sh](#setup_open_terminal-v1_2sh)
 - [nanopi-llm-setup.sh](#nanopi-llm-setupsh)
+- [See it running](#see-it-running)
 - [Which form of each stack](#which-form-of-each-stack)
 
 ## gpu-box-llm-setup-v1.9.sh
@@ -182,6 +183,23 @@ changing command and changes nothing; `--print-config` prints the
 rendered unit or nginx site and exits. The boards are ARM64; the
 script warns on other architectures instead of refusing, because
 the native build works the same way.
+
+## See it running
+
+The bare-metal deployments these installers produce, running at
+home. Screenshots from my own systems, May 2026.
+
+![llama-ui serving Meta-Llama-3.1 8B Instruct](llama-ui-screenshot-2026-05-29.png)
+
+*The OptiPlex deployment from optiplex-llm-setup-v2.1.sh:
+llama.cpp compiled natively and running under systemd, serving
+Meta-Llama-3.1 8B Instruct (Q4_K_M) through llama-ui.*
+
+![Open WebUI fronting Ollama with deepseek-r1:14b](open-webui-screenshot-2026-05-28.webp)
+
+*The GPU box deployment from gpu-box-llm-setup-v1.9.sh: Open
+WebUI fronting the bare-metal Ollama install, deepseek-r1:14b
+loaded.*
 
 ## Which form of each stack
 

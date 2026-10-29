@@ -16,14 +16,6 @@ x86_64 Docker host.
 | `LimitMEMLOCK=infinity` | `ulimits: memlock: -1` |
 | `bind_addr: 127.0.0.1`, API key required | Loopback-only publish; API key via env (below) |
 
-## See it running
-
-The stack running at home: llama-ui, the web front end the llama.cpp
-server ships with, serving Meta-Llama-3.1 8B Instruct (Q4_K_M).
-Screenshot from my own deployment, May 2026.
-
-![llama-ui serving Meta-Llama-3.1 8B Instruct on this stack](llama-ui-screenshot-2026-05-29.png)
-
 ## 🚀 Quickstart
 
 ```bash
