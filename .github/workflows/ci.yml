@@ -52,6 +52,25 @@ jobs:
         with:
           egress-policy: audit
 
+      # The markdownlint pre-commit hook is mdl, a Ruby tool, and the
+      # runner image no longer ships a system Ruby: without this step
+      # the hook has no interpreter at all (PR #87's Lint run,
+      # 2026-10-29).
+      - uses: ruby/setup-ruby@7f797815d8adceb1c412e7abefdd1ab4abc47a5f  # v1.335.0
+        with:
+          ruby-version: '3.3'
+
+      # Installing a Ruby is not enough on its own (PR #88's Lint
+      # run): pre-commit's cached mdl environment carries the
+      # absolute path of the Ruby that built it, and the restored
+      # cache still points at the runner's old /usr/bin/ruby3.2.
+      # pre-commit reuses a cached environment without checking
+      # that its interpreter still exists, so the hook dies on the
+      # stale path forever. Deleting the cached Ruby environments
+      # forces a rebuild against the Ruby installed above.
+      - name: Clear stale pre-commit Ruby environments
+        run: find "$HOME/.cache/pre-commit" "$GITHUB_WORKSPACE/.cache/pre-commit" -maxdepth 2 -type d -name 'rbenv-*' -exec rm -rf {} + 2>/dev/null || true
+
       - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd  # v3.0.1
         with:
           extra_args: --all-files
