@@ -52,6 +52,14 @@ jobs:
         with:
           egress-policy: audit
 
+      # The markdownlint pre-commit hook is mdl, a Ruby tool, and the
+      # runner image no longer ships a system Ruby: without this step
+      # the hook dies with "Executable /usr/bin/ruby3.2 not found"
+      # before linting anything (PR #87's Lint run, 2026-10-29).
+      - uses: ruby/setup-ruby@7f797815d8adceb1c412e7abefdd1ab4abc47a5f  # v1.335.0
+        with:
+          ruby-version: '3.3'
+
       - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd  # v3.0.1
         with:
           extra_args: --all-files
