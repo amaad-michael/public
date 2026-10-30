@@ -1,6 +1,6 @@
 # Linux Laptop Prep Checklist: Coding Instructor and Linux Administrator
 
-**Version:** 1.7
+**Version:** 1.8
 **Date:** 2026-10-30
 **Scope:** Role-agnostic. Built for a personal Linux laptop that has to walk into either a classroom or a server environment and be ready, with personal and work life kept cleanly apart.
 
@@ -128,7 +128,7 @@ The laptop is personal property doing professional work, so the walls matter mor
 
 ## 11. Automation: the setup script
 
-The state this checklist describes can be produced from the command line for every item that is CLI-able. The script below does it: it creates the michael and michael-work accounts, installs the admin and instructor tooling, wires the per-role SSH and git separation, sets the screen lock and the host firewall, and prints whatever still needs hands, hardware, or a sign-in as a manual list at the end. Version 1.5 of the script installs the GitHub CLI from section 6 (a per-distro package install; GitHub's own repo is the RHEL-family fallback, and the sign-in stays a manual step), sets persistent journaling and the fleet personalization from section 1, and installs the three vendor applications from sections 3 and 10, each by the vendor's own distribution method. Proton Pass has no repository: the script reads Proton's version feed, takes the newest Stable release at full rollout, verifies the package's SHA512 checksum against the feed, and only then installs it; the sign-in and the SSH agent setup stay manual (see the companion handoff). Proton VPN uses Proton's own repository: on Debian and Ubuntu the script verifies and installs Proton's signed release package, then installs the proton-vpn-gnome-desktop app from the repo, and on Fedora it follows the same pattern with Proton's Fedora release package. Proton officially supports Fedora only on the RPM side, so on RHEL-family systems the script installs no VPN package and prints the manual path instead (the WireGuard configs from your Proton account). TickTick has no repository either: the script downloads from TickTick's official version-less endpoint, the same one the download page uses. All three install through the distro package manager, so dependencies resolve instead of failing the way the vendors' bare dpkg -i and rpm -i instructions can. One vendor collision is handled on the RPM side: the Proton Pass and TickTick RPMs both ship the same /usr/lib/.build-id debug symlinks with different targets (both apps are built on the stock Electron binary), so rpm refuses the second install; the script pulls the package's dependencies with dnf and retries with rpm --replacefiles, which changes only which app the debug links point at. Run it on the laptop as root: `sudo ./laptop-role-prep-setup-v1.5.sh`. The same script ships as a standalone file, laptop-role-prep-setup-v1.5.sh, byte-identical to the block below; the standalone is the copy to take to the laptop.
+The state this checklist describes can be produced from the command line for every item that is CLI-able. The script below does it: it creates the michael and michael-work accounts, installs the admin and instructor tooling, wires the per-role SSH and git separation, sets the screen lock and the host firewall, and prints whatever still needs hands, hardware, or a sign-in as a manual list at the end. Version 1.6 of the script installs the GitHub CLI from section 6 (a per-distro package install; GitHub's own repo is the RHEL-family fallback, and the sign-in stays a manual step), sets persistent journaling and the fleet personalization from section 1, and installs the three vendor applications from sections 3 and 10, each by the vendor's own distribution method. Proton Pass has no repository: the script reads Proton's version feed, takes the newest Stable release at full rollout, verifies the package's SHA512 checksum against the feed, and only then installs it; the sign-in and the SSH agent setup stay manual (see the companion handoff). Proton VPN uses Proton's own repository: on Debian and Ubuntu the script verifies and installs Proton's signed release package, then installs the proton-vpn-gnome-desktop app from the repo, and on Fedora it follows the same pattern with Proton's Fedora release package. Proton officially supports Fedora only on the RPM side, so on RHEL-family systems the script installs no VPN package and prints the manual path instead (the WireGuard configs from your Proton account). TickTick has no repository either: the script downloads from TickTick's official version-less endpoint, the same one the download page uses. All three install through the distro package manager, so dependencies resolve instead of failing the way the vendors' bare dpkg -i and rpm -i instructions can. One vendor collision is handled on the RPM side: the Proton Pass and TickTick RPMs both ship the same /usr/lib/.build-id debug symlinks with different targets (both apps are built on the stock Electron binary), so rpm refuses the second install; the script pulls the package's dependencies with dnf and retries with rpm --replacefiles, which changes only which app the debug links point at. Run it on the laptop as root: `sudo ./laptop-role-prep-setup-v1.6.sh`. The same script ships as a standalone file, laptop-role-prep-setup-v1.6.sh, byte-identical to the block below; the standalone is the copy to take to the laptop.
 
 Version 1.4 (2026-10-30) fixes two defects the first real-metal run, on the travel laptop the same day, exposed. Distro detection no longer treats every dnf-family system whose ID is not exactly "fedora" as RHEL-family: an exact RHEL-family ID (rhel, rocky, almalinux, centos) decides first, because Rocky declares fedora in its ID_LIKE, and a derivative under its own ID is judged by its declared lineage, so Nobara (ID nobara, ID_LIKE fedora) is Fedora-family and gets zenmap, Python IDLE, flameshot, and virt-manager instead of the RHEL-family substitutions. And the account and group changes now check their results: account creation and the docker, libvirt, and optional sudo-group adds report a warning when they fail, never a done line. On a first run the package phase precedes account creation, so those group adds land on a re-run; the report now says so instead of claiming memberships that do not exist yet.
 
@@ -140,9 +140,13 @@ Version 1.5 (2026-10-30) closes a gap the same laptop run exposed: the fleet per
 
 The version 1.5 changes were verified on 2026-10-30 with an executed harness: the personalization block was extracted verbatim from the script and run against fixture /etc trees, with the fixture directory bound over /etc. An empty /etc/motd gained the playbook's content byte-for-byte; a second run changed neither file; a pre-existing custom /etc/motd was backed up with its original bytes and replaced, and a second run left that backup untouched; a read-only /etc/motd produced a warning and no done claim; and the version 1.4 block, run through the same harness, left /etc/motd untouched in both its empty and custom states. A full live run of version 1.5 on the laptop is the remaining proof and had not happened when this version was cut.
 
+Version 1.6 (2026-10-30) corrects the distro detection a second time, on evidence the version 1.4 work did not have: the travel laptop's real /etc/os-release. Nobara's ID_LIKE is "rhel centos fedora", its whole ancestry with the RHEL tokens first, so the version 1.4 fallback, which judged a derivative under its own ID by its ID_LIKE lineage, still read Nobara as RHEL-family, and the version 1.5 live run on the laptop repeated the RHEL-family claims (Python IDLE and flameshot as manual items, the RHEL zenmap line, virt-manager as not packaged for RHEL 10). ID_LIKE cannot carry this distinction at all: Nobara's value is byte-identical to Rocky 10's, and RHEL itself ships ID_LIKE="fedora". Ancestry is not package lineage. The exact ID is now the only signal: an ID of rhel, rocky, almalinux, or centos is RHEL-family, and every other dnf system is not; the ID_LIKE fallback is removed. The family detection (dnf versus apt) still reads ID and ID_LIKE together, where ancestry tokens are harmless. The version 1.4 fixtures stand corrected by the same evidence: their Nobara entry assumed ID_LIKE=fedora, a value no real distro ships.
+
+The version 1.6 changes were verified on 2026-10-30 with an executed harness over real os-release values only: Nobara's pair read from the laptop's own /etc/os-release, Rocky's and Ubuntu's read from the os-release files of the Rocky 10 and Ubuntu 24.04 reference trees on disk, and the Fedora, RHEL, AlmaLinux, and CentOS pairs taken from those distros' shipped os-release contents. All seven, run through the shipped version 1.6 detection block, give the right family and RHEL flag; the same fixtures through the version 1.5 block flip only the Nobara case, from RHEL-family to not, while Rocky stays RHEL-family. The section 5 branch, extracted from the shipped script and run under the Nobara flags, now takes the install branch (python3-idle and flameshot) instead of the manual items. A full live run of version 1.6 on the laptop is the remaining proof and had not happened when this version was cut.
+
 ```bash
 #!/usr/bin/env bash
-# laptop-role-prep-setup-v1.5.sh
+# laptop-role-prep-setup-v1.6.sh
 #
 # Produce the desired state from "Linux Laptop Prep Checklist: Coding
 # Instructor and Linux Administrator" (linux-laptop-role-prep-checklist)
@@ -208,7 +212,7 @@ step() { printf '\n== %s ==\n' "$*"; }
 # ---------------------------------------------------------------------------
 
 if [[ ${EUID} -ne 0 ]]; then
-    say "This script must run as root: sudo ./laptop-role-prep-setup-v1.5.sh"
+    say "This script must run as root: sudo ./laptop-role-prep-setup-v1.6.sh"
     exit 1
 fi
 
@@ -236,23 +240,21 @@ say "Detected: ${PRETTY_NAME:-${OS_ID}} (family: ${FAMILY})"
 # universe that differs from Fedora's for a few names this script
 # cares about; the package sections branch on it where the Rocky 10
 # and EPEL 10 indexes prove the Fedora name does not exist there.
-# An exact distro ID decides first: Rocky declares fedora in its
-# ID_LIKE, so ID_LIKE alone would misread Rocky as Fedora-family.
-# A derivative under its own ID is judged by its declared lineage
-# instead: Nobara is ID=nobara with ID_LIKE=fedora and is a Fedora
-# derivative, not a RHEL one (v1.3 called every non-"fedora" ID
-# RHEL-family, which misclassified it).
+# The exact distro ID is the only sound signal, and it decides
+# alone. ID_LIKE declares ancestry, not package lineage, and it
+# cannot separate the two families at all: Nobara's ID_LIKE is
+# "rhel centos fedora" (read from the travel laptop's real
+# /etc/os-release on 2026-10-30), byte-identical to Rocky 10's own
+# ID_LIKE, and RHEL itself ships ID_LIKE="fedora". v1.4 judged a
+# derivative under its own ID by its ID_LIKE lineage and so still
+# read Nobara as RHEL-family on real hardware; v1.6 removes that
+# fallback. The RHEL set is closed and known: an exact ID of rhel,
+# rocky, almalinux, or centos is RHEL-family, and every other dnf
+# system, Fedora and its derivatives alike, is not.
 RHELISH=0
 if [[ "${FAMILY}" == "dnf" ]]; then
     case " ${OS_ID} " in
         *" rhel "*|*" rocky "*|*" almalinux "*|*" centos "*) RHELISH=1 ;;
-        *" fedora "*) RHELISH=0 ;;
-        *)
-            case " ${OS_LIKE} " in
-                *" rhel "*|*" rocky "*|*" almalinux "*|*" centos "*) RHELISH=1 ;;
-                *) RHELISH=0 ;;
-            esac
-            ;;
     esac
 fi
 
@@ -1108,4 +1110,4 @@ say ""
 say "Re-running this script is safe; it converges to the same state."
 ```
 
-*Companion records: proton-pass-ssh-handoff-v1.0.md (open item [ee7f5b] on the action board), ansible-hosts-inventory (homelab reference), the public repo at github.com/amaad-michael/public (toolkit and playbooks source); laptop-role-prep-setup-v1.5.sh, the standalone form of the section 11 script (byte-identical; the two files travel together).*
+*Companion records: proton-pass-ssh-handoff-v1.0.md (open item [ee7f5b] on the action board), ansible-hosts-inventory (homelab reference), the public repo at github.com/amaad-michael/public (toolkit and playbooks source); laptop-role-prep-setup-v1.6.sh, the standalone form of the section 11 script (byte-identical; the two files travel together).*
