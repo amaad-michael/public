@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# laptop-role-prep-setup-v1.6.sh
+# laptop-role-prep-setup-v1.7.sh
 #
 # Produce the desired state from "Linux Laptop Prep Checklist: Coding
 # Instructor and Linux Administrator" (linux-laptop-role-prep-checklist)
@@ -65,7 +65,7 @@ step() { printf '\n== %s ==\n' "$*"; }
 # ---------------------------------------------------------------------------
 
 if [[ ${EUID} -ne 0 ]]; then
-    say "This script must run as root: sudo ./laptop-role-prep-setup-v1.6.sh"
+    say "This script must run as root: sudo ./laptop-role-prep-setup-v1.7.sh"
     exit 1
 fi
 
@@ -254,13 +254,8 @@ if [[ "${FAMILY}" == "apt" ]] && command -v docker >/dev/null 2>&1; then
     if systemctl list-unit-files 2>/dev/null | grep '^docker\.service' >/dev/null; then
         systemctl enable --now docker >/dev/null 2>&1 || warn_item "docker present but its service could not be enabled"
     fi
-    if getent group docker >/dev/null 2>&1; then
-        if usermod -aG docker "${WORK_USER}"; then
-            done_item "${WORK_USER} added to the docker group (root-equivalent; matches the libvirt pattern so the work account can run containers without sudo)"
-        else
-            warn_item "${WORK_USER} could not be added to the docker group (the account is created later in this run; a re-run converges)"
-        fi
-    fi
+    # The docker group add for the work user runs in the Users
+    # section, after the account exists; see there.
 fi
 
 # Container runtime (section 4): Podman on both families.
@@ -271,8 +266,9 @@ else
     warn_item "podman not available after install attempt"
 fi
 
-# Virtualization (section 4): libvirt + a VM console, work user in the
-# libvirt group so the sandbox VM is usable without root. The console
+# Virtualization (section 4): libvirt + a VM console. (The work
+# user's libvirt group add runs in the Users section, after the
+# account exists; see there.) The console
 # differs by family: virt-manager on apt. On RHEL 10 virt-manager is
 # not packaged at all, so cockpit-machines, the RHEL-native console,
 # takes its place.
@@ -293,13 +289,6 @@ if [[ "${INSTALL_VIRT}" == "1" ]]; then
         fi
     else
         warn_item "libvirt packages did not yield a libvirtd service; VM setup needs a look"
-    fi
-    if getent group libvirt >/dev/null 2>&1; then
-        if usermod -aG libvirt "${WORK_USER}"; then
-            done_item "${WORK_USER} added to the libvirt group (checklist 4)"
-        else
-            warn_item "${WORK_USER} could not be added to the libvirt group (the account is created later in this run; a re-run converges)"
-        fi
     fi
     manual_item "Section 4: build the one clean Linux sandbox VM (image choice is yours) and confirm it boots."
 else
@@ -775,6 +764,32 @@ create_user() {
 create_user "${WORK_USER}"
 create_user "${PERSONAL_USER}"
 
+# Group adds that need a group the install sections create and the
+# account this section just created: docker (apt family) and
+# libvirt. Both adds used to sit in their install sections, hundreds
+# of lines before create_user ran, so on a fresh machine they
+# failed on run 1 and only a re-run converged; v1.7 moves them here,
+# next to the sudo-group add below, where the account exists. A
+# failure here is a real failure and is reported as one.
+if [[ "${FAMILY}" == "apt" ]] && command -v docker >/dev/null 2>&1; then
+    if getent group docker >/dev/null 2>&1; then
+        if usermod -aG docker "${WORK_USER}"; then
+            done_item "${WORK_USER} added to the docker group (root-equivalent; matches the libvirt pattern so the work account can run containers without sudo)"
+        else
+            warn_item "${WORK_USER} could not be added to the docker group (checklist 4)"
+        fi
+    fi
+fi
+if [[ "${INSTALL_VIRT}" == "1" ]]; then
+    if getent group libvirt >/dev/null 2>&1; then
+        if usermod -aG libvirt "${WORK_USER}"; then
+            done_item "${WORK_USER} added to the libvirt group (checklist 4)"
+        else
+            warn_item "${WORK_USER} could not be added to the libvirt group (checklist 4)"
+        fi
+    fi
+fi
+
 # Sudo posture (checklist 3): sudo must require a password. New accounts
 # get no sudoers entries from this script; membership only on request.
 SUDO_GROUP="wheel"
@@ -877,7 +892,7 @@ EOF
         if as_user "${u}" git clone --quiet "${PUBLIC_REPO_URL}" "${home}/public" 2>/dev/null; then
             done_item "${u}: public repo cloned to ~/public (checklist 4)"
         else
-            warn_item "${u}: public repo clone failed (offline?); clone ${PUBLIC_REPO_URL} later"
+            warn_item "${u}: public repo clone failed; the usual causes are no network or this account's key not yet added on GitHub - clone ${PUBLIC_REPO_URL} later"
         fi
     fi
 }
