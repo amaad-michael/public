@@ -141,7 +141,7 @@ and the login user is `michael`.
 
 ### New workstation, in order
 
-1. Controller setup: `ssh-setup-new-box-v1.2.sh` (dnf and apt family
+1. Controller setup: `ssh-setup-new-box-v1.3.sh` (dnf and apt family
    boxes; v1.0 was Rocky-family only). It installs keychain (on dnf,
    enabling EPEL if the package is not in the enabled repos; on apt,
    refreshing the package lists and retrying), adds the keychain eval
@@ -149,13 +149,15 @@ and the login user is `michael`.
    loads the key into the persistent agent (passphrase asked once),
    and copies the public key to all six nodes with ssh-copy-id,
    using a 5-second connect timeout so an off-fleet run fails fast
-   on unreachable hosts. Idempotent; safe to re-run.
+   on unreachable hosts, and continuing through failures: every
+   host gets its attempt, and any host the key did not reach is
+   named in a closing warning. Idempotent; safe to re-run.
 1. If the workstation already has a key and agent setup, use
    `send_keys.sh` instead for step one's copy phase. It loops the six
    hosts with ssh-copy-id, prompting for the `michael` password on
    each host unless the key is already installed, and skips hosts that
    already carry the key. Note that it reads `~/.ssh/id_rsa.pub`
-   specifically, while `ssh-setup-new-box-v1.2.sh` works with
+   specifically, while `ssh-setup-new-box-v1.3.sh` works with
    ed25519; point the file variable at the right public key before
    running.
 1. Pre-trust the fleet: `add_known_hosts.sh` appends an ssh-keyscan of
