@@ -70,7 +70,7 @@ environment ready. The checklist is the specification; the script
 produces every CLI-able part of it and prints the rest as a manual
 list.
 
-### linux-laptop-role-prep-checklist-v1.7.md
+### linux-laptop-role-prep-checklist-v1.8.md
 
 The checklist itself: base system, separation of personal and work
 lives, the security core, the Linux administrator kit, the coding
@@ -81,9 +81,9 @@ tested bare-metal restore are the load-bearing items. The setup
 script is embedded in section 11, byte-identical to the standalone
 file below.
 
-### laptop-role-prep-setup-v1.5.sh
+### laptop-role-prep-setup-v1.6.sh
 
-Run as root (`sudo ./laptop-role-prep-setup-v1.5.sh`). It creates
+Run as root (`sudo ./laptop-role-prep-setup-v1.6.sh`). It creates
 the per-role user accounts, installs the admin and instructor
 tooling, wires the per-role SSH and git separation, sets the screen
 lock, the host firewall, and persistent journaling, adds the fleet /etc/hosts entries, the cluster MOTD, and the fastfetch login setup, and prints whatever still needs hands,
@@ -115,6 +115,14 @@ entries: the motd playbook's static /etc/motd (banner plus the
 fleet subnet block), with the playbook's backup of any
 pre-existing /etc/motd and a checked write that warns on failure
 instead of claiming success.
+Version 1.6 corrects the distro detection again, on the travel
+laptop's real /etc/os-release: Nobara's ID_LIKE is "rhel centos
+fedora", byte-identical to Rocky 10's, so the ID_LIKE lineage
+fallback version 1.4 added still read Nobara as RHEL-family.
+ID_LIKE declares ancestry, not package lineage, and cannot
+separate the families (RHEL itself ships ID_LIKE="fedora"); the
+exact ID now decides alone, against the closed RHEL set (rhel,
+rocky, almalinux, centos).
 
 ## update-gpu-box.sh
 

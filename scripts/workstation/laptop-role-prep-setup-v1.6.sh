@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# laptop-role-prep-setup-v1.5.sh
+# laptop-role-prep-setup-v1.6.sh
 #
 # Produce the desired state from "Linux Laptop Prep Checklist: Coding
 # Instructor and Linux Administrator" (linux-laptop-role-prep-checklist)
@@ -65,7 +65,7 @@ step() { printf '\n== %s ==\n' "$*"; }
 # ---------------------------------------------------------------------------
 
 if [[ ${EUID} -ne 0 ]]; then
-    say "This script must run as root: sudo ./laptop-role-prep-setup-v1.5.sh"
+    say "This script must run as root: sudo ./laptop-role-prep-setup-v1.6.sh"
     exit 1
 fi
 
@@ -93,23 +93,21 @@ say "Detected: ${PRETTY_NAME:-${OS_ID}} (family: ${FAMILY})"
 # universe that differs from Fedora's for a few names this script
 # cares about; the package sections branch on it where the Rocky 10
 # and EPEL 10 indexes prove the Fedora name does not exist there.
-# An exact distro ID decides first: Rocky declares fedora in its
-# ID_LIKE, so ID_LIKE alone would misread Rocky as Fedora-family.
-# A derivative under its own ID is judged by its declared lineage
-# instead: Nobara is ID=nobara with ID_LIKE=fedora and is a Fedora
-# derivative, not a RHEL one (v1.3 called every non-"fedora" ID
-# RHEL-family, which misclassified it).
+# The exact distro ID is the only sound signal, and it decides
+# alone. ID_LIKE declares ancestry, not package lineage, and it
+# cannot separate the two families at all: Nobara's ID_LIKE is
+# "rhel centos fedora" (read from the travel laptop's real
+# /etc/os-release on 2026-10-30), byte-identical to Rocky 10's own
+# ID_LIKE, and RHEL itself ships ID_LIKE="fedora". v1.4 judged a
+# derivative under its own ID by its ID_LIKE lineage and so still
+# read Nobara as RHEL-family on real hardware; v1.6 removes that
+# fallback. The RHEL set is closed and known: an exact ID of rhel,
+# rocky, almalinux, or centos is RHEL-family, and every other dnf
+# system, Fedora and its derivatives alike, is not.
 RHELISH=0
 if [[ "${FAMILY}" == "dnf" ]]; then
     case " ${OS_ID} " in
         *" rhel "*|*" rocky "*|*" almalinux "*|*" centos "*) RHELISH=1 ;;
-        *" fedora "*) RHELISH=0 ;;
-        *)
-            case " ${OS_LIKE} " in
-                *" rhel "*|*" rocky "*|*" almalinux "*|*" centos "*) RHELISH=1 ;;
-                *) RHELISH=0 ;;
-            esac
-            ;;
     esac
 fi
 
