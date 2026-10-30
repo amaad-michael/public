@@ -70,7 +70,7 @@ environment ready. The checklist is the specification; the script
 produces every CLI-able part of it and prints the rest as a manual
 list.
 
-### linux-laptop-role-prep-checklist-v1.8.md
+### linux-laptop-role-prep-checklist-v1.9.md
 
 The checklist itself: base system, separation of personal and work
 lives, the security core, the Linux administrator kit, the coding
@@ -81,9 +81,9 @@ tested bare-metal restore are the load-bearing items. The setup
 script is embedded in section 11, byte-identical to the standalone
 file below.
 
-### laptop-role-prep-setup-v1.6.sh
+### laptop-role-prep-setup-v1.7.sh
 
-Run as root (`sudo ./laptop-role-prep-setup-v1.6.sh`). It creates
+Run as root (`sudo ./laptop-role-prep-setup-v1.7.sh`). It creates
 the per-role user accounts, installs the admin and instructor
 tooling, wires the per-role SSH and git separation, sets the screen
 lock, the host firewall, and persistent journaling, adds the fleet /etc/hosts entries, the cluster MOTD, and the fastfetch login setup, and prints whatever still needs hands,
@@ -123,6 +123,15 @@ ID_LIKE declares ancestry, not package lineage, and cannot
 separate the families (RHEL itself ships ID_LIKE="fedora"); the
 exact ID now decides alone, against the closed RHEL set (rhel,
 rocky, almalinux, centos).
+Version 1.7 fixes the sequencing of the work account's group
+adds: the docker and libvirt adds sat in their install sections,
+hundreds of lines before the account is created, so a fresh
+machine's first run failed both and only a re-run converged.
+They now run immediately after the accounts are created, next to
+the sudo-group add, under their original gates, and a failure is
+reported as the real failure it is. The repository-clone warning
+no longer guesses at a cause; it states the failure and lists
+the usual causes instead.
 
 ## update-gpu-box.sh
 
