@@ -70,7 +70,7 @@ environment ready. The checklist is the specification; the script
 produces every CLI-able part of it and prints the rest as a manual
 list.
 
-### linux-laptop-role-prep-checklist-v1.5.md
+### linux-laptop-role-prep-checklist-v1.6.md
 
 The checklist itself: base system, separation of personal and work
 lives, the security core, the Linux administrator kit, the coding
@@ -81,9 +81,9 @@ tested bare-metal restore are the load-bearing items. The setup
 script is embedded in section 11, byte-identical to the standalone
 file below.
 
-### laptop-role-prep-setup-v1.3.sh
+### laptop-role-prep-setup-v1.4.sh
 
-Run as root (`sudo ./laptop-role-prep-setup-v1.3.sh`). It creates
+Run as root (`sudo ./laptop-role-prep-setup-v1.4.sh`). It creates
 the per-role user accounts, installs the admin and instructor
 tooling, wires the per-role SSH and git separation, sets the screen
 lock, the host firewall, and persistent journaling, adds the fleet /etc/hosts entries and the fastfetch login setup, and prints whatever still needs hands,
@@ -103,7 +103,13 @@ live runs during the script's 2026-10-18 build, the second run
 converging. Version 1.3 also installs the GitHub CLI (a per-distro
 package install, with GitHub's own package repo as the RHEL-family
 fallback) and leaves `gh auth login` on the manual list, since
-sign-in is never scripted.
+sign-in is never scripted. Version 1.4 fixes the distro detection
+the first real-metal laptop run exposed: an exact RHEL-family ID
+decides first (Rocky declares fedora in ID_LIKE), and a derivative
+under its own ID is judged by its declared lineage, so Nobara is
+Fedora-family rather than RHEL-family. Account creation and the
+group-membership adds now check their results and warn on failure
+instead of reporting success unconditionally.
 
 ## update-gpu-box.sh
 

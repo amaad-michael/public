@@ -1,7 +1,7 @@
 # Linux Laptop Prep Checklist: Coding Instructor and Linux Administrator
 
-**Version:** 1.5
-**Date:** 2026-10-29
+**Version:** 1.6
+**Date:** 2026-10-30
 **Scope:** Role-agnostic. Built for a personal Linux laptop that has to walk into either a classroom or a server environment and be ready, with personal and work life kept cleanly apart.
 
 ---
@@ -127,13 +127,17 @@ The laptop is personal property doing professional work, so the walls matter mor
 
 ## 11. Automation: the setup script
 
-The state this checklist describes can be produced from the command line for every item that is CLI-able. The script below does it: it creates the michael and michael-work accounts, installs the admin and instructor tooling, wires the per-role SSH and git separation, sets the screen lock and the host firewall, and prints whatever still needs hands, hardware, or a sign-in as a manual list at the end. Version 1.3 of the script installs the GitHub CLI from section 6 (a per-distro package install; GitHub's own repo is the RHEL-family fallback, and the sign-in stays a manual step), sets persistent journaling and the fleet personalization from section 1, and installs the three vendor applications from sections 3 and 10, each by the vendor's own distribution method. Proton Pass has no repository: the script reads Proton's version feed, takes the newest Stable release at full rollout, verifies the package's SHA512 checksum against the feed, and only then installs it; the sign-in and the SSH agent setup stay manual (see the companion handoff). Proton VPN uses Proton's own repository: on Debian and Ubuntu the script verifies and installs Proton's signed release package, then installs the proton-vpn-gnome-desktop app from the repo, and on Fedora it follows the same pattern with Proton's Fedora release package. Proton officially supports Fedora only on the RPM side, so on RHEL-family systems the script installs no VPN package and prints the manual path instead (the WireGuard configs from your Proton account). TickTick has no repository either: the script downloads from TickTick's official version-less endpoint, the same one the download page uses. All three install through the distro package manager, so dependencies resolve instead of failing the way the vendors' bare dpkg -i and rpm -i instructions can. One vendor collision is handled on the RPM side: the Proton Pass and TickTick RPMs both ship the same /usr/lib/.build-id debug symlinks with different targets (both apps are built on the stock Electron binary), so rpm refuses the second install; the script pulls the package's dependencies with dnf and retries with rpm --replacefiles, which changes only which app the debug links point at. Run it on the laptop as root: `sudo ./laptop-role-prep-setup-v1.3.sh`. The same script ships as a standalone file, laptop-role-prep-setup-v1.3.sh, byte-identical to the block below; the standalone is the copy to take to the laptop.
+The state this checklist describes can be produced from the command line for every item that is CLI-able. The script below does it: it creates the michael and michael-work accounts, installs the admin and instructor tooling, wires the per-role SSH and git separation, sets the screen lock and the host firewall, and prints whatever still needs hands, hardware, or a sign-in as a manual list at the end. Version 1.4 of the script installs the GitHub CLI from section 6 (a per-distro package install; GitHub's own repo is the RHEL-family fallback, and the sign-in stays a manual step), sets persistent journaling and the fleet personalization from section 1, and installs the three vendor applications from sections 3 and 10, each by the vendor's own distribution method. Proton Pass has no repository: the script reads Proton's version feed, takes the newest Stable release at full rollout, verifies the package's SHA512 checksum against the feed, and only then installs it; the sign-in and the SSH agent setup stay manual (see the companion handoff). Proton VPN uses Proton's own repository: on Debian and Ubuntu the script verifies and installs Proton's signed release package, then installs the proton-vpn-gnome-desktop app from the repo, and on Fedora it follows the same pattern with Proton's Fedora release package. Proton officially supports Fedora only on the RPM side, so on RHEL-family systems the script installs no VPN package and prints the manual path instead (the WireGuard configs from your Proton account). TickTick has no repository either: the script downloads from TickTick's official version-less endpoint, the same one the download page uses. All three install through the distro package manager, so dependencies resolve instead of failing the way the vendors' bare dpkg -i and rpm -i instructions can. One vendor collision is handled on the RPM side: the Proton Pass and TickTick RPMs both ship the same /usr/lib/.build-id debug symlinks with different targets (both apps are built on the stock Electron binary), so rpm refuses the second install; the script pulls the package's dependencies with dnf and retries with rpm --replacefiles, which changes only which app the debug links point at. Run it on the laptop as root: `sudo ./laptop-role-prep-setup-v1.4.sh`. The same script ships as a standalone file, laptop-role-prep-setup-v1.4.sh, byte-identical to the block below; the standalone is the copy to take to the laptop.
+
+Version 1.4 (2026-10-30) fixes two defects the first real-metal run, on the travel laptop the same day, exposed. Distro detection no longer treats every dnf-family system whose ID is not exactly "fedora" as RHEL-family: an exact RHEL-family ID (rhel, rocky, almalinux, centos) decides first, because Rocky declares fedora in its ID_LIKE, and a derivative under its own ID is judged by its declared lineage, so Nobara (ID nobara, ID_LIKE fedora) is Fedora-family and gets zenmap, Python IDLE, flameshot, and virt-manager instead of the RHEL-family substitutions. And the account and group changes now check their results: account creation and the docker, libvirt, and optional sudo-group adds report a warning when they fail, never a done line. On a first run the package phase precedes account creation, so those group adds land on a re-run; the report now says so instead of claiming memberships that do not exist yet.
 
 Tested 2026-10-17 and 2026-10-18: bash -n and ShellCheck clean, and both distro branches passed two consecutive live runs in test environments (Ubuntu 24.04 and Rocky Linux 10, each against local repos of the real distro packages and a local mirror of the genuine, checksum-verified vendor files), the second run converging, with results verified independently of the script's own report: packages installed, binaries present, group memberships, home permissions, and dotfiles all checked directly. The vendor installs were verified the same way on both branches: Proton Pass 1.42.0 with its feed checksum verified during the run, TickTick 8.0.20 on both branches, and Proton VPN (proton-vpn-gnome-desktop 0.11.0 from Proton's repo) on the Ubuntu branch, with the RHEL branch printing the manual path as designed. The Fedora variant of the Proton VPN install follows Proton's published Fedora instructions verbatim and is the one path not exercised live; every other branch was run. On RHEL-family systems a few checklist items have no package in the Rocky and EPEL indexes (Python IDLE, flameshot, zenmap, and virt-manager); the script reports those honestly and installs Cockpit Machines as the VM console there. Podman is the container runtime on that family; Docker is installed on the Debian family.
 
+The version 1.4 changes were verified on 2026-10-30 with an executed harness: fixture os-release files for both families (including Rocky Linux, whose ID_LIKE declares fedora, and Nobara) run through the script's own detection block, and stubbed usermod and useradd success and failure paths run through the group-add and account-creation blocks. A full live re-run of version 1.4 on the laptop is the remaining proof and had not happened when this version was cut.
+
 ```bash
 #!/usr/bin/env bash
-# laptop-role-prep-setup-v1.3.sh
+# laptop-role-prep-setup-v1.4.sh
 #
 # Produce the desired state from "Linux Laptop Prep Checklist: Coding
 # Instructor and Linux Administrator" (linux-laptop-role-prep-checklist)
@@ -199,7 +203,7 @@ step() { printf '\n== %s ==\n' "$*"; }
 # ---------------------------------------------------------------------------
 
 if [[ ${EUID} -ne 0 ]]; then
-    say "This script must run as root: sudo ./laptop-role-prep-setup-v1.3.sh"
+    say "This script must run as root: sudo ./laptop-role-prep-setup-v1.4.sh"
     exit 1
 fi
 
@@ -227,9 +231,24 @@ say "Detected: ${PRETTY_NAME:-${OS_ID}} (family: ${FAMILY})"
 # universe that differs from Fedora's for a few names this script
 # cares about; the package sections branch on it where the Rocky 10
 # and EPEL 10 indexes prove the Fedora name does not exist there.
+# An exact distro ID decides first: Rocky declares fedora in its
+# ID_LIKE, so ID_LIKE alone would misread Rocky as Fedora-family.
+# A derivative under its own ID is judged by its declared lineage
+# instead: Nobara is ID=nobara with ID_LIKE=fedora and is a Fedora
+# derivative, not a RHEL one (v1.3 called every non-"fedora" ID
+# RHEL-family, which misclassified it).
 RHELISH=0
-if [[ "${FAMILY}" == "dnf" && "${OS_ID}" != "fedora" ]]; then
-    RHELISH=1
+if [[ "${FAMILY}" == "dnf" ]]; then
+    case " ${OS_ID} " in
+        *" rhel "*|*" rocky "*|*" almalinux "*|*" centos "*) RHELISH=1 ;;
+        *" fedora "*) RHELISH=0 ;;
+        *)
+            case " ${OS_LIKE} " in
+                *" rhel "*|*" rocky "*|*" almalinux "*|*" centos "*) RHELISH=1 ;;
+                *) RHELISH=0 ;;
+            esac
+            ;;
+    esac
 fi
 
 INTERACTIVE=0
@@ -376,8 +395,11 @@ if [[ "${FAMILY}" == "apt" ]] && command -v docker >/dev/null 2>&1; then
         systemctl enable --now docker >/dev/null 2>&1 || warn_item "docker present but its service could not be enabled"
     fi
     if getent group docker >/dev/null 2>&1; then
-        usermod -aG docker "${WORK_USER}"
-        done_item "${WORK_USER} added to the docker group (root-equivalent; matches the libvirt pattern so the work account can run containers without sudo)"
+        if usermod -aG docker "${WORK_USER}"; then
+            done_item "${WORK_USER} added to the docker group (root-equivalent; matches the libvirt pattern so the work account can run containers without sudo)"
+        else
+            warn_item "${WORK_USER} could not be added to the docker group (the account is created later in this run; a re-run converges)"
+        fi
     fi
 fi
 
@@ -413,8 +435,11 @@ if [[ "${INSTALL_VIRT}" == "1" ]]; then
         warn_item "libvirt packages did not yield a libvirtd service; VM setup needs a look"
     fi
     if getent group libvirt >/dev/null 2>&1; then
-        usermod -aG libvirt "${WORK_USER}"
-        done_item "${WORK_USER} added to the libvirt group (checklist 4)"
+        if usermod -aG libvirt "${WORK_USER}"; then
+            done_item "${WORK_USER} added to the libvirt group (checklist 4)"
+        else
+            warn_item "${WORK_USER} could not be added to the libvirt group (the account is created later in this run; a re-run converges)"
+        fi
     fi
     manual_item "Section 4: build the one clean Linux sandbox VM (image choice is yours) and confirm it boots."
 else
@@ -838,9 +863,11 @@ create_user() {
     local u="$1"
     if id "${u}" >/dev/null 2>&1; then
         done_item "user exists already: ${u} (checklist 2)"
-    else
-        useradd -m -s /bin/bash "${u}"
+    elif useradd -m -s /bin/bash "${u}"; then
         done_item "user created: ${u} (checklist 2)"
+    else
+        warn_item "user could not be created: ${u} (checklist 2)"
+        return 1
     fi
     chmod 750 "/home/${u}"
     if [[ "${INTERACTIVE}" == "1" ]]; then
@@ -861,8 +888,11 @@ create_user "${PERSONAL_USER}"
 SUDO_GROUP="wheel"
 [[ "${FAMILY}" == "apt" ]] && SUDO_GROUP="sudo"
 if [[ "${GRANT_SUDO_WORK}" == "1" ]]; then
-    usermod -aG "${SUDO_GROUP}" "${WORK_USER}"
-    done_item "${WORK_USER} added to ${SUDO_GROUP} (GRANT_SUDO_WORK=1); sudo still requires a password (checklist 3)"
+    if usermod -aG "${SUDO_GROUP}" "${WORK_USER}"; then
+        done_item "${WORK_USER} added to ${SUDO_GROUP} (GRANT_SUDO_WORK=1); sudo still requires a password (checklist 3)"
+    else
+        warn_item "${WORK_USER} could not be added to ${SUDO_GROUP} (checklist 3)"
+    fi
 fi
 if grep -Rqs 'NOPASSWD' /etc/sudoers /etc/sudoers.d 2>/dev/null; then
     warn_item "a NOPASSWD entry exists in sudoers; the checklist says sudo requires a password - review /etc/sudoers.d"
@@ -1041,4 +1071,4 @@ say ""
 say "Re-running this script is safe; it converges to the same state."
 ```
 
-*Companion records: proton-pass-ssh-handoff-v1.0.md (open item [ee7f5b] on the action board), ansible-hosts-inventory (homelab reference), the public repo at github.com/amaad-michael/public (toolkit and playbooks source); laptop-role-prep-setup-v1.3.sh, the standalone form of the section 11 script (byte-identical; the two files travel together).*
+*Companion records: proton-pass-ssh-handoff-v1.0.md (open item [ee7f5b] on the action board), ansible-hosts-inventory (homelab reference), the public repo at github.com/amaad-michael/public (toolkit and playbooks source); laptop-role-prep-setup-v1.4.sh, the standalone form of the section 11 script (byte-identical; the two files travel together).*
