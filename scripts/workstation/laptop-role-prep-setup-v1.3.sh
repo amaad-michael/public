@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# laptop-role-prep-setup-v1.2.sh
+# laptop-role-prep-setup-v1.3.sh
 #
 # Produce the desired state from "Linux Laptop Prep Checklist: Coding
 # Instructor and Linux Administrator" (linux-laptop-role-prep-checklist)
@@ -65,7 +65,7 @@ step() { printf '\n== %s ==\n' "$*"; }
 # ---------------------------------------------------------------------------
 
 if [[ ${EUID} -ne 0 ]]; then
-    say "This script must run as root: sudo ./laptop-role-prep-setup-v1.2.sh"
+    say "This script must run as root: sudo ./laptop-role-prep-setup-v1.3.sh"
     exit 1
 fi
 
@@ -141,6 +141,33 @@ else
     install_pkgs git tmux python3 nodejs man-db manpages
 fi
 done_item "core tooling installed: git, tmux, python3, nodejs, man pages (checklist 4, 6)"
+
+# GitHub CLI (gh): pull requests from the terminal, git's companion
+# for the landing workflow. Fedora carries gh in the standard repos
+# and EPEL 10 carries it for the RHEL family (2.97.0, verified
+# against the EPEL 10 index 2026-10-29); Debian carries it too.
+# Where no candidate exists, the fallback is GitHub's own package
+# repo on the RHEL family and a manual item naming the official
+# route elsewhere. Authentication is a sign-in and is never
+# scripted; the manual item below carries it on every run.
+install_pkgs gh
+if command -v gh >/dev/null 2>&1; then
+    done_item "github cli installed: $(gh --version 2>/dev/null | head -1) (checklist 6)"
+elif [[ "${FAMILY}" == "dnf" && "${RHELISH}" == "1" ]]; then
+    if ! dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo >/dev/null 2>&1; then
+        dnf install -y dnf-plugins-core >/dev/null 2>&1 || true
+        dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo >/dev/null 2>&1 || true
+    fi
+    install_pkgs gh
+    if command -v gh >/dev/null 2>&1; then
+        done_item "github cli installed from GitHub's package repo: $(gh --version 2>/dev/null | head -1) (checklist 6)"
+    else
+        manual_item "GitHub CLI: install gh from https://cli.github.com (neither EPEL nor GitHub's repo yielded a package on this box)."
+    fi
+else
+    manual_item "GitHub CLI: install gh from https://cli.github.com (no package candidate on this distro)."
+fi
+manual_item "GitHub CLI: authenticate once per box (never scripted): gh auth login (GitHub.com, SSH, web browser), then gh auth status to verify (checklist 6)."
 
 # Linux administrator kit diagnostics (section 4) + Ansible.
 if [[ "${FAMILY}" == "dnf" ]]; then
@@ -568,6 +595,50 @@ elif systemctl list-unit-files 2>/dev/null | grep '^systemd-timesyncd\.service' 
     systemctl enable --now systemd-timesyncd >/dev/null 2>&1 || true
 fi
 done_item "automatic time synchronization enabled (checklist 1)"
+
+# Persistent journal: a /var/log/journal directory plus an explicit
+# Storage=persistent drop-in is what keeps the journal across
+# reboots; without it the journal is volatile and a failed boot
+# leaves no logs (the pi3 lesson, checklist 1).
+mkdir -p /var/log/journal /etc/systemd/journald.conf.d
+printf '[Journal]\nStorage=persistent\n' > /etc/systemd/journald.conf.d/10-persistent.conf
+systemctl restart systemd-journald >/dev/null 2>&1 || true
+if [[ -d /var/log/journal ]]; then
+    done_item "persistent journaling on: /var/log/journal present, Storage=persistent drop-in set (checklist 1)"
+else
+    warn_item "persistent journaling could not be confirmed; /var/log/journal missing"
+fi
+
+# Fleet personalization: the homelab hosts block (the same entries
+# the server leg and the motd playbook write, grep-guarded the same
+# way) so fleet names resolve on this box, and fastfetch as the
+# login presentation, via the same /etc/profile.d mechanism the
+# fleet's fastfetch playbook uses (checklist 1).
+if ! grep -q 'pi0' /etc/hosts 2>/dev/null; then
+    cat >> /etc/hosts <<'EOF'
+
+## local subnet
+192.168.0.100   pi0
+192.168.0.101   pi1
+192.168.0.102   pi2
+192.168.0.103   pi3
+192.168.0.104   pi4
+192.168.0.105   neo1
+EOF
+fi
+done_item "fleet /etc/hosts entries present: pi0-pi4 and neo1 (checklist 1)"
+
+install_pkgs fastfetch
+if command -v fastfetch >/dev/null 2>&1; then
+    mkdir -p /etc/profile.d
+    cat > /etc/profile.d/fastfetch.sh <<'EOF'
+#!/bin/bash
+# Run fastfetch for interactive login shells.
+fastfetch
+EOF
+    chmod 755 /etc/profile.d/fastfetch.sh
+    done_item "fastfetch login presentation set: /etc/profile.d/fastfetch.sh (checklist 1)"
+fi
 
 # Screen lock at 5 minutes with password on wake, as system dconf defaults
 # so it covers every account including the two created below (GNOME only).

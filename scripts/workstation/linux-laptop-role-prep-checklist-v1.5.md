@@ -1,7 +1,7 @@
 # Linux Laptop Prep Checklist: Coding Instructor and Linux Administrator
 
-**Version:** 1.4
-**Date:** 2026-10-18
+**Version:** 1.5
+**Date:** 2026-10-29
 **Scope:** Role-agnostic. Built for a personal Linux laptop that has to walk into either a classroom or a server environment and be ready, with personal and work life kept cleanly apart.
 
 ---
@@ -26,6 +26,9 @@
 - [ ] Firmware/BIOS updated
 - [ ] Full-disk encryption on and the recovery key stored in Proton Pass
 - [ ] Automatic time sync on (wrong clocks break Kerberos, TOTP codes, and log correlation)
+- [ ] Persistent journaling on (the journal survives reboots, so a failed boot still leaves logs)
+- [ ] Fleet /etc/hosts entries present (pi0-pi4 and neo1 resolve by name)
+- [ ] Login presentation set (fastfetch runs on login shells)
 - [ ] Screen lock at 5 minutes or less, with password required on wake
 - [ ] Host firewall on, default deny inbound
 - [ ] A full system backup taken before the first workday, plus a bare-metal restore method you have actually tested (installer USB + backup is not a plan until a restore has succeeded once)
@@ -85,6 +88,7 @@ The laptop is personal property doing professional work, so the walls matter mor
 - [ ] Language toolchains installed for what you teach and what you administer: Python, Node, and current shell tooling at minimum
 - [ ] git configured with the work identity for work directories and your personal identity elsewhere (conditional includes, not one global identity)
 - [ ] GitHub (or the employer's forge) access tested: key uploaded, clone over SSH confirmed working
+- [ ] GitHub CLI (gh) installed and authenticated (`gh auth login`), so pull requests can be opened from the terminal
 - [ ] A scratch directory habit for experiments, so demos and tests never land in real project trees
 
 ## 7. Communications
@@ -123,13 +127,13 @@ The laptop is personal property doing professional work, so the walls matter mor
 
 ## 11. Automation: the setup script
 
-The state this checklist describes can be produced from the command line for every item that is CLI-able. The script below does it: it creates the michael and michael-work accounts, installs the admin and instructor tooling, wires the per-role SSH and git separation, sets the screen lock and the host firewall, and prints whatever still needs hands, hardware, or a sign-in as a manual list at the end. Version 1.2 of the script also installs the three vendor applications from sections 3 and 10, each by the vendor's own distribution method. Proton Pass has no repository: the script reads Proton's version feed, takes the newest Stable release at full rollout, verifies the package's SHA512 checksum against the feed, and only then installs it; the sign-in and the SSH agent setup stay manual (see the companion handoff). Proton VPN uses Proton's own repository: on Debian and Ubuntu the script verifies and installs Proton's signed release package, then installs the proton-vpn-gnome-desktop app from the repo, and on Fedora it follows the same pattern with Proton's Fedora release package. Proton officially supports Fedora only on the RPM side, so on RHEL-family systems the script installs no VPN package and prints the manual path instead (the WireGuard configs from your Proton account). TickTick has no repository either: the script downloads from TickTick's official version-less endpoint, the same one the download page uses. All three install through the distro package manager, so dependencies resolve instead of failing the way the vendors' bare dpkg -i and rpm -i instructions can. One vendor collision is handled on the RPM side: the Proton Pass and TickTick RPMs both ship the same /usr/lib/.build-id debug symlinks with different targets (both apps are built on the stock Electron binary), so rpm refuses the second install; the script pulls the package's dependencies with dnf and retries with rpm --replacefiles, which changes only which app the debug links point at. Run it on the laptop as root: `sudo ./laptop-role-prep-setup-v1.2.sh`. The same script ships as a standalone file, laptop-role-prep-setup-v1.2.sh, byte-identical to the block below; the standalone is the copy to take to the laptop.
+The state this checklist describes can be produced from the command line for every item that is CLI-able. The script below does it: it creates the michael and michael-work accounts, installs the admin and instructor tooling, wires the per-role SSH and git separation, sets the screen lock and the host firewall, and prints whatever still needs hands, hardware, or a sign-in as a manual list at the end. Version 1.3 of the script installs the GitHub CLI from section 6 (a per-distro package install; GitHub's own repo is the RHEL-family fallback, and the sign-in stays a manual step), sets persistent journaling and the fleet personalization from section 1, and installs the three vendor applications from sections 3 and 10, each by the vendor's own distribution method. Proton Pass has no repository: the script reads Proton's version feed, takes the newest Stable release at full rollout, verifies the package's SHA512 checksum against the feed, and only then installs it; the sign-in and the SSH agent setup stay manual (see the companion handoff). Proton VPN uses Proton's own repository: on Debian and Ubuntu the script verifies and installs Proton's signed release package, then installs the proton-vpn-gnome-desktop app from the repo, and on Fedora it follows the same pattern with Proton's Fedora release package. Proton officially supports Fedora only on the RPM side, so on RHEL-family systems the script installs no VPN package and prints the manual path instead (the WireGuard configs from your Proton account). TickTick has no repository either: the script downloads from TickTick's official version-less endpoint, the same one the download page uses. All three install through the distro package manager, so dependencies resolve instead of failing the way the vendors' bare dpkg -i and rpm -i instructions can. One vendor collision is handled on the RPM side: the Proton Pass and TickTick RPMs both ship the same /usr/lib/.build-id debug symlinks with different targets (both apps are built on the stock Electron binary), so rpm refuses the second install; the script pulls the package's dependencies with dnf and retries with rpm --replacefiles, which changes only which app the debug links point at. Run it on the laptop as root: `sudo ./laptop-role-prep-setup-v1.3.sh`. The same script ships as a standalone file, laptop-role-prep-setup-v1.3.sh, byte-identical to the block below; the standalone is the copy to take to the laptop.
 
 Tested 2026-10-17 and 2026-10-18: bash -n and ShellCheck clean, and both distro branches passed two consecutive live runs in test environments (Ubuntu 24.04 and Rocky Linux 10, each against local repos of the real distro packages and a local mirror of the genuine, checksum-verified vendor files), the second run converging, with results verified independently of the script's own report: packages installed, binaries present, group memberships, home permissions, and dotfiles all checked directly. The vendor installs were verified the same way on both branches: Proton Pass 1.42.0 with its feed checksum verified during the run, TickTick 8.0.20 on both branches, and Proton VPN (proton-vpn-gnome-desktop 0.11.0 from Proton's repo) on the Ubuntu branch, with the RHEL branch printing the manual path as designed. The Fedora variant of the Proton VPN install follows Proton's published Fedora instructions verbatim and is the one path not exercised live; every other branch was run. On RHEL-family systems a few checklist items have no package in the Rocky and EPEL indexes (Python IDLE, flameshot, zenmap, and virt-manager); the script reports those honestly and installs Cockpit Machines as the VM console there. Podman is the container runtime on that family; Docker is installed on the Debian family.
 
 ```bash
 #!/usr/bin/env bash
-# laptop-role-prep-setup-v1.2.sh
+# laptop-role-prep-setup-v1.3.sh
 #
 # Produce the desired state from "Linux Laptop Prep Checklist: Coding
 # Instructor and Linux Administrator" (linux-laptop-role-prep-checklist)
@@ -195,7 +199,7 @@ step() { printf '\n== %s ==\n' "$*"; }
 # ---------------------------------------------------------------------------
 
 if [[ ${EUID} -ne 0 ]]; then
-    say "This script must run as root: sudo ./laptop-role-prep-setup-v1.2.sh"
+    say "This script must run as root: sudo ./laptop-role-prep-setup-v1.3.sh"
     exit 1
 fi
 
@@ -271,6 +275,33 @@ else
     install_pkgs git tmux python3 nodejs man-db manpages
 fi
 done_item "core tooling installed: git, tmux, python3, nodejs, man pages (checklist 4, 6)"
+
+# GitHub CLI (gh): pull requests from the terminal, git's companion
+# for the landing workflow. Fedora carries gh in the standard repos
+# and EPEL 10 carries it for the RHEL family (2.97.0, verified
+# against the EPEL 10 index 2026-10-29); Debian carries it too.
+# Where no candidate exists, the fallback is GitHub's own package
+# repo on the RHEL family and a manual item naming the official
+# route elsewhere. Authentication is a sign-in and is never
+# scripted; the manual item below carries it on every run.
+install_pkgs gh
+if command -v gh >/dev/null 2>&1; then
+    done_item "github cli installed: $(gh --version 2>/dev/null | head -1) (checklist 6)"
+elif [[ "${FAMILY}" == "dnf" && "${RHELISH}" == "1" ]]; then
+    if ! dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo >/dev/null 2>&1; then
+        dnf install -y dnf-plugins-core >/dev/null 2>&1 || true
+        dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo >/dev/null 2>&1 || true
+    fi
+    install_pkgs gh
+    if command -v gh >/dev/null 2>&1; then
+        done_item "github cli installed from GitHub's package repo: $(gh --version 2>/dev/null | head -1) (checklist 6)"
+    else
+        manual_item "GitHub CLI: install gh from https://cli.github.com (neither EPEL nor GitHub's repo yielded a package on this box)."
+    fi
+else
+    manual_item "GitHub CLI: install gh from https://cli.github.com (no package candidate on this distro)."
+fi
+manual_item "GitHub CLI: authenticate once per box (never scripted): gh auth login (GitHub.com, SSH, web browser), then gh auth status to verify (checklist 6)."
 
 # Linux administrator kit diagnostics (section 4) + Ansible.
 if [[ "${FAMILY}" == "dnf" ]]; then
@@ -699,6 +730,50 @@ elif systemctl list-unit-files 2>/dev/null | grep '^systemd-timesyncd\.service' 
 fi
 done_item "automatic time synchronization enabled (checklist 1)"
 
+# Persistent journal: a /var/log/journal directory plus an explicit
+# Storage=persistent drop-in is what keeps the journal across
+# reboots; without it the journal is volatile and a failed boot
+# leaves no logs (the pi3 lesson, checklist 1).
+mkdir -p /var/log/journal /etc/systemd/journald.conf.d
+printf '[Journal]\nStorage=persistent\n' > /etc/systemd/journald.conf.d/10-persistent.conf
+systemctl restart systemd-journald >/dev/null 2>&1 || true
+if [[ -d /var/log/journal ]]; then
+    done_item "persistent journaling on: /var/log/journal present, Storage=persistent drop-in set (checklist 1)"
+else
+    warn_item "persistent journaling could not be confirmed; /var/log/journal missing"
+fi
+
+# Fleet personalization: the homelab hosts block (the same entries
+# the server leg and the motd playbook write, grep-guarded the same
+# way) so fleet names resolve on this box, and fastfetch as the
+# login presentation, via the same /etc/profile.d mechanism the
+# fleet's fastfetch playbook uses (checklist 1).
+if ! grep -q 'pi0' /etc/hosts 2>/dev/null; then
+    cat >> /etc/hosts <<'EOF'
+
+## local subnet
+192.168.0.100   pi0
+192.168.0.101   pi1
+192.168.0.102   pi2
+192.168.0.103   pi3
+192.168.0.104   pi4
+192.168.0.105   neo1
+EOF
+fi
+done_item "fleet /etc/hosts entries present: pi0-pi4 and neo1 (checklist 1)"
+
+install_pkgs fastfetch
+if command -v fastfetch >/dev/null 2>&1; then
+    mkdir -p /etc/profile.d
+    cat > /etc/profile.d/fastfetch.sh <<'EOF'
+#!/bin/bash
+# Run fastfetch for interactive login shells.
+fastfetch
+EOF
+    chmod 755 /etc/profile.d/fastfetch.sh
+    done_item "fastfetch login presentation set: /etc/profile.d/fastfetch.sh (checklist 1)"
+fi
+
 # Screen lock at 5 minutes with password on wake, as system dconf defaults
 # so it covers every account including the two created below (GNOME only).
 if [[ -d /etc/dconf ]] || command -v dconf >/dev/null 2>&1; then
@@ -966,4 +1041,4 @@ say ""
 say "Re-running this script is safe; it converges to the same state."
 ```
 
-*Companion records: proton-pass-ssh-handoff-v1.0.md (open item [ee7f5b] on the action board), ansible-hosts-inventory (homelab reference), the public repo at github.com/amaad-michael/public (toolkit and playbooks source); laptop-role-prep-setup-v1.2.sh, the standalone form of the section 11 script (byte-identical; the two files travel together).*
+*Companion records: proton-pass-ssh-handoff-v1.0.md (open item [ee7f5b] on the action board), ansible-hosts-inventory (homelab reference), the public repo at github.com/amaad-michael/public (toolkit and playbooks source); laptop-role-prep-setup-v1.3.sh, the standalone form of the section 11 script (byte-identical; the two files travel together).*

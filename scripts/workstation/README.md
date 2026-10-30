@@ -47,7 +47,7 @@ environment ready. The checklist is the specification; the script
 produces every CLI-able part of it and prints the rest as a manual
 list.
 
-### linux-laptop-role-prep-checklist-v1.4.md
+### linux-laptop-role-prep-checklist-v1.5.md
 
 The checklist itself: base system, separation of personal and work
 lives, the security core, the Linux administrator kit, the coding
@@ -58,12 +58,12 @@ tested bare-metal restore are the load-bearing items. The setup
 script is embedded in section 11, byte-identical to the standalone
 file below.
 
-### laptop-role-prep-setup-v1.2.sh
+### laptop-role-prep-setup-v1.3.sh
 
-Run as root (`sudo ./laptop-role-prep-setup-v1.2.sh`). It creates
+Run as root (`sudo ./laptop-role-prep-setup-v1.3.sh`). It creates
 the per-role user accounts, installs the admin and instructor
 tooling, wires the per-role SSH and git separation, sets the screen
-lock and the host firewall, and prints whatever still needs hands,
+lock, the host firewall, and persistent journaling, adds the fleet /etc/hosts entries and the fastfetch login setup, and prints whatever still needs hands,
 hardware, or a sign-in as a manual list. The toolchain installs on
 both package families (apt and dnf) and includes the three vendor
 apps from the checklist: Proton Pass (no repository; the newest
@@ -77,7 +77,10 @@ Proton Pass / TickTick build-id collision on the RPM side). Docker
 on the Debian family, Podman on the RHEL family. Tested on Ubuntu
 24.04 and Rocky 10: both distro branches passed two consecutive
 live runs during the script's 2026-10-18 build, the second run
-converging.
+converging. Version 1.3 also installs the GitHub CLI (a per-distro
+package install, with GitHub's own package repo as the RHEL-family
+fallback) and leaves `gh auth login` on the manual list, since
+sign-in is never scripted.
 
 ## update-gpu-box.sh
 
