@@ -6,9 +6,28 @@ role-prep checklist and setup script for a personal Linux laptop.
 The Ansible patching counterpart for Nobara lives in
 `ansible/playbooks/monthly/monthly_maint_nobara.yml`.
 
+## The single new-box workflow
+
+`new-box-prep-v1.0.sh` is the entry point for prepping any new
+box or server. It sequences the repo's existing prep scripts
+(newest version of each wins) and adds nothing of its own:
+
+- `new-box-prep-v1.0.sh laptop [--with-gpu] [--dry-run]`: git
+  setup, ssh setup, then the laptop role prep; `--with-gpu`
+  appends the GPU tuning step, which skips cleanly on boxes
+  without a discrete AMD GPU.
+- `new-box-prep-v1.0.sh server [--dry-run]` (as root on the
+  target): the conservative secure-server-init, then git setup
+  for the michael user, then it prints the controller-side
+  follow-ons (the fleet password cycle, the node_exporter
+  rollout, the first lynis audit).
+
+Every step stays runnable on its own; the runner is only the
+order.
+
 ## 🛠️ New Nobara setup
 
-One script for the first-boot job: `new-nobara-setup-v1.1.sh`, run
+One script for the first-boot job: `new-nobara-setup-v1.2.sh`, run
 as root on a fresh Nobara install. It:
 
 - Finds the discrete AMD GPU (amdgpu driver, device class 0x030000,
@@ -32,8 +51,12 @@ the gear menu on the login screen, then set themes and wallpaper.
 For GPU tuning alone, without the setup:
 
 ```bash
-sudo ./new-nobara-setup-v1.1.sh gpu-high
+sudo ./new-nobara-setup-v1.2.sh gpu-high
 ```
+
+(v1.2: in gpu-high mode a missing discrete GPU is a skip with
+exit 0, not an error, so the new-box workflow can offer this
+step on every box. A full run still stops without one.)
 
 (The retired `new-nobara-setup-alt-v1.1.sh` variant, whose
 `gpu-high` subcommand was folded into the script above, is in
