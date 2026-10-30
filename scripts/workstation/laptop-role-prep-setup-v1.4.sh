@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# laptop-role-prep-setup-v1.3.sh
+# laptop-role-prep-setup-v1.4.sh
 #
 # Produce the desired state from "Linux Laptop Prep Checklist: Coding
 # Instructor and Linux Administrator" (linux-laptop-role-prep-checklist)
@@ -65,7 +65,7 @@ step() { printf '\n== %s ==\n' "$*"; }
 # ---------------------------------------------------------------------------
 
 if [[ ${EUID} -ne 0 ]]; then
-    say "This script must run as root: sudo ./laptop-role-prep-setup-v1.3.sh"
+    say "This script must run as root: sudo ./laptop-role-prep-setup-v1.4.sh"
     exit 1
 fi
 
@@ -93,9 +93,24 @@ say "Detected: ${PRETTY_NAME:-${OS_ID}} (family: ${FAMILY})"
 # universe that differs from Fedora's for a few names this script
 # cares about; the package sections branch on it where the Rocky 10
 # and EPEL 10 indexes prove the Fedora name does not exist there.
+# An exact distro ID decides first: Rocky declares fedora in its
+# ID_LIKE, so ID_LIKE alone would misread Rocky as Fedora-family.
+# A derivative under its own ID is judged by its declared lineage
+# instead: Nobara is ID=nobara with ID_LIKE=fedora and is a Fedora
+# derivative, not a RHEL one (v1.3 called every non-"fedora" ID
+# RHEL-family, which misclassified it).
 RHELISH=0
-if [[ "${FAMILY}" == "dnf" && "${OS_ID}" != "fedora" ]]; then
-    RHELISH=1
+if [[ "${FAMILY}" == "dnf" ]]; then
+    case " ${OS_ID} " in
+        *" rhel "*|*" rocky "*|*" almalinux "*|*" centos "*) RHELISH=1 ;;
+        *" fedora "*) RHELISH=0 ;;
+        *)
+            case " ${OS_LIKE} " in
+                *" rhel "*|*" rocky "*|*" almalinux "*|*" centos "*) RHELISH=1 ;;
+                *) RHELISH=0 ;;
+            esac
+            ;;
+    esac
 fi
 
 INTERACTIVE=0
@@ -242,8 +257,11 @@ if [[ "${FAMILY}" == "apt" ]] && command -v docker >/dev/null 2>&1; then
         systemctl enable --now docker >/dev/null 2>&1 || warn_item "docker present but its service could not be enabled"
     fi
     if getent group docker >/dev/null 2>&1; then
-        usermod -aG docker "${WORK_USER}"
-        done_item "${WORK_USER} added to the docker group (root-equivalent; matches the libvirt pattern so the work account can run containers without sudo)"
+        if usermod -aG docker "${WORK_USER}"; then
+            done_item "${WORK_USER} added to the docker group (root-equivalent; matches the libvirt pattern so the work account can run containers without sudo)"
+        else
+            warn_item "${WORK_USER} could not be added to the docker group (the account is created later in this run; a re-run converges)"
+        fi
     fi
 fi
 
@@ -279,8 +297,11 @@ if [[ "${INSTALL_VIRT}" == "1" ]]; then
         warn_item "libvirt packages did not yield a libvirtd service; VM setup needs a look"
     fi
     if getent group libvirt >/dev/null 2>&1; then
-        usermod -aG libvirt "${WORK_USER}"
-        done_item "${WORK_USER} added to the libvirt group (checklist 4)"
+        if usermod -aG libvirt "${WORK_USER}"; then
+            done_item "${WORK_USER} added to the libvirt group (checklist 4)"
+        else
+            warn_item "${WORK_USER} could not be added to the libvirt group (the account is created later in this run; a re-run converges)"
+        fi
     fi
     manual_item "Section 4: build the one clean Linux sandbox VM (image choice is yours) and confirm it boots."
 else
@@ -704,9 +725,11 @@ create_user() {
     local u="$1"
     if id "${u}" >/dev/null 2>&1; then
         done_item "user exists already: ${u} (checklist 2)"
-    else
-        useradd -m -s /bin/bash "${u}"
+    elif useradd -m -s /bin/bash "${u}"; then
         done_item "user created: ${u} (checklist 2)"
+    else
+        warn_item "user could not be created: ${u} (checklist 2)"
+        return 1
     fi
     chmod 750 "/home/${u}"
     if [[ "${INTERACTIVE}" == "1" ]]; then
@@ -727,8 +750,11 @@ create_user "${PERSONAL_USER}"
 SUDO_GROUP="wheel"
 [[ "${FAMILY}" == "apt" ]] && SUDO_GROUP="sudo"
 if [[ "${GRANT_SUDO_WORK}" == "1" ]]; then
-    usermod -aG "${SUDO_GROUP}" "${WORK_USER}"
-    done_item "${WORK_USER} added to ${SUDO_GROUP} (GRANT_SUDO_WORK=1); sudo still requires a password (checklist 3)"
+    if usermod -aG "${SUDO_GROUP}" "${WORK_USER}"; then
+        done_item "${WORK_USER} added to ${SUDO_GROUP} (GRANT_SUDO_WORK=1); sudo still requires a password (checklist 3)"
+    else
+        warn_item "${WORK_USER} could not be added to ${SUDO_GROUP} (checklist 3)"
+    fi
 fi
 if grep -Rqs 'NOPASSWD' /etc/sudoers /etc/sudoers.d 2>/dev/null; then
     warn_item "a NOPASSWD entry exists in sudoers; the checklist says sudo requires a password - review /etc/sudoers.d"
