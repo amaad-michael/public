@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
 #
-# NAME: ssh-setup-new-box-v1.1.sh
+# NAME: ssh-setup-new-box-v1.2.sh
 # WHAT: Provisions SSH access from a new controller box to the homelab:
 #       installs keychain, generates an ed25519 keypair if missing, loads
 #       it into a persistent agent, and copies the public key to pi0-pi4
 #       plus neo1 (192.168.0.100-105) as user michael.
 # WHY:  One run replaces the manual key and agent setup repeated on every
 #       new controller box before ansible can reach the fleet.
-# HOW:  ./ssh-setup-new-box-v1.1.sh
+# HOW:  ./ssh-setup-new-box-v1.2.sh
 #       Idempotent: safe to re-run. dnf and apt family boxes (v1.1 added
-#       the apt branch; v1.0 was Rocky-family only).
+#       the apt branch; v1.0 was Rocky-family only). v1.2 adds a
+#       5-second ConnectTimeout to the key-copy loop so an off-fleet
+#       run fails fast on unreachable hosts instead of burning the
+#       full TCP timeout six times.
 set -euo pipefail
 
 KEY="$HOME/.ssh/id_ed25519"
@@ -69,9 +72,11 @@ chmod 600 "$KEY"
 eval "$(keychain --eval --quiet "$KEY")"
 
 # --- 4. copy the public key to every node ---
+# ConnectTimeout=5: off the fleet LAN each unreachable host would
+# otherwise stall for the full TCP connection timeout.
 for ip in "${NODES[@]}"; do
     echo "--- $ip ---"
-    ssh-copy-id -i "$KEY.pub" "$SSH_USER@$ip"
+    ssh-copy-id -o ConnectTimeout=5 -i "$KEY.pub" "$SSH_USER@$ip"
 done
 
 echo "done. verify with: ansible pi_all -i ~/git/ansible/hosts -m ping"
