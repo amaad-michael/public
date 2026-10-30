@@ -10,10 +10,10 @@
 #  - Downloads wallpaper and provides setup guidance
 #
 #  Usage:
-#  1. Save as new-nobara-setup-v1.1.sh
-#  2. chmod +x new-nobara-setup-v1.1.sh
-#  3. sudo ./new-nobara-setup-v1.1.sh            (full setup)
-#     sudo ./new-nobara-setup-v1.1.sh gpu-high   (GPU tuning only)
+#  1. Save as new-nobara-setup-v1.2.sh
+#  2. chmod +x new-nobara-setup-v1.2.sh
+#  3. sudo ./new-nobara-setup-v1.2.sh            (full setup)
+#     sudo ./new-nobara-setup-v1.2.sh gpu-high   (GPU tuning only)
 #
 # ==============================================================================
 
@@ -22,7 +22,7 @@ set -e
 # --- Safety Check: Ensure root ---
 if [ "$EUID" -ne 0 ]; then
   echo "Error: This script must be run with root privileges."
-  echo "Please use 'sudo ./new-nobara-setup-v1.1.sh'"
+  echo "Please use 'sudo ./new-nobara-setup-v1.2.sh'"
   exit 1
 fi
 
@@ -68,6 +68,10 @@ for card in /sys/class/drm/card*/device/uevent; do
 done
 
 if [ -z "$GPU_DEVICE" ]; then
+    if [ "${GPU_OPTIONAL:-0}" = "1" ]; then
+        echo "No AMD discrete GPU found; skipping GPU tuning (optional step)."
+        return 0
+    fi
     echo "Error: No AMD discrete GPU found. Exiting."
     exit 1
 fi
@@ -95,7 +99,13 @@ echo ""
 }
 
 # --- Dispatch: gpu-high runs Part 1 only ---
+# v1.2: in gpu-high mode a missing discrete GPU is a skip (exit 0),
+# not an error: the single new-box workflow calls this mode as its
+# optional final step on every box, gaming rig or not. A full run
+# still stops, because a gaming setup without the GPU is wrong.
 if [ "${1:-}" = "gpu-high" ]; then
+    GPU_OPTIONAL=1
+    export GPU_OPTIONAL
     gpu_high
     echo "GPU tuning only: setup not run. Run without arguments for the full setup."
     exit 0
