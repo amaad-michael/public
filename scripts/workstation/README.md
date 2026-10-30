@@ -70,7 +70,7 @@ environment ready. The checklist is the specification; the script
 produces every CLI-able part of it and prints the rest as a manual
 list.
 
-### linux-laptop-role-prep-checklist-v1.6.md
+### linux-laptop-role-prep-checklist-v1.7.md
 
 The checklist itself: base system, separation of personal and work
 lives, the security core, the Linux administrator kit, the coding
@@ -81,12 +81,12 @@ tested bare-metal restore are the load-bearing items. The setup
 script is embedded in section 11, byte-identical to the standalone
 file below.
 
-### laptop-role-prep-setup-v1.4.sh
+### laptop-role-prep-setup-v1.5.sh
 
-Run as root (`sudo ./laptop-role-prep-setup-v1.4.sh`). It creates
+Run as root (`sudo ./laptop-role-prep-setup-v1.5.sh`). It creates
 the per-role user accounts, installs the admin and instructor
 tooling, wires the per-role SSH and git separation, sets the screen
-lock, the host firewall, and persistent journaling, adds the fleet /etc/hosts entries and the fastfetch login setup, and prints whatever still needs hands,
+lock, the host firewall, and persistent journaling, adds the fleet /etc/hosts entries, the cluster MOTD, and the fastfetch login setup, and prints whatever still needs hands,
 hardware, or a sign-in as a manual list. The toolchain installs on
 both package families (apt and dnf) and includes the three vendor
 apps from the checklist: Proton Pass (no repository; the newest
@@ -110,6 +110,11 @@ under its own ID is judged by its declared lineage, so Nobara is
 Fedora-family rather than RHEL-family. Account creation and the
 group-membership adds now check their results and warn on failure
 instead of reporting success unconditionally.
+Version 1.5 also writes the cluster MOTD alongside the hosts
+entries: the motd playbook's static /etc/motd (banner plus the
+fleet subnet block), with the playbook's backup of any
+pre-existing /etc/motd and a checked write that warns on failure
+instead of claiming success.
 
 ## update-gpu-box.sh
 

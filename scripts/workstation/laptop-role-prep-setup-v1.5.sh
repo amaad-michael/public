@@ -1,143 +1,5 @@
-# Linux Laptop Prep Checklist: Coding Instructor and Linux Administrator
-
-**Version:** 1.6
-**Date:** 2026-10-30
-**Scope:** Role-agnostic. Built for a personal Linux laptop that has to walk into either a classroom or a server environment and be ready, with personal and work life kept cleanly apart.
-
----
-
-## Table of Contents
-
-1. [1. Base system](#1-base-system)
-1. [2. Separation of lives](#2-separation-of-lives)
-1. [3. Security core](#3-security-core)
-1. [4. Linux administrator kit](#4-linux-administrator-kit)
-1. [5. Coding instructor kit](#5-coding-instructor-kit)
-1. [6. Developer environment](#6-developer-environment)
-1. [7. Communications](#7-communications)
-1. [8. Carry kit](#8-carry-kit)
-1. [9. Dry run before day one](#9-dry-run-before-day-one)
-1. [10. Ongoing hygiene](#10-ongoing-hygiene)
-1. [11. Automation: the setup script](#11-automation-the-setup-script)
-
-## 1. Base system
-
-- [ ] OS fully updated, rebooted into the new kernel, and confirmed stable for a day before relying on it
-- [ ] Firmware/BIOS updated
-- [ ] Full-disk encryption on and the recovery key stored in Proton Pass
-- [ ] Automatic time sync on (wrong clocks break Kerberos, TOTP codes, and log correlation)
-- [ ] Persistent journaling on (the journal survives reboots, so a failed boot still leaves logs)
-- [ ] Fleet /etc/hosts entries present (pi0-pi4 and neo1 resolve by name)
-- [ ] Login presentation set (fastfetch runs on login shells)
-- [ ] Screen lock at 5 minutes or less, with password required on wake
-- [ ] Host firewall on, default deny inbound
-- [ ] A full system backup taken before the first workday, plus a bare-metal restore method you have actually tested (installer USB + backup is not a plan until a restore has succeeded once)
-- [ ] Battery health checked; runtime on battery is known, not guessed
-
-## 2. Separation of lives
-
-The laptop is personal property doing professional work, so the walls matter more than the tools.
-
-- [ ] A separate local user account (or at minimum a separate browser profile and home-directory workspace) for work, so no personal files, photos, or logins are one misclick from a classroom projector or a screen share
-- [ ] Separate browser profile for work: no personal bookmarks, no personal saved logins, no personal history
-- [ ] Separate SSH key per role and per employer, generated for the purpose, never your personal homelab key
-- [ ] Separate git identity (name and email) configured per directory for work repos
-- [ ] Employer data lives in one clearly named work folder, so returning or wiping it on exit is a single delete, not a scavenger hunt
-- [ ] Nothing of an employer's stored in personal cloud accounts, and nothing personal stored in employer accounts
-
-## 3. Security core
-
-- [ ] Proton Pass installed and signed in; work credentials go in their own vault
-- [ ] Proton Pass SSH agent set up, so SSH keys are served by the vault instead of sitting as loose files in ~/.ssh (handoff already written: proton-pass-ssh-handoff-v1.0.md)
-- [ ] Proton VPN installed and signed in (the setup script configures Proton's own repo on Debian/Ubuntu and Fedora; Proton supports Fedora only on the RPM side, so on RHEL-family systems use the WireGuard configs from your Proton account instead)
-- [ ] Authenticator app ready for employer 2FA enrollment on day one; recovery codes for every account saved to both clouds, the same pattern as the Gumroad codes
-- [ ] SSH config hardened for work hosts: key-only auth, IdentitiesOnly set per host so the wrong key is never offered
-- [ ] sudo requires a password; no passwordless sudo carried over from homelab habits
-- [ ] An encrypted USB drive (LUKS) for moving files into restricted environments where cloud storage is not allowed
-- [ ] Webcam cover and a hardware mute habit for calls
-
-## 4. Linux administrator kit
-
-- [ ] Terminal setup you can fly blind: tmux, shell history search, aliases, and the dotfiles to rebuild it all on a fresh machine in minutes
-- [ ] Your public repo cloned locally (the ops toolkit, Ansible playbooks, and templates live there and are already tested)
-- [ ] Ansible installed, with a clean inventory template ready to fill in for a new environment
-- [ ] Core diagnostic tools: nmap, tcpdump, mtr, dig, curl, jq, iperf3, smartmontools, nc
-- [ ] Docker (or Podman) installed and tested, for reproducing a service locally instead of guessing at it
-- [ ] A VM setup (virt-manager/libvirt or VirtualBox) with one clean Linux VM kept as a sandbox and test target
-- [ ] Bootable USB: current installer image plus a rescue environment, tested to boot on this laptop
-- [ ] Hardware in the bag: USB-to-Ethernet adapter, console/serial cable, USB-C and HDMI cables, a small switch if the work ever touches physical racks
-- [ ] VPN client support sorted: WireGuard and OpenVPN configs import cleanly, and any employer-specific client is installed and launches
-- [ ] A local, offline copy of the documentation you reach for most (man pages cover most of it; add offline copies of anything web-only you depend on)
-
-## 5. Coding instructor kit
-
-- [ ] Presentation path tested end to end: laptop to projector or TV over HDMI and USB-C, at the room's resolution, with the desktop readable from the back row
-- [ ] A clean presentation desktop: notifications off or do-not-disturb set, no personal windows, wallpaper neutral
-- [ ] Terminal font and editor font sized for projection, high-contrast theme that survives a washed-out projector
-- [ ] A presentation clicker or the keyboard shortcuts to replace one
-- [ ] Local development environments installed and working offline, so a dead classroom network cannot kill a lesson: Python 3 with IDLE or a simple editor, a local JavaScript runtime (Node), and whatever block-based or beginner tools the curriculum uses, opened once and confirmed working without a connection
-- [ ] Demo projects and exercises stored locally, not only in a cloud drive, with a spare copy on the encrypted USB
-- [ ] One demo VM or container image pre-built with the class environment, so every session starts from the same known-good state and resets cleanly
-- [ ] Student-safe defaults: the work browser profile has no saved passwords, no autofill of personal details, and no personal tabs restored on launch
-- [ ] Screen recording or screenshot tool ready (for making recap material and for documenting a student's work)
-- [ ] A printed or offline copy of the day's lesson plan, because the projector, the network, and the laptop never all fail on different days
-
-## 6. Developer environment
-
-- [ ] Editor configured and identical in feel to your main machine (keybindings, theme, extensions exported or synced)
-- [ ] Language toolchains installed for what you teach and what you administer: Python, Node, and current shell tooling at minimum
-- [ ] git configured with the work identity for work directories and your personal identity elsewhere (conditional includes, not one global identity)
-- [ ] GitHub (or the employer's forge) access tested: key uploaded, clone over SSH confirmed working
-- [ ] GitHub CLI (gh) installed and authenticated (`gh auth login`), so pull requests can be opened from the terminal
-- [ ] A scratch directory habit for experiments, so demos and tests never land in real project trees
-
-## 7. Communications
-
-- [ ] Headset with a microphone you have heard a recording of; the laptop's built-in mic is the backup, not the plan
-- [ ] Webcam tested in the actual apps you will use, with a background that is neutral and unrevealing
-- [ ] Zoom, Teams, and Meet all launch in the work browser profile or their apps, signed in to the work accounts only
-- [ ] Calendar access for the work schedule set up, with personal calendar details not exposed in return
-
-## 8. Carry kit
-
-- [ ] Charger plus one spare cable
-- [ ] Wireless mouse (presenting and teaching from a trackpad all day is needless wear)
-- [ ] HDMI cable and USB-C to HDMI adapter, even if the room "has them"
-- [ ] Power bank sized for the laptop, or at minimum for the phone that becomes the emergency hotspot
-- [ ] Phone hotspot plan confirmed working; it is the backup network for both roles
-- [ ] A few blank USB drives for handing files to students or pulling logs off an isolated machine
-
-## 9. Dry run before day one
-
-- [ ] Present a full practice lesson or demo to an empty room: projector, fonts, demo environment, offline mode all exercised at once
-- [ ] SSH into a test host using only the work key and the Proton Pass agent, exactly as you would on the job
-- [ ] Run one real admin task end to end (an Ansible playbook against the sandbox VM) to prove the toolchain, not just its installation
-- [ ] Restore one file from the backup
-- [ ] Time a cold start: bag packed to logged in and presenting, so the first real morning has no surprises
-
-## 10. Ongoing hygiene
-
-- [ ] Weekly updates on a schedule that is never the morning of a teaching or on-call day
-- [ ] Work folder reviewed monthly: anything that belongs to an employer is where it should be, and nothing personal has drifted in
-- [ ] Keys and credentials rotated when an engagement ends; the per-role keys from section 2 get revoked and deleted, not just abandoned
-- [ ] On exit from any role: employer data wiped from the work folder and the encrypted USB, access confirmed closed, and the separation from section 2 is what makes this a ten-minute job
-- [ ] TickTick installed and signed in; it is the working task list for everything else
-
----
-
-## 11. Automation: the setup script
-
-The state this checklist describes can be produced from the command line for every item that is CLI-able. The script below does it: it creates the michael and michael-work accounts, installs the admin and instructor tooling, wires the per-role SSH and git separation, sets the screen lock and the host firewall, and prints whatever still needs hands, hardware, or a sign-in as a manual list at the end. Version 1.4 of the script installs the GitHub CLI from section 6 (a per-distro package install; GitHub's own repo is the RHEL-family fallback, and the sign-in stays a manual step), sets persistent journaling and the fleet personalization from section 1, and installs the three vendor applications from sections 3 and 10, each by the vendor's own distribution method. Proton Pass has no repository: the script reads Proton's version feed, takes the newest Stable release at full rollout, verifies the package's SHA512 checksum against the feed, and only then installs it; the sign-in and the SSH agent setup stay manual (see the companion handoff). Proton VPN uses Proton's own repository: on Debian and Ubuntu the script verifies and installs Proton's signed release package, then installs the proton-vpn-gnome-desktop app from the repo, and on Fedora it follows the same pattern with Proton's Fedora release package. Proton officially supports Fedora only on the RPM side, so on RHEL-family systems the script installs no VPN package and prints the manual path instead (the WireGuard configs from your Proton account). TickTick has no repository either: the script downloads from TickTick's official version-less endpoint, the same one the download page uses. All three install through the distro package manager, so dependencies resolve instead of failing the way the vendors' bare dpkg -i and rpm -i instructions can. One vendor collision is handled on the RPM side: the Proton Pass and TickTick RPMs both ship the same /usr/lib/.build-id debug symlinks with different targets (both apps are built on the stock Electron binary), so rpm refuses the second install; the script pulls the package's dependencies with dnf and retries with rpm --replacefiles, which changes only which app the debug links point at. Run it on the laptop as root: `sudo ./laptop-role-prep-setup-v1.4.sh`. The same script ships as a standalone file, laptop-role-prep-setup-v1.4.sh, byte-identical to the block below; the standalone is the copy to take to the laptop.
-
-Version 1.4 (2026-10-30) fixes two defects the first real-metal run, on the travel laptop the same day, exposed. Distro detection no longer treats every dnf-family system whose ID is not exactly "fedora" as RHEL-family: an exact RHEL-family ID (rhel, rocky, almalinux, centos) decides first, because Rocky declares fedora in its ID_LIKE, and a derivative under its own ID is judged by its declared lineage, so Nobara (ID nobara, ID_LIKE fedora) is Fedora-family and gets zenmap, Python IDLE, flameshot, and virt-manager instead of the RHEL-family substitutions. And the account and group changes now check their results: account creation and the docker, libvirt, and optional sudo-group adds report a warning when they fail, never a done line. On a first run the package phase precedes account creation, so those group adds land on a re-run; the report now says so instead of claiming memberships that do not exist yet.
-
-Tested 2026-10-17 and 2026-10-18: bash -n and ShellCheck clean, and both distro branches passed two consecutive live runs in test environments (Ubuntu 24.04 and Rocky Linux 10, each against local repos of the real distro packages and a local mirror of the genuine, checksum-verified vendor files), the second run converging, with results verified independently of the script's own report: packages installed, binaries present, group memberships, home permissions, and dotfiles all checked directly. The vendor installs were verified the same way on both branches: Proton Pass 1.42.0 with its feed checksum verified during the run, TickTick 8.0.20 on both branches, and Proton VPN (proton-vpn-gnome-desktop 0.11.0 from Proton's repo) on the Ubuntu branch, with the RHEL branch printing the manual path as designed. The Fedora variant of the Proton VPN install follows Proton's published Fedora instructions verbatim and is the one path not exercised live; every other branch was run. On RHEL-family systems a few checklist items have no package in the Rocky and EPEL indexes (Python IDLE, flameshot, zenmap, and virt-manager); the script reports those honestly and installs Cockpit Machines as the VM console there. Podman is the container runtime on that family; Docker is installed on the Debian family.
-
-The version 1.4 changes were verified on 2026-10-30 with an executed harness: fixture os-release files for both families (including Rocky Linux, whose ID_LIKE declares fedora, and Nobara) run through the script's own detection block, and stubbed usermod and useradd success and failure paths run through the group-add and account-creation blocks. A full live re-run of version 1.4 on the laptop is the remaining proof and had not happened when this version was cut.
-
-```bash
 #!/usr/bin/env bash
-# laptop-role-prep-setup-v1.4.sh
+# laptop-role-prep-setup-v1.5.sh
 #
 # Produce the desired state from "Linux Laptop Prep Checklist: Coding
 # Instructor and Linux Administrator" (linux-laptop-role-prep-checklist)
@@ -203,7 +65,7 @@ step() { printf '\n== %s ==\n' "$*"; }
 # ---------------------------------------------------------------------------
 
 if [[ ${EUID} -ne 0 ]]; then
-    say "This script must run as root: sudo ./laptop-role-prep-setup-v1.4.sh"
+    say "This script must run as root: sudo ./laptop-role-prep-setup-v1.5.sh"
     exit 1
 fi
 
@@ -770,8 +632,10 @@ fi
 
 # Fleet personalization: the homelab hosts block (the same entries
 # the server leg and the motd playbook write, grep-guarded the same
-# way) so fleet names resolve on this box, and fastfetch as the
-# login presentation, via the same /etc/profile.d mechanism the
+# way) so fleet names resolve on this box, the cluster MOTD the motd
+# playbook writes to /etc/motd (banner plus the same subnet block,
+# so console and SSH logins show the fleet map), and fastfetch as
+# the login presentation, via the same /etc/profile.d mechanism the
 # fleet's fastfetch playbook uses (checklist 1).
 if ! grep -q 'pi0' /etc/hosts 2>/dev/null; then
     cat >> /etc/hosts <<'EOF'
@@ -786,6 +650,36 @@ if ! grep -q 'pi0' /etc/hosts 2>/dev/null; then
 EOF
 fi
 done_item "fleet /etc/hosts entries present: pi0-pi4 and neo1 (checklist 1)"
+
+# Cluster MOTD, mirroring the motd playbook's static /etc/motd. A
+# /etc/motd that already carries the subnet block is left alone;
+# any other non-empty one is copied to /etc/motd.backup first (the
+# backup the playbook takes), and only when no backup exists yet.
+if grep -q '## local subnet' /etc/motd 2>/dev/null; then
+    done_item "cluster MOTD in place: /etc/motd carries the fleet subnet block (checklist 1)"
+else
+    if [[ -s /etc/motd && ! -e /etc/motd.backup ]]; then
+        cp /etc/motd /etc/motd.backup
+    fi
+    if cat > /etc/motd <<'EOF'
+
+▄▀▄     █▄ ▄█ █ ▄▀▀ █▄█ ▄▀▄ ██▀ █      ▀█▀ ▄▀▄ ▀█▀ █ █ █▄ ▄█
+█▀█ ▄   █ ▀ █ █ ▀▄▄ █ █ █▀█ █▄▄ █▄▄     █  █▀█  █  ▀▄█ █ ▀ █
+
+## local subnet
+192.168.0.100   pi0
+192.168.0.101   pi1
+192.168.0.102   pi2
+192.168.0.103   pi3
+192.168.0.104   pi4
+192.168.0.105   neo1
+EOF
+    then
+        done_item "cluster MOTD in place: /etc/motd carries the fleet subnet block (checklist 1)"
+    else
+        warn_item "cluster MOTD could not be written to /etc/motd (checklist 1)"
+    fi
+fi
 
 install_pkgs fastfetch
 if command -v fastfetch >/dev/null 2>&1; then
@@ -1069,6 +963,3 @@ for u in "${WORK_USER}" "${PERSONAL_USER}"; do
 done
 say ""
 say "Re-running this script is safe; it converges to the same state."
-```
-
-*Companion records: proton-pass-ssh-handoff-v1.0.md (open item [ee7f5b] on the action board), ansible-hosts-inventory (homelab reference), the public repo at github.com/amaad-michael/public (toolkit and playbooks source); laptop-role-prep-setup-v1.4.sh, the standalone form of the section 11 script (byte-identical; the two files travel together).*
