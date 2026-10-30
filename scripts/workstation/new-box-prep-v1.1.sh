@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# NAME: new-box-prep-v1.0.sh
+# NAME: new-box-prep-v1.1.sh
 # WHAT: The single new-box workflow. Runs this repo's prep scripts in
 #       order for a laptop or a server, with GPU tuning as an
 #       optional final step (the only delta for a gaming rig):
@@ -14,11 +14,16 @@
 #       2026-10-29). Every step is one of the repo's existing
 #       scripts, each idempotent and runnable on its own; this
 #       runner only sequences them.
-# HOW:  ./new-box-prep-v1.0.sh laptop|server [--with-gpu] [--dry-run]
+# HOW:  ./new-box-prep-v1.1.sh laptop|server [--with-gpu] [--dry-run]
 #       Run it from inside a clone of this repo; sibling scripts
 #       are resolved relative to this file and the newest version
 #       of each wins. --dry-run prints the resolved plan and runs
-#       nothing. Run the server form as root on the target.
+#       nothing. Run the server form as root on the target. The
+#       laptop role prep runs under sudo (it requires root); the
+#       git and ssh setup steps run as the invoking user. A step
+#       that exits nonzero stops the workflow: it names the failed
+#       step, exits nonzero itself, and never prints the done
+#       footer.
 set -uo pipefail
 
 usage() {
@@ -62,13 +67,17 @@ GPU_STEP="$(newest scripts/workstation 'new-nobara-setup-v*.sh')"
 
 STEP=0
 run_step() {
+    local desc="$1"
     STEP=$((STEP + 1))
     echo ""
-    echo "=== Step $STEP: $1 ==="
+    echo "=== Step $STEP: $desc ==="
     shift
     echo "  $*"
     if [[ "$DRY_RUN" -eq 0 ]]; then
-        "$@"
+        if ! "$@"; then
+            echo "FAILED: step $STEP ($desc) exited nonzero; workflow stopped." >&2
+            exit 1
+        fi
     fi
 }
 
@@ -79,7 +88,7 @@ if [[ "$ROLE" == "laptop" ]]; then
     echo "New-box workflow: laptop"
     run_step "git setup (identity, defaults, efficiency settings)" bash "$REPO_ROOT/scripts/git/$GIT_SETUP"
     run_step "ssh setup (keychain, keypair, keys to the fleet)" bash "$REPO_ROOT/scripts/security/$SSH_SETUP"
-    run_step "laptop role prep (accounts, tooling, gh, hardening)" bash "$REPO_ROOT/scripts/workstation/$ROLE_PREP"
+    run_step "laptop role prep (accounts, tooling, gh, hardening)" sudo bash "$REPO_ROOT/scripts/workstation/$ROLE_PREP"
     if [[ "$WITH_GPU" -eq 1 ]]; then
         require "GPU step" "$GPU_STEP"
         run_step "GPU tuning (optional final step; skips without a discrete AMD GPU)" sudo bash "$REPO_ROOT/scripts/workstation/$GPU_STEP" gpu-high
