@@ -55,16 +55,17 @@ lockout pre-flight; its compensating controls are listed below.
   unattended-upgrades or dnf-automatic and zeroes the periodic update
   settings).
 - Creates the user `michael` if missing, with a NOPASSWD sudoers
-  drop-in at `/etc/sudoers.d/michael`. Conservative v1.2 also
-  creates the `ansible` user with its own NOPASSWD drop-in (the
-  fleet default trio is root, michael, ansible), enables
-  persistent journaling (`Storage=persistent`), and enables time
-  synchronization; the other variants predate those additions.
+  drop-in at `/etc/sudoers.d/michael`. Conservative v1.2 and
+  standard v1.2 also create the `ansible` user with its own
+  NOPASSWD drop-in (the fleet default trio is root, michael,
+  ansible). Conservative v1.2 additionally enables persistent
+  journaling (`Storage=persistent`) and time synchronization;
+  the other variants predate those additions.
 - Writes the SSH policy as a drop-in,
   `/etc/ssh/sshd_config.d/99-hardening.conf`, validates it with
   `sshd -t`, and restarts SSH. Login is restricted to `AllowUsers
-  michael` in every variant (conservative v1.2: `AllowUsers
-  michael ansible`).
+  michael` in every variant (conservative v1.2 and standard
+  v1.2: `AllowUsers michael ansible`).
 - Configures the firewall as a whitelist with port 22 only: UFW
   (reset, default deny incoming) on Debian, firewalld (public zone,
   ssh service) on RHEL.
@@ -89,7 +90,7 @@ sntrup761x25519-sha512).
 
 | | Standard | Conservative | Legacy |
 | --- | --- | --- | --- |
-| Files | `secure-server-init-v1.sh`, `secure-server-init-v1.1.sh` | `secure-server-init-conservative-v1.sh`, `secure-server-init-conservative-v1.1.sh`, `secure-server-init-conservative-v1.2.sh` | `secure-server-init-legacy-v1.sh`, `secure-server-init-legacy-v1.1.sh` |
+| Files | `secure-server-init-v1.sh`, `secure-server-init-v1.1.sh`, `secure-server-init-v1.2.sh` | `secure-server-init-conservative-v1.sh`, `secure-server-init-conservative-v1.1.sh`, `secure-server-init-conservative-v1.2.sh` | `secure-server-init-legacy-v1.sh`, `secure-server-init-legacy-v1.1.sh` |
 | Use when | Modern OpenSSH on both ends | Clients cannot do the post-quantum key exchange | Old OpenSSH that needs password auth and RSA |
 | Password auth | No | No | Yes |
 | Root login | No | Key only (`prohibit-password`) | No |
