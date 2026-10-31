@@ -8,6 +8,8 @@
 
 ## Version
 
+**v1.2** (2026-10-31) — added `launcher.sh`, a menu front end for the 27 tools: on a terminal it opens an arrow-key panel over the task index below (grouped audit / manage / report, scrollable; typing a tool number jumps to it), and off a terminal it prints the same list as a numbered text menu and reads the choice as a line. Choosing a tool runs it in the foreground with the launcher's own arguments forwarded, or with arguments typed at its prompt when none were given; the launcher exits with the tool's exit status. The tools themselves are unchanged.
+
 **v1.1** (2026-09-20) — fixed the 6 minor bugs found by independent testing, plus related follow-ups from the same pass (see `TEST-REPORT-2026-09-20.md`):
 
 - `update-report` / `system-update`: `apt-get update` now runs under `timeout 120` where the `timeout` command is available (a bare run otherwise) and both scripts gained a `--no-refresh` flag; previously a stalled mirror hung the script indefinitely.
@@ -75,6 +77,8 @@ The current version is also recorded in this folder's `VERSION` file.
 Bash (single server):
 
 ```bash
+./launcher.sh                                                 # menu front end for all 27 tools
+./launcher.sh --check                                         # forwards --check to the chosen tool
 sudo ./01-user-add/user-add-local.sh --help
 sudo ./01-user-add/user-add-local.sh deploy --ssh-key ~/.ssh/id_ed25519.pub --sudo
 sudo ./05-system-update/system-update-local.sh --check        # dry run first
