@@ -83,6 +83,12 @@ sudo ./fleet-firewall.sh --verify         # diff live rules vs profile
 sudo ./fleet-firewall.sh --dry-run        # print changes, change nothing
 ```
 
+Run in a terminal without `--profile` and a profile picker panel
+opens instead: arrow keys or j/k move, Enter chooses, q cancels.
+The chosen profile runs through the same code path as `--profile`;
+off a terminal, or with `--profile` given, nothing changes and
+the default stays `pi`.
+
 Log: `/var/log/fleet-firewall.log`. There is no Docker form: this
 configures the host's own firewall.
 
