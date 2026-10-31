@@ -42,9 +42,9 @@
 # FLEET_FW_OS_FAMILY (debian|redhat; overrides OS detection, for tests).
 set -euo pipefail
 
-SCRIPT_VERSION="1.0"
+SCRIPT_VERSION="1.1"
 LOG_FILE="${LOG_FILE:-/var/log/fleet-firewall.log}"
-PROFILE="pi"
+PROFILE="pi"; PROFILE_GIVEN=false
 ZONE="public"
 MODE="apply"
 FAIL_ON_PROBE_FAILURE=false
@@ -66,7 +66,7 @@ EOF
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --profile) PROFILE="$2"; shift 2 ;;
+        --profile) PROFILE="$2"; PROFILE_GIVEN=true; shift 2 ;;
         --zone) ZONE="$2"; shift 2 ;;
         --dry-run) MODE="dry-run"; shift ;;
         --verify) MODE="verify"; shift ;;
@@ -75,6 +75,135 @@ while [[ $# -gt 0 ]]; do
         *) echo "ERROR: unknown option: $1" >&2; usage >&2; exit 2 ;;
     esac
 done
+
+# ── Profile picker panel (added entry path, TTY only) ─────────────────────
+# With --profile absent on a terminal, a one-of panel offers the three
+# profiles defined below and writes the chosen one into PROFILE, the
+# same variable --profile writes; the value then passes the validation
+# and every code path below exactly as a flag value does. With
+# --profile given in any form, with no terminal, or with TERM=dumb,
+# the script takes the paths it has always taken, byte for byte. Pure
+# bash and ANSI, in the repo's panel conventions: an ASCII frame, a
+# reverse-video cursor row, the cursor hidden while the panel is
+# drawn and restored on every exit from it, and a trap on INT/TERM
+# that restores the cursor and exits 130. The panel only chooses; it
+# reimplements no profile. Rows marked * are the profiles whose UFW
+# path also sets the default policies (deny incoming, allow
+# outgoing); baseline never touches them. q or EOF cancels: the
+# script exits 0 having run nothing.
+PANEL_PROFILES=(pi new baseline)
+PANEL_ROWS=(
+    "pi - fleet default (firewall_local_pi.yml): TCP 53 80 443 9090, UDP 53 *"
+    "new - pi list plus TCP 853, DNS-over-TLS (firewall_local_new.yml) *"
+    "baseline - firewalld only (default-firewalld.yml): ssh http https, 8080/tcp, 5000-5010/udp, cockpit removed"
+)
+PANEL_CURSOR=0
+PANEL_FIRST=1
+PANEL_FRAME_LINES=0
+
+panel_erase() {
+    local i
+    printf '\033[%dA' "$PANEL_FRAME_LINES"
+    for ((i = 0; i < PANEL_FRAME_LINES; i++)); do
+        printf '\033[2K'
+        if [[ $i -lt $((PANEL_FRAME_LINES - 1)) ]]; then
+            printf '\n'
+        fi
+    done
+    printf '\033[%dA' $((PANEL_FRAME_LINES - 1))
+    printf '\033[?25h'
+}
+
+panel_draw() {
+    local -a frame=()
+    local line="" dashes="" border=""
+    local width=44 len i mark=""
+    local title="fleet-firewall v$SCRIPT_VERSION: choose a profile"
+    local note="* UFW path also sets the default policies: deny incoming, allow outgoing"
+    local keys="arrows or j/k move, enter selects, q cancels"
+    for line in "$title" "$note" "$keys" "${PANEL_ROWS[@]}"; do
+        len=${#line}
+        if [[ $len -gt $width ]]; then
+            width=$len
+        fi
+    done
+    printf -v dashes '%*s' $((width + 2)) ''
+    dashes="${dashes// /-}"
+    border="+${dashes}+"
+    frame+=("$border")
+    printf -v line '| %-*s |' "$width" "$title"
+    frame+=("$line")
+    frame+=("$border")
+    for i in "${!PANEL_ROWS[@]}"; do
+        mark="  "
+        if [[ $i -eq $PANEL_CURSOR ]]; then
+            mark="> "
+        fi
+        printf -v line '| %-*s |' "$width" "${mark}${PANEL_ROWS[$i]}"
+        frame+=("$line")
+    done
+    frame+=("$border")
+    printf -v line '| %-*s |' "$width" "$note"
+    frame+=("$line")
+    printf -v line '| %-*s |' "$width" "$keys"
+    frame+=("$line")
+    frame+=("$border")
+    PANEL_FRAME_LINES=${#frame[@]}
+    if [[ $PANEL_FIRST -eq 1 ]]; then
+        PANEL_FIRST=0
+    else
+        printf '\033[%dA' "${#frame[@]}"
+    fi
+    for i in "${!frame[@]}"; do
+        if [[ $i -eq $((PANEL_CURSOR + 3)) ]]; then
+            printf '\r\033[7m%s\033[0m\n' "${frame[$i]}"
+        else
+            printf '\r%s\n' "${frame[$i]}"
+        fi
+    done
+}
+
+profile_pick_panel() {
+    local key="" rest=""
+    PANEL_CURSOR=0
+    PANEL_FIRST=1
+    printf '\033[?25l'
+    trap 'printf "\033[?25h" >&2; exit 130' INT TERM
+    while true; do
+        panel_draw
+        if ! IFS= read -rsn1 key; then
+            key="q"
+        fi
+        if [[ $key == $'\033' ]]; then
+            IFS= read -rsn2 -t 0.1 rest || rest=""
+            key="${key}${rest}"
+        fi
+        case $key in
+            $'\033[A' | k)
+                PANEL_CURSOR=$(((PANEL_CURSOR + 2) % 3))
+                ;;
+            $'\033[B' | j)
+                PANEL_CURSOR=$(((PANEL_CURSOR + 1) % 3))
+                ;;
+            q)
+                panel_erase
+                trap - INT TERM
+                echo "Profile picker cancelled; nothing was applied."
+                exit 0
+                ;;
+            '' | $'\n' | $'\r')
+                PROFILE="${PANEL_PROFILES[$PANEL_CURSOR]}"
+                panel_erase
+                trap - INT TERM
+                return 0
+                ;;
+        esac
+    done
+}
+
+if [[ $PROFILE_GIVEN == false && -t 0 && -t 1 && -n ${TERM:-} && $TERM != "dumb" ]]; then
+    profile_pick_panel
+fi
 
 case "$PROFILE" in pi|new|baseline) ;; *) echo "ERROR: unknown profile: $PROFILE" >&2; exit 2 ;; esac
 
