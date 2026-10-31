@@ -97,7 +97,14 @@ sudo scripts/provisioning/proxmox-setup.sh templates-turnkey
 Every subcommand accepts `--dry-run`, which prints each step in
 order (including the full contents of every file it would write)
 and changes nothing. A real `prep` run refuses the playbook's
-placeholder admin password. The script's `api-check` subcommand
+placeholder admin password. Running `prep` or `all` on a terminal
+with no setting flags first opens a pre-flight panel that shows
+the prep settings (NFS storage, server and export, the firewall
+toggle, the management CIDR, the notify email, and a dry-run
+toggle) and lets the operator adjust them before confirming; the
+admin password is never one of the panel's settings, so the
+placeholder refusal applies on the panel path exactly as on the
+flag path. The script's `api-check` subcommand
 validates an API token directly against the REST API
 (`GET /api2/json/version` with a `PVEAPIToken` header); the
 deployment steps themselves use the host CLIs (`pveum`, `pvesm`,

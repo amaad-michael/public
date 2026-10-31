@@ -91,6 +91,12 @@ API_INSECURE=0
 
 DRY_RUN=0
 ASSUME_YES=0
+# Set by the argument parser when any flag that assigns a setting is
+# present (--dry-run and --yes are modes, not settings, and do not
+# set it). The pre-flight panel further down is offered only when
+# this is still 0: a setting flag means the caller has already said
+# everything the panel would ask.
+SETTINGS_GIVEN=0
 
 ANSIBLE_PRIVS="Datastore.AllocateSpace,Datastore.Audit,Pool.Allocate,Sys.Audit,Sys.Console,Sys.Modify,VM.Allocate,VM.Audit,VM.Clone,VM.Config.CDROM,VM.Config.CPU,VM.Config.Cloudinit,VM.Config.Disk,VM.Config.HWType,VM.Config.Memory,VM.Config.Network,VM.Config.Options,VM.Migrate,VM.Monitor,VM.PowerMgmt,SDN.Use"
 ADMIN_PRIVS="Datastore.Allocate,Datastore.AllocateSpace,Datastore.AllocateTemplate,Datastore.Audit,Pool.Allocate,Pool.Audit,Sys.Audit,Sys.Console,Sys.Modify,Sys.PowerMgmt,Sys.Syslog,VM.Allocate,VM.Audit,VM.Backup,VM.Clone,VM.Config.CDROM,VM.Config.CPU,VM.Config.Cloudinit,VM.Config.Disk,VM.Config.HWType,VM.Config.Memory,VM.Config.Network,VM.Config.Options,VM.Console,VM.Migrate,VM.Monitor,VM.PowerMgmt,VM.Snapshot,VM.Snapshot.Rollback,SDN.Use"
@@ -810,6 +816,254 @@ do_api_check() {
 }
 
 # ---------------------------------------------------------------------
+# Pre-flight settings panel — prep and all
+# ---------------------------------------------------------------------
+# When prep or all runs on a terminal with no setting flags (the
+# gate is at the bottom of this file, after argument parsing), this
+# panel opens before anything else runs: one screen listing the
+# effective prep settings, which the operator can adjust and then
+# confirm or cancel. The panel writes the same variables the flags
+# write — PVE_NFS_ENABLED, PVE_NFS_SERVER, PVE_NFS_EXPORT,
+# PVE_FIREWALL_ENABLED, PVE_MGMT_CIDR, NOTIFY_EMAIL, DRY_RUN — so
+# the steps run exactly as if the values had come from flags, and
+# every existing check still applies after it: the CIDR validation
+# below, require_root, and the placeholder-password refusal in
+# do_prep. The admin password is never a panel row, and the panel
+# offers no way around that refusal. Cancelling (q, or the Cancel
+# row) exits 0 at the gate, before validation and dispatch —
+# nothing has run and nothing was promised. Any setting flag, no
+# terminal, TERM=dumb, or a non-root real run (whose root refusal
+# must fire exactly as it does today) skips the panel entirely.
+#
+# Pure bash and ANSI, in the panel conventions used elsewhere in
+# this repo (the new-box runner's desktop panel, the neo1 stack
+# panel): no external TUI tool, an ASCII frame redrawn in place, a
+# reverse-video cursor row, the cursor hidden while the panel is
+# drawn and restored on every exit from it, and a trap on INT/TERM
+# that restores the cursor and exits 130. Keys: the Up/Down
+# arrows or j/k move; space or enter flips a toggle row (NFS
+# storage, Firewall, Dry run); enter on a value row (NFS server,
+# NFS export, Management CIDR, Notify email) opens a line-edit
+# prompt at the panel's foot, prefilled with the current value —
+# the readline edit line, so accepting the line unchanged keeps
+# the value and clearing it sets an empty one, exactly as an
+# empty flag value would; enter on Run confirms; q or the Cancel
+# row aborts the run.
+
+PF_ROWS=9
+PF_CURSOR=0
+PF_FIRST=1
+PF_FRAME_LINES=0
+
+pf_label() {
+  case "$1" in
+    0) printf 'NFS storage' ;;
+    1) printf 'NFS server' ;;
+    2) printf 'NFS export' ;;
+    3) printf 'Firewall' ;;
+    4) printf 'Management CIDR' ;;
+    5) printf 'Notify email' ;;
+    6) printf 'Dry run' ;;
+    7) printf 'Run' ;;
+    8) printf 'Cancel' ;;
+  esac
+}
+
+pf_hint() {
+  case "$1" in
+    0) printf '%s' '--nfs' ;;
+    1) printf '%s' '--nfs-server' ;;
+    2) printf '%s' '--nfs-export' ;;
+    3) printf '%s' '--no-firewall' ;;
+    4) printf '%s' '--mgmt-cidr' ;;
+    5) printf '%s' '--notify-email' ;;
+    6) printf '%s' '--dry-run' ;;
+    *) printf '' ;;
+  esac
+}
+
+pf_value() {
+  case "$1" in
+    0) if [[ "$PVE_NFS_ENABLED" -eq 1 ]]; then printf 'on'; else printf 'off'; fi ;;
+    1) printf '%s' "$PVE_NFS_SERVER" ;;
+    2) printf '%s' "$PVE_NFS_EXPORT" ;;
+    3) if [[ "$PVE_FIREWALL_ENABLED" -eq 1 ]]; then printf 'on'; else printf 'off'; fi ;;
+    4) printf '%s' "$PVE_MGMT_CIDR" ;;
+    5) if [[ -n "$NOTIFY_EMAIL" ]]; then printf '%s' "$NOTIFY_EMAIL"; else printf '(none)'; fi ;;
+    6) if [[ "$DRY_RUN" -eq 1 ]]; then printf 'on'; else printf 'off'; fi ;;
+    *) printf '' ;;
+  esac
+}
+
+pf_toggle() {
+  case "$1" in
+    0) if [[ "$PVE_NFS_ENABLED" -eq 1 ]]; then PVE_NFS_ENABLED=0; else PVE_NFS_ENABLED=1; fi ;;
+    3) if [[ "$PVE_FIREWALL_ENABLED" -eq 1 ]]; then PVE_FIREWALL_ENABLED=0; else PVE_FIREWALL_ENABLED=1; fi ;;
+    6) if [[ "$DRY_RUN" -eq 1 ]]; then DRY_RUN=0; else DRY_RUN=1; fi ;;
+  esac
+}
+
+pf_erase() {
+  local i
+  printf '\033[%dA' "$PF_FRAME_LINES"
+  for ((i = 0; i < PF_FRAME_LINES; i++)); do
+    printf '\033[2K'
+    if [[ $i -lt $((PF_FRAME_LINES - 1)) ]]; then
+      printf '\n'
+    fi
+  done
+  printf '\033[%dA' $((PF_FRAME_LINES - 1))
+  printf '\033[?25h'
+}
+
+pf_draw() {
+  local -a frame=()
+  local -a rows=()
+  local line="" dashes="" border=""
+  local width=42 len i cursor_line=0
+  for i in 0 1 2 3 4 5 6 7 8; do
+    if [[ $i -le 6 ]]; then
+      printf -v line '%-15s %s (%s)' "$(pf_label "$i")" "$(pf_value "$i")" "$(pf_hint "$i")"
+    else
+      printf -v line '%s' "$(pf_label "$i")"
+    fi
+    rows+=("$line")
+    len=${#line}
+    if [[ $len -gt $width ]]; then
+      width=$len
+    fi
+  done
+  printf -v line 'proxmox-setup.sh %s: pre-flight settings' "$SUBCOMMAND"
+  len=${#line}
+  if [[ $len -gt $width ]]; then
+    width=$len
+  fi
+  printf -v dashes '%*s' $((width + 2)) ''
+  dashes="${dashes// /-}"
+  border="+${dashes}+"
+  frame+=("$border")
+  printf -v line '| %-*s |' "$width" "proxmox-setup.sh $SUBCOMMAND: pre-flight settings"
+  frame+=("$line")
+  frame+=("$border")
+  for i in 0 1 2 3 4 5 6; do
+    printf -v line '| %-*s |' "$width" "${rows[$i]}"
+    frame+=("$line")
+  done
+  frame+=("$border")
+  for i in 7 8; do
+    printf -v line '| %-*s |' "$width" "${rows[$i]}"
+    frame+=("$line")
+  done
+  frame+=("$border")
+  printf -v line '| %-*s |' "$width" "arrows or j/k move, space toggles,"
+  frame+=("$line")
+  printf -v line '| %-*s |' "$width" "enter edits or confirms, q cancels"
+  frame+=("$line")
+  frame+=("$border")
+  if [[ $PF_CURSOR -le 6 ]]; then
+    cursor_line=$((PF_CURSOR + 3))
+  else
+    cursor_line=$((PF_CURSOR + 4))
+  fi
+  PF_FRAME_LINES=${#frame[@]}
+  if [[ $PF_FIRST -eq 1 ]]; then
+    PF_FIRST=0
+  else
+    printf '\033[%dA' "${#frame[@]}"
+  fi
+  for i in "${!frame[@]}"; do
+    if [[ $i -eq $cursor_line ]]; then
+      printf '\r\033[7m%s\033[0m\n' "${frame[$i]}"
+    else
+      printf '\r%s\n' "${frame[$i]}"
+    fi
+  done
+}
+
+pf_edit() {
+  local row=$1 label="" cur="" new=""
+  label="$(pf_label "$row")"
+  case "$row" in
+    1) cur="$PVE_NFS_SERVER" ;;
+    2) cur="$PVE_NFS_EXPORT" ;;
+    4) cur="$PVE_MGMT_CIDR" ;;
+    5) cur="$NOTIFY_EMAIL" ;;
+  esac
+  pf_erase
+  trap - INT TERM
+  printf '%s: ' "$label"
+  new=""
+  IFS= read -r -e -i "$cur" new || new="$cur"
+  case "$row" in
+    1) PVE_NFS_SERVER="$new" ;;
+    2) PVE_NFS_EXPORT="$new" ;;
+    4) PVE_MGMT_CIDR="$new" ;;
+    5) NOTIFY_EMAIL="$new" ;;
+  esac
+  PF_FIRST=1
+  printf '\033[?25l'
+  trap 'printf "\033[?25h" >&2; exit 130' INT TERM
+}
+
+preflight_panel() {
+  local key="" rest=""
+  PF_CURSOR=0
+  PF_FIRST=1
+  printf '\033[?25l'
+  trap 'printf "\033[?25h" >&2; exit 130' INT TERM
+  while true; do
+    pf_draw
+    key=""
+    rest=""
+    IFS= read -rsn1 key || key=""
+    if [[ $key == $'\033' ]]; then
+      IFS= read -rsn2 -t 0.1 rest || rest=""
+      key="${key}${rest}"
+    fi
+    case $key in
+      $'\033[A' | k)
+        PF_CURSOR=$(((PF_CURSOR + PF_ROWS - 1) % PF_ROWS))
+        ;;
+      $'\033[B' | j)
+        PF_CURSOR=$(((PF_CURSOR + 1) % PF_ROWS))
+        ;;
+      ' ')
+        case $PF_CURSOR in
+          0 | 3 | 6) pf_toggle "$PF_CURSOR" ;;
+        esac
+        ;;
+      q)
+        pf_erase
+        trap - INT TERM
+        printf 'Pre-flight cancelled; nothing was run.\n'
+        return 1
+        ;;
+      '' | $'\n' | $'\r')
+        case $PF_CURSOR in
+          0 | 3 | 6)
+            pf_toggle "$PF_CURSOR"
+            ;;
+          1 | 2 | 4 | 5)
+            pf_edit "$PF_CURSOR"
+            ;;
+          7)
+            pf_erase
+            trap - INT TERM
+            return 0
+            ;;
+          8)
+            pf_erase
+            trap - INT TERM
+            printf 'Pre-flight cancelled; nothing was run.\n'
+            return 1
+            ;;
+        esac
+        ;;
+    esac
+  done
+}
+
+# ---------------------------------------------------------------------
 # Argument parsing
 # ---------------------------------------------------------------------
 [[ $# -ge 1 ]] || { usage; exit 1; }
@@ -825,29 +1079,46 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) DRY_RUN=1; shift ;;
     --yes) ASSUME_YES=1; shift ;;
-    --bridge-iface) BRIDGE_IFACE="${2:?--bridge-iface needs a value}"; shift 2 ;;
-    --bridge-ip) BRIDGE_IP="${2:?--bridge-ip needs a value}"; shift 2 ;;
-    --bridge-prefix) BRIDGE_PREFIX="${2:?--bridge-prefix needs a value}"; shift 2 ;;
-    --bridge-gateway) BRIDGE_GATEWAY="${2:?--bridge-gateway needs a value}"; shift 2 ;;
-    --bridge-dns) BRIDGE_DNS="${2:?--bridge-dns needs a value}"; shift 2 ;;
-    --hostname) HOSTNAME_FQDN="${2:?--hostname needs a value}"; shift 2 ;;
-    --admin-password) PVE_ADMIN_PASSWORD="${2:?--admin-password needs a value}"; shift 2 ;;
-    --mgmt-cidr) PVE_MGMT_CIDR="${2:?--mgmt-cidr needs a value}"; shift 2 ;;
-    --nfs) PVE_NFS_ENABLED=1; shift ;;
-    --nfs-server) PVE_NFS_SERVER="${2:?--nfs-server needs a value}"; shift 2 ;;
-    --nfs-export) PVE_NFS_EXPORT="${2:?--nfs-export needs a value}"; shift 2 ;;
-    --notify-email) NOTIFY_EMAIL="${2:?--notify-email needs a value}"; shift 2 ;;
-    --no-firewall) PVE_FIREWALL_ENABLED=0; shift ;;
-    --ssh-public-key) SSH_PUBLIC_KEY="${2:?--ssh-public-key needs a value}"; shift 2 ;;
-    --api-url) API_URL="${2:?--api-url needs a value}"; shift 2 ;;
-    --api-user) API_USER="${2:?--api-user needs a value}"; shift 2 ;;
-    --api-token-name) API_TOKEN_NAME="${2:?--api-token-name needs a value}"; shift 2 ;;
-    --api-token-secret) API_TOKEN_SECRET="${2:?--api-token-secret needs a value}"; shift 2 ;;
-    --insecure) API_INSECURE=1; shift ;;
+    --bridge-iface) BRIDGE_IFACE="${2:?--bridge-iface needs a value}"; SETTINGS_GIVEN=1; shift 2 ;;
+    --bridge-ip) BRIDGE_IP="${2:?--bridge-ip needs a value}"; SETTINGS_GIVEN=1; shift 2 ;;
+    --bridge-prefix) BRIDGE_PREFIX="${2:?--bridge-prefix needs a value}"; SETTINGS_GIVEN=1; shift 2 ;;
+    --bridge-gateway) BRIDGE_GATEWAY="${2:?--bridge-gateway needs a value}"; SETTINGS_GIVEN=1; shift 2 ;;
+    --bridge-dns) BRIDGE_DNS="${2:?--bridge-dns needs a value}"; SETTINGS_GIVEN=1; shift 2 ;;
+    --hostname) HOSTNAME_FQDN="${2:?--hostname needs a value}"; SETTINGS_GIVEN=1; shift 2 ;;
+    --admin-password) PVE_ADMIN_PASSWORD="${2:?--admin-password needs a value}"; SETTINGS_GIVEN=1; shift 2 ;;
+    --mgmt-cidr) PVE_MGMT_CIDR="${2:?--mgmt-cidr needs a value}"; SETTINGS_GIVEN=1; shift 2 ;;
+    --nfs) PVE_NFS_ENABLED=1; SETTINGS_GIVEN=1; shift ;;
+    --nfs-server) PVE_NFS_SERVER="${2:?--nfs-server needs a value}"; SETTINGS_GIVEN=1; shift 2 ;;
+    --nfs-export) PVE_NFS_EXPORT="${2:?--nfs-export needs a value}"; SETTINGS_GIVEN=1; shift 2 ;;
+    --notify-email) NOTIFY_EMAIL="${2:?--notify-email needs a value}"; SETTINGS_GIVEN=1; shift 2 ;;
+    --no-firewall) PVE_FIREWALL_ENABLED=0; SETTINGS_GIVEN=1; shift ;;
+    --ssh-public-key) SSH_PUBLIC_KEY="${2:?--ssh-public-key needs a value}"; SETTINGS_GIVEN=1; shift 2 ;;
+    --api-url) API_URL="${2:?--api-url needs a value}"; SETTINGS_GIVEN=1; shift 2 ;;
+    --api-user) API_USER="${2:?--api-user needs a value}"; SETTINGS_GIVEN=1; shift 2 ;;
+    --api-token-name) API_TOKEN_NAME="${2:?--api-token-name needs a value}"; SETTINGS_GIVEN=1; shift 2 ;;
+    --api-token-secret) API_TOKEN_SECRET="${2:?--api-token-secret needs a value}"; SETTINGS_GIVEN=1; shift 2 ;;
+    --insecure) API_INSECURE=1; SETTINGS_GIVEN=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown argument: $1 (see --help)" ;;
   esac
 done
+
+# Pre-flight panel gate: prep and all only, and only when no
+# setting flag was given, the terminal can host the panel, and the
+# run is not a non-root real run (whose root refusal must fire
+# exactly as it does without the panel). Every other invocation
+# takes the exact paths this script has always taken. The gate
+# sits before the validation below on purpose: a CIDR typed into
+# the panel is checked by the same rule as a --mgmt-cidr value.
+if [[ "$SUBCOMMAND" == "prep" || "$SUBCOMMAND" == "all" ]] \
+  && [[ "$SETTINGS_GIVEN" -eq 0 ]] \
+  && [[ -t 0 && -t 1 ]] \
+  && [[ -n "${TERM:-}" && "$TERM" != "dumb" ]] \
+  && { [[ "$DRY_RUN" -eq 1 ]] || [[ $EUID -eq 0 ]]; }; then
+  if ! preflight_panel; then
+    exit 0
+  fi
+fi
 
 [[ "$PVE_MGMT_CIDR" == */* ]] || die "--mgmt-cidr must be a CIDR (address/prefix): $PVE_MGMT_CIDR"
 if [[ -n "$BRIDGE_IP" && "$BRIDGE_IP" != *.*.*.* ]]; then
