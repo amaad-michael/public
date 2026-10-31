@@ -322,6 +322,31 @@
         - unbound-backup.service
         - unbound-backup.timer
 
+    - name: Check for the Grafana admin password file
+      ansible.builtin.stat:
+        path: /etc/grafana/grafana.env
+      register: neo1_obs_grafana_env
+
+    - name: Generate a Grafana admin password when none is on file
+      ansible.builtin.set_fact:
+        neo1_obs_grafana_password: "{{ lookup('ansible.builtin.password', '/dev/null length=32 chars=ascii_letters,digits') }}"
+      when: not neo1_obs_grafana_env.stat.exists
+
+    - name: Write the Grafana admin password file (once, never overwritten)
+      ansible.builtin.copy:
+        dest: /etc/grafana/grafana.env
+        content: "GF_SECURITY_ADMIN_PASSWORD={{ neo1_obs_grafana_password }}\n"
+        owner: root
+        group: root
+        mode: "0600"
+      when: not neo1_obs_grafana_env.stat.exists
+      register: neo1_obs_grafana_env_created
+
+    - name: Show the generated Grafana admin password (this once only)
+      ansible.builtin.debug:
+        msg: "Grafana admin password GENERATED - save it now; it is shown only here: {{ neo1_obs_grafana_password }}"
+      when: neo1_obs_grafana_env_created is changed
+
     - name: Enable and start the always-on set (grafana deliberately excluded)
       ansible.builtin.systemd:
         name: "{{ item }}"

@@ -10,6 +10,10 @@ After=network-online.target prometheus.service
 User=grafana
 Group=grafana
 WorkingDirectory=/opt/grafana
+# The admin password comes from this root-only file, created once by the
+# installer. Required on purpose (no leading dash): if the file is missing
+# the start FAILS, so a session can never come up on factory admin/admin.
+EnvironmentFile=/etc/grafana/grafana.env
 ExecStart=/opt/grafana/bin/grafana server \
   --config=/etc/grafana/grafana.ini \
   --homepath=/opt/grafana
