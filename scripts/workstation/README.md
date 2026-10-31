@@ -82,7 +82,7 @@ environment ready. The checklist is the specification; the script
 produces every CLI-able part of it and prints the rest as a manual
 list.
 
-### linux-laptop-role-prep-checklist-v2.1.md
+### linux-laptop-role-prep-checklist-v2.2.md
 
 The checklist itself: base system, separation of personal and work
 lives, the security core, the Linux administrator kit, the coding
@@ -93,9 +93,9 @@ tested bare-metal restore are the load-bearing items. The setup
 script is embedded in section 11, byte-identical to the standalone
 file below.
 
-### laptop-role-prep-setup-v1.9.sh
+### laptop-role-prep-setup-v2.0.sh
 
-Run as root (`sudo ./laptop-role-prep-setup-v1.9.sh`). It creates
+Run as root (`sudo ./laptop-role-prep-setup-v2.0.sh`). It creates
 the per-role user accounts, installs the admin and instructor
 tooling, wires the per-role SSH and git separation, sets the screen
 lock, the host firewall, and persistent journaling, adds the fleet /etc/hosts entries, the cluster MOTD, and the fastfetch login setup, and prints whatever still needs hands,
@@ -156,6 +156,22 @@ Proton VPN on every workstation ahead of the role prep, so the
 pins live in one place and personal boxes get it too. A
 standalone run of this script no longer installs Proton VPN.
 The matching checklist is version 2.1.
+Version 2.0 aligns the sudo report with the standing design:
+your users are NOPASSWD by design, so a NOPASSWD entry in
+sudoers is reported as the intended configuration instead of a
+warning, and its absence is reported as a plain fact. It also
+completes the desktop application set from the software list on
+both families (Firefox, Tilix, htop, GtkHash, PyChess,
+FileZilla, the Transmission GTK client, Remmina, rkhunter,
+Lynis, Cockpit, and luckyBackup; the RHEL family gets manual
+items for gtkhash, pychess, and luckyBackup, which it does not
+package, and for remmina, which EPEL 10 packages but cannot
+install today because its libappindicator-gtk3 dependency
+requires libdbusmenu libraries no RHEL-family repo provides,
+and Brave and LibreFox are manual items on every
+family because neither is in the distro repos and this script
+adds no vendor repos), and it enables the Cockpit socket where
+Cockpit is installed. The matching checklist is version 2.2.
 
 ## update-gpu-box.sh
 

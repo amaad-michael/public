@@ -1,6 +1,6 @@
 # Linux Laptop Prep Checklist: Coding Instructor and Linux Administrator
 
-**Version:** 2.1
+**Version:** 2.2
 **Date:** 2026-10-30
 **Scope:** Role-agnostic. Built for a personal Linux laptop that has to walk into either a classroom or a server environment and be ready, with personal and work life kept cleanly apart.
 
@@ -32,7 +32,7 @@
 - [ ] Terminal greeting set (the cluster MOTD prints above fastfetch in the first terminal of a session: /etc/profile.d/00-motd.sh ahead of fastfetch.sh for login shells, the same guarded block in /etc/bashrc for non-login terminals, once per session via the .motd-shown session flag; SSH logins keep PAM's native MOTD print)
 - [ ] Screen lock at 5 minutes or less, with password required on wake
 - [ ] Host firewall on, default deny inbound
-- [ ] A full system backup taken before the first workday, plus a bare-metal restore method you have actually tested (installer USB + backup is not a plan until a restore has succeeded once)
+- [ ] A full system backup taken before the first workday with Clonezilla, plus a bare-metal restore you have actually tested (a backup is not a plan until a restore has succeeded once). The disk is LUKS on ext4, so Clonezilla images it as raw blocks: the image comes out near full partition size no matter how little space is in use, and the restore target must be at least the source size. After a restore, the first boot asks for the LUKS passphrase to unlock; if the passphrase is ever lost, the recovery key stored in Proton Pass (above) is the fallback
 - [ ] Battery health checked; runtime on battery is known, not guessed
 
 ## 2. Separation of lives
@@ -53,7 +53,7 @@ The laptop is personal property doing professional work, so the walls matter mor
 - [ ] Proton VPN installed and signed in (the new-box workflow's Proton step installs the app from Proton's own repo on Debian/Ubuntu and Fedora before the role prep runs; on RHEL-family systems Proton publishes no app, so use the WireGuard configs from your Proton account instead; signing in on first launch is the remaining manual action)
 - [ ] Authenticator app ready for employer 2FA enrollment on day one; recovery codes for every account saved to both clouds, the same pattern as the Gumroad codes
 - [ ] SSH config hardened for work hosts: key-only auth, IdentitiesOnly set per host so the wrong key is never offered
-- [ ] sudo requires a password; no passwordless sudo carried over from homelab habits
+- [ ] sudo posture matches your standing design: your own users are NOPASSWD by design (deliberate, for convenience), and there are no passwordless entries beyond the ones you placed there yourself
 - [ ] An encrypted USB drive (LUKS) for moving files into restricted environments where cloud storage is not allowed
 - [ ] Webcam cover and a hardware mute habit for calls
 
@@ -128,7 +128,7 @@ The laptop is personal property doing professional work, so the walls matter mor
 
 ## 11. Automation: the setup script
 
-The state this checklist describes can be produced from the command line for every item that is CLI-able. The script below does it: it creates the michael and michael-work accounts, installs the admin and instructor tooling, wires the per-role SSH and git separation, sets the screen lock and the host firewall, and prints whatever still needs hands, hardware, or a sign-in as a manual list at the end. Version 1.7 of the script installs the GitHub CLI from section 6 (a per-distro package install; GitHub's own repo is the RHEL-family fallback, and the sign-in stays a manual step), sets persistent journaling and the fleet personalization from section 1, and installs the two vendor applications from sections 3 and 10, each by the vendor's own distribution method. Proton Pass has no repository: the script reads Proton's version feed, takes the newest Stable release at full rollout, verifies the package's SHA512 checksum against the feed, and only then installs it; the sign-in and the SSH agent setup stay manual (see the companion handoff). Proton VPN is not this script's job anymore: the new-box workflow's own Proton step installs it on every workstation before the role prep runs, from Proton's own repository on Debian/Ubuntu and Fedora, with the manual WireGuard path on RHEL-family systems, where Proton publishes no app; the sign-in stays manual (version 1.9 note below). TickTick has no repository either: the script downloads from TickTick's official version-less endpoint, the same one the download page uses. Both install through the distro package manager, so dependencies resolve instead of failing the way the vendors' bare dpkg -i and rpm -i instructions can. One vendor collision is handled on the RPM side: the Proton Pass and TickTick RPMs both ship the same /usr/lib/.build-id debug symlinks with different targets (both apps are built on the stock Electron binary), so rpm refuses the second install; the script pulls the package's dependencies with dnf and retries with rpm --replacefiles, which changes only which app the debug links point at. Run it on the laptop as root: `sudo ./laptop-role-prep-setup-v1.9.sh`. The same script ships as a standalone file, laptop-role-prep-setup-v1.9.sh, byte-identical to the block below; the standalone is the copy to take to the laptop.
+The state this checklist describes can be produced from the command line for every item that is CLI-able. The script below does it: it creates the michael and michael-work accounts, installs the admin and instructor tooling, wires the per-role SSH and git separation, sets the screen lock and the host firewall, and prints whatever still needs hands, hardware, or a sign-in as a manual list at the end. Version 1.7 of the script installs the GitHub CLI from section 6 (a per-distro package install; GitHub's own repo is the RHEL-family fallback, and the sign-in stays a manual step), sets persistent journaling and the fleet personalization from section 1, and installs the two vendor applications from sections 3 and 10, each by the vendor's own distribution method. Proton Pass has no repository: the script reads Proton's version feed, takes the newest Stable release at full rollout, verifies the package's SHA512 checksum against the feed, and only then installs it; the sign-in and the SSH agent setup stay manual (see the companion handoff). Proton VPN is not this script's job anymore: the new-box workflow's own Proton step installs it on every workstation before the role prep runs, from Proton's own repository on Debian/Ubuntu and Fedora, with the manual WireGuard path on RHEL-family systems, where Proton publishes no app; the sign-in stays manual (version 1.9 note below). TickTick has no repository either: the script downloads from TickTick's official version-less endpoint, the same one the download page uses. Both install through the distro package manager, so dependencies resolve instead of failing the way the vendors' bare dpkg -i and rpm -i instructions can. One vendor collision is handled on the RPM side: the Proton Pass and TickTick RPMs both ship the same /usr/lib/.build-id debug symlinks with different targets (both apps are built on the stock Electron binary), so rpm refuses the second install; the script pulls the package's dependencies with dnf and retries with rpm --replacefiles, which changes only which app the debug links point at. Run it on the laptop as root: `sudo ./laptop-role-prep-setup-v2.0.sh`. The same script ships as a standalone file, laptop-role-prep-setup-v2.0.sh, byte-identical to the block below; the standalone is the copy to take to the laptop.
 
 Version 1.4 (2026-10-30) fixes two defects the first real-metal run, on the travel laptop the same day, exposed. Distro detection no longer treats every dnf-family system whose ID is not exactly "fedora" as RHEL-family: an exact RHEL-family ID (rhel, rocky, almalinux, centos) decides first, because Rocky declares fedora in its ID_LIKE, and a derivative under its own ID is judged by its declared lineage, so Nobara (ID nobara, ID_LIKE fedora) is Fedora-family and gets zenmap, Python IDLE, flameshot, and virt-manager instead of the RHEL-family substitutions. And the account and group changes now check their results: account creation and the docker, libvirt, and optional sudo-group adds report a warning when they fail, never a done line. On a first run the package phase precedes account creation, so those group adds land on a re-run; the report now says so instead of claiming memberships that do not exist yet.
 
@@ -156,9 +156,13 @@ Version 1.9 (2026-10-30) retires this script's own Proton VPN install and moves 
 
 The version 1.9 changes were verified on 2026-10-30 by executing the shipped step code, extracted verbatim from new-box-prep-v1.3.sh, in the three reference trees, with the runner's ordering proven in a stub harness inside the Rocky tree (the real runner sequencing stub siblings, its Proton step executing for real against that tree's own os-release). Fedora 44: in the tree the verified install guide was tested in, the step reported the app already in place and skipped; in a copy of that tree with the Proton packages removed, it ran the full path (the release package reachable-checked, downloaded, and installed; check-update; the app set installed at proton-vpn-gnome-desktop 0.11.0-1.fc44, with libappindicator-gtk3 since no gnome-shell is present; the daemon package's own scriptlet created the split-tunneling service's enable symlink), reported the sign-in as the remaining manual action, and a re-run reported the app in place. Ubuntu 24.04: the step downloaded the release deb, verified its SHA256 against Proton's published checksum, installed it with dpkg, updated, and installed proton-vpn-gnome-desktop 0.11.0 (gtk-app 4.18.8, cli 1.0.5); the negative control, the same run with the downloaded deb corrupted by one byte, aborted at the checksum with nothing installed; a download failure likewise stops the step with nothing installed; and a re-run reported the app in place. Rocky 10: the step printed the RHEL-family lines, recorded the manual WireGuard/OpenVPN follow-on in the workflow footer under both designations, installed nothing, and exited clean; on the server leg the step does not appear at all. Two sandbox adaptations are harness, not procedure: chrooted processes cannot open HTTPS tunnels through this sandbox's egress proxy, so the chroot runs spoke to a local relay process that pipes bytes to the proxy (TLS stayed end to end, and the checksums and repo signatures verified against the real servers), and the bare container trees first needed the stock state a workstation ships with (curl and gnupg installed, /tmp at 1777, the stock Ubuntu sources restored, a CA pointer for dnf). A live run of the full workflow on real hardware is the remaining proof and had not happened when this version was cut.
 
+Version 2.0 (2026-10-30) aligns the sudo posture with the standing design, rewrites the backup item around Clonezilla, and completes the desktop application set. Through version 1.9 the report treated a NOPASSWD entry in sudoers as something to review, because the checklist said sudo requires a password; the standing ruling is the opposite, that your users are NOPASSWD by design, deliberate and for convenience, so the script now reports a NOPASSWD entry as the intended configuration and its absence as a plain fact, and section 3 of this checklist says the same. Section 1's backup item now names the actual tool and disk: Clonezilla imaging of a LUKS-on-ext4 system, where the image is raw blocks and comes out near full partition size regardless of used space, the restore target must be at least the source size, the first boot after a restore asks for the LUKS passphrase to unlock, and the recovery key in Proton Pass is the fallback if the passphrase is ever lost. The desktop applications from the software list that the script did not already install (VLC, nmap, and zenmap were already handled) are now installed on both families: Firefox, Tilix, htop, GtkHash, PyChess, FileZilla, the Transmission GTK client, Remmina, rkhunter, Lynis, Cockpit, and luckyBackup, and the Cockpit socket is enabled where Cockpit is installed. Three of them are not packaged for the RHEL family, so that family gets manual items for gtkhash, pychess, and luckyBackup instead of the same failed install on every run. Remmina is packaged for the RHEL family but cannot install there today: its EPEL 10 dependency libappindicator-gtk3 requires the libdbusmenu libraries, and no RHEL-family repo provides them (verified against the live EPEL 10 index as well as the local mirror), so the RHEL family gets a manual item for remmina too, until EPEL fixes the chain; it installs normally on Fedora and Ubuntu. Brave and LibreFox (LibreWolf) are manual items on every family, because neither is in the distro repos and this script adds no vendor repos and downloads no vendor installers. Chrome and Chromium stay excluded, as ruled.
+
+The version 2.0 changes were verified on 2026-10-30 by executing the shipped code, extracted verbatim from the script, in the three reference trees. The sudo block ran in the Rocky tree against two fixture sudoers states: with a NOPASSWD entry present it printed the by-design done line and no warning, and with none present it printed the factual done line and no warning; the same harness running the version 1.9 block against the present fixture produced the old warning, proving the harness can tell the difference. The desktop applications block ran for real in all three trees. Fedora 44: all twelve applications installed (firefox 159.0, tilix 1.9.6, htop 3.4.1, gtkhash 1.4, pychess 1.0.5, filezilla 3.69.5, transmission-gtk 4.1.4, remmina 1.4.41, rkhunter 1.4.6, lynis 3.1.7, cockpit 370, luckybackup 0.5.0), and a second run reported the installed line, the two manual items, and the cockpit line with no warnings. Ubuntu 24.04: all twelve installed in a single batch (versions matching the apt index, including the firefox snap-transitional package, which is how Ubuntu ships Firefox; the snap payload it hands off to is snapd's job on a live system and was not exercised in a chroot), with the same clean report. Rocky 10: the eight installable applications installed (firefox 140.17.0, tilix 1.9.6, htop 3.3.0, filezilla 3.69.3, transmission-gtk 4.1.3, rkhunter 1.4.6, lynis 3.1.7, cockpit 356.3) and the report printed the four RHEL manual items with no warnings; the warning path itself was executed as a control (an install call for the absent gtkhash warns, the same call for the present htop does not). Two sandbox adaptations are harness, not procedure: chrooted processes cannot open tunnels through this sandbox's egress proxy, so the Ubuntu run spoke to a local relay process that pipes bytes to the proxy, and the Rocky tree's local mirrors ship metadata only, so the missing RPM payloads were fetched from the upstream Rocky and EPEL trees into the mirror first (dnf verifies every checksum against the metadata before installing). A live run of the version 2.0 script itself on a fresh machine is the remaining proof and had not happened when this version was cut.
+
 ```bash
 #!/usr/bin/env bash
-# laptop-role-prep-setup-v1.9.sh
+# laptop-role-prep-setup-v2.0.sh
 #
 # Produce the desired state from "Linux Laptop Prep Checklist: Coding
 # Instructor and Linux Administrator" (linux-laptop-role-prep-checklist)
@@ -197,9 +201,11 @@ WORK_GIT_EMAIL=""
 
 # 1 also adds the work user to the libvirt group when virt is installed.
 INSTALL_VIRT=1
-# 1 would add the work user to the sudo/wheel group. Default 0: the
-# checklist requires only that sudo demands a password; it does not grant
-# either new account admin rights. Your existing account stays the admin.
+# 1 would add the work user to the sudo/wheel group. Default 0: neither
+# new account gets admin rights unless asked; your existing account
+# stays the admin. Sudo posture itself is checklist 3: your users are
+# NOPASSWD by design (your ruling, deliberate, for convenience), and
+# this script neither adds nor removes sudoers entries.
 GRANT_SUDO_WORK=0
 
 PUBLIC_REPO_URL="https://github.com/amaad-michael/public.git"
@@ -224,7 +230,7 @@ step() { printf '\n== %s ==\n' "$*"; }
 # ---------------------------------------------------------------------------
 
 if [[ ${EUID} -ne 0 ]]; then
-    say "This script must run as root: sudo ./laptop-role-prep-setup-v1.9.sh"
+    say "This script must run as root: sudo ./laptop-role-prep-setup-v2.0.sh"
     exit 1
 fi
 
@@ -415,6 +421,48 @@ if [[ "${FAMILY}" == "apt" ]] && command -v docker >/dev/null 2>&1; then
     fi
     # The docker group add for the work user runs in the Users
     # section, after the account exists; see there.
+fi
+
+# Desktop applications (Michael's software list, scoped 2026-10-22,
+# completed in v2.0): Firefox, Tilix, htop, GtkHash, PyChess,
+# FileZilla, Transmission (the GTK client), Remmina, rkhunter, Lynis,
+# Cockpit, and luckyBackup. Package names verified 2026-10-30
+# against the Fedora 44, Rocky 10 + EPEL 10, and Ubuntu 24.04
+# indexes: the full set exists on Fedora and on Ubuntu under the
+# names below (Ubuntu's firefox package is the snap-transitional
+# one; installing it is how Ubuntu ships Firefox). On the RHEL
+# family gtkhash, pychess, and luckybackup are not packaged (the
+# same Rocky 10 + EPEL 10 indexes that have no IDLE or flameshot),
+# so that family gets manual items for those three instead of the
+# same failed install on every run. Remmina is packaged for the
+# RHEL family but cannot install today (checked 2026-10-30): its
+# EPEL 10 dependency libappindicator-gtk3 requires the
+# libdbusmenu libraries, and no RHEL-family repo provides them
+# (verified against Rocky 10 BaseOS/AppStream and the live EPEL
+# 10 index, not just the local mirror), so that family gets a
+# manual item for remmina too, until EPEL fixes the chain. Brave
+# and LibreFox are in no stock repo on any family; this script
+# adds no vendor repos and downloads no vendor installers, so
+# both are manual items below.
+if [[ "${FAMILY}" == "dnf" && "${RHELISH}" == "1" ]]; then
+    install_pkgs firefox tilix htop filezilla transmission-gtk rkhunter lynis cockpit
+    done_item "desktop applications installed: firefox, tilix, htop, filezilla, transmission (GTK), rkhunter, lynis, cockpit"
+    manual_item "Desktop applications: gtkhash is not packaged for the RHEL family (Rocky 10 + EPEL 10 indexes, checked 2026-10-30); install it by hand if you want it."
+    manual_item "Desktop applications: pychess is not packaged for the RHEL family (Rocky 10 + EPEL 10 indexes, checked 2026-10-30); install it by hand if you want it."
+    manual_item "Desktop applications: luckyBackup is not packaged for the RHEL family (Rocky 10 + EPEL 10 indexes, checked 2026-10-30); install it by hand if you want it."
+    manual_item "Desktop applications: remmina is packaged in EPEL 10 but cannot install today (checked 2026-10-30): its dependency libappindicator-gtk3 requires the libdbusmenu libraries, which no RHEL-family repo provides; install it by hand if a future EPEL update fixes the chain."
+else
+    install_pkgs firefox tilix htop gtkhash pychess filezilla transmission-gtk remmina rkhunter lynis cockpit luckybackup
+    done_item "desktop applications installed: firefox, tilix, htop, gtkhash, pychess, filezilla, transmission (GTK), remmina, rkhunter, lynis, cockpit, luckybackup"
+fi
+manual_item "Brave browser: not in the distro repos (Fedora 44, Rocky 10 + EPEL 10, and Ubuntu 24.04 indexes checked 2026-10-30), and this script adds no vendor repos; install it from brave.com if you want it."
+manual_item "LibreFox (LibreWolf): not in the distro repos (Fedora 44, Rocky 10 + EPEL 10, and Ubuntu 24.04 indexes checked 2026-10-30), and this script adds no vendor repos; install it from librewolf.net if you want it."
+if systemctl list-unit-files 2>/dev/null | grep '^cockpit\.socket' >/dev/null; then
+    if systemctl enable --now cockpit.socket >/dev/null 2>&1; then
+        done_item "cockpit web console enabled (cockpit.socket)"
+    else
+        warn_item "cockpit present but its socket could not be enabled"
+    fi
 fi
 
 # Container runtime (section 4): Podman on both families.
@@ -927,21 +975,24 @@ if [[ "${INSTALL_VIRT}" == "1" ]]; then
     fi
 fi
 
-# Sudo posture (checklist 3): sudo must require a password. New accounts
-# get no sudoers entries from this script; membership only on request.
+# Sudo posture (checklist 3): your users are NOPASSWD by design
+# (Michael's ruling: deliberate, for convenience). New accounts get
+# no sudoers entries from this script; membership only on request.
+# The report states the posture it finds as fact, never as a
+# defect: NOPASSWD present is the intended configuration.
 SUDO_GROUP="wheel"
 [[ "${FAMILY}" == "apt" ]] && SUDO_GROUP="sudo"
 if [[ "${GRANT_SUDO_WORK}" == "1" ]]; then
     if usermod -aG "${SUDO_GROUP}" "${WORK_USER}"; then
-        done_item "${WORK_USER} added to ${SUDO_GROUP} (GRANT_SUDO_WORK=1); sudo still requires a password (checklist 3)"
+        done_item "${WORK_USER} added to ${SUDO_GROUP} (GRANT_SUDO_WORK=1) (checklist 3)"
     else
         warn_item "${WORK_USER} could not be added to ${SUDO_GROUP} (checklist 3)"
     fi
 fi
 if grep -Rqs 'NOPASSWD' /etc/sudoers /etc/sudoers.d 2>/dev/null; then
-    warn_item "a NOPASSWD entry exists in sudoers; the checklist says sudo requires a password - review /etc/sudoers.d"
+    done_item "sudo posture: NOPASSWD entry present in sudoers, the intended configuration (your users are NOPASSWD by design) (checklist 3)"
 else
-    done_item "sudo posture verified: no NOPASSWD entries (checklist 3)"
+    done_item "sudo posture: no NOPASSWD entry found in sudoers on this box; your standing design is NOPASSWD for your users, so this box does not match it yet (checklist 3)"
 fi
 
 # Per-user environment. Runs as the user so file ownership is right.
@@ -1115,4 +1166,4 @@ say ""
 say "Re-running this script is safe; it converges to the same state."
 ```
 
-*Companion records: proton-pass-ssh-handoff-v1.0.md (open item [ee7f5b] on the action board), ansible-hosts-inventory (homelab reference), the public repo at github.com/amaad-michael/public (toolkit and playbooks source); laptop-role-prep-setup-v1.9.sh, the standalone form of the section 11 script (byte-identical; the two files travel together).*
+*Companion records: proton-pass-ssh-handoff-v1.0.md (open item [ee7f5b] on the action board), ansible-hosts-inventory (homelab reference), the public repo at github.com/amaad-michael/public (toolkit and playbooks source); laptop-role-prep-setup-v2.0.sh, the standalone form of the section 11 script (byte-identical; the two files travel together).*
