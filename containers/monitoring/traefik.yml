@@ -11,6 +11,7 @@ entryPoints:
     http:
       redirections:
         entrypoint:
+          to: websecure
           scheme: https
           permanent: false
 
