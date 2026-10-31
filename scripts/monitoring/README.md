@@ -92,6 +92,20 @@ Both checkers suit an on-demand or scheduled audit. Every run writes
 a new timestamped file; nothing is overwritten, so the directory
 becomes the audit history.
 
+## audit-journal-persistence.sh
+
+Read-only audit of systemd-journald persistence across the fleet
+(pi0, pi1, pi2, pi3, pi4, neo1). For each node it reports the
+effective `Storage=` value, whether `/var/log/journal` exists,
+how many boots the on-disk journal knows about, and disk usage,
+and prints a PERSISTENT / VOLATILE / UNREACHABLE / ERROR verdict
+per node. With `--write-fixes DIR` it also generates one
+idempotent fix script per volatile node (drop-in
+`Storage=persistent`, tmpfiles creation of `/var/log/journal`,
+journald restart, verification). Run it from pi1, where the
+fleet hostnames resolve; `--local` audits the host it runs on.
+It changes nothing on any node it inspects.
+
 ## Backup manifest integrity
 
 This folder no longer carries its own backup checker: the repo's
