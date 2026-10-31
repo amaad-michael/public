@@ -8,15 +8,20 @@ The Ansible patching counterpart for Nobara lives in
 
 ## The single new-box workflow
 
-`new-box-prep-v1.1.sh` is the entry point for prepping any new
+`new-box-prep-v1.2.sh` is the entry point for prepping any new
 box or server. It sequences the repo's existing prep scripts
 (newest version of each wins) and adds nothing of its own:
 
-- `new-box-prep-v1.1.sh laptop [--with-gpu] [--dry-run]`: git
-  setup, ssh setup, then the laptop role prep; `--with-gpu`
+- `new-box-prep-v1.2.sh laptop [--work|--personal] [--with-gpu] [--dry-run]`:
+  git setup, ssh setup, then the laptop role prep. A laptop run
+  carries a work or personal designation (`--work` or
+  `--personal`, or the runner asks on the terminal), and the
+  role prep runs only on a work box; a scripted run must pass
+  the flag, because an undesignated run stops and runs nothing.
+  `--with-gpu`
   appends the GPU tuning step, which skips cleanly on boxes
   without a discrete AMD GPU.
-- `new-box-prep-v1.1.sh server [--dry-run]` (as root on the
+- `new-box-prep-v1.2.sh server [--dry-run]` (as root on the
   target): the conservative secure-server-init, then git setup
   for the michael user, then it prints the controller-side
   follow-ons (the fleet password cycle, the node_exporter
