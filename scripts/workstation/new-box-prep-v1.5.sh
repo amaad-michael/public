@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# NAME: new-box-prep-v1.4.sh
+# NAME: new-box-prep-v1.5.sh
 # WHAT: The single new-box workflow. Runs this repo's prep scripts in
 #       order for a laptop or a server, with GPU tuning as an
 #       optional final step (the only delta for a gaming rig):
@@ -34,6 +34,22 @@
 #       desktop step is the runner's other own step: it installs
 #       the chosen desktops per OS family (install only; the
 #       desktop is picked at the login screen).
+#       A run can also be launched guided, with --guided: the
+#       up-front choices the invocation leaves open are asked
+#       as a short sequence of panels on the same panel
+#       machinery as the desktop question (the form itself,
+#       laptop or server, when the invocation names none; then
+#       the designation; then the desktop choice through the
+#       desktop panel itself), and the walk ends on a summary
+#       screen listing every choice and the steps that will
+#       run, with Run and Cancel. A choice the invocation
+#       already made is not asked again, so a fully flagged
+#       guided run shows only the summary. Guided needs a
+#       terminal that can draw: with choices still open and
+#       no such terminal it stops and runs nothing, and with
+#       every choice already determined by the flags it adds
+#       nothing and the run proceeds exactly as the flag path.
+#       Cancelling at any panel runs nothing.
 # WHY:  One entry point replaces remembering which scripts run in
 #       which order on which kind of box (prep scripting audit,
 #       2026-10-29). The steps are the repo's existing scripts,
@@ -41,8 +57,11 @@
 #       sequences them. The steps of its own are the Proton VPN
 #       install and the desktop install, which have no sibling
 #       scripts to sequence.
-# HOW:  ./new-box-prep-v1.4.sh laptop|server [--work|--personal]
-#       [--desktop=<list>] [--with-gpu] [--dry-run]
+# HOW:  ./new-box-prep-v1.5.sh laptop|server [--guided]
+#       [--work|--personal] [--desktop=<list>] [--with-gpu]
+#       [--dry-run]
+#       ./new-box-prep-v1.5.sh --guided (the form itself is
+#       the first panel)
 #       Run it from inside a clone of this repo; sibling scripts
 #       are resolved relative to this file and the newest version
 #       of each wins. --dry-run prints the resolved plan and runs
@@ -111,9 +130,17 @@ normalize_desktop_choice() {
     echo "$out"
 }
 
-ROLE="${1:-}"
-[[ "$ROLE" == "laptop" || "$ROLE" == "server" ]] || usage
-shift
+ROLE=""
+GUIDED=0
+if [[ "${1:-}" == "laptop" || "${1:-}" == "server" ]]; then
+    ROLE="$1"
+    shift
+elif [[ "${1:-}" == "--guided" ]]; then
+    GUIDED=1
+    shift
+else
+    usage
+fi
 
 BOX_KIND=""
 DESKTOP=""
@@ -121,6 +148,7 @@ WITH_GPU=0
 DRY_RUN=0
 for arg in "$@"; do
     case "$arg" in
+        --guided) GUIDED=1 ;;
         --work)
             [[ -z "$BOX_KIND" ]] || usage
             BOX_KIND="work"
@@ -387,57 +415,103 @@ desktop_label() {
     esac
 }
 
+# --- Panel machinery (begin) ----------------------------------
+# The frame code every panel in this script shares, factored
+# out of the desktop panel that introduced it; the guided
+# launch's panels below are built on it too, not on a second
+# implementation. A panel builds its frame, one boxed line
+# per entry, into PANEL_FRAME, and panel_draw redraws it in
+# place: the first draw just prints, and later draws first
+# move the cursor back up over the previous frame. The frame
+# line whose index panel_draw is passed shows in reverse
+# video. panel_open hides the cursor and arms the interrupt
+# trap (restore the cursor, exit 130); panel_close erases
+# the frame, restores the cursor, and disarms the trap.
+# panel_read_key reads one key into PANEL_KEY, joining an
+# escape sequence's tail so the arrow keys arrive whole.
+PANEL_FRAME=()
+PANEL_FIRST=1
+PANEL_KEY=""
+
+panel_open() {
+    printf '\033[?25l'
+    trap 'printf "\033[?25h" >&2; exit 130' INT TERM
+}
+
+panel_draw() {
+    local hl="$1" i
+    if [[ "$PANEL_FIRST" -eq 1 ]]; then
+        PANEL_FIRST=0
+    else
+        printf '\033[%dA' "${#PANEL_FRAME[@]}"
+    fi
+    for i in "${!PANEL_FRAME[@]}"; do
+        if [[ "$i" -eq "$hl" ]]; then
+            printf '\r\033[7m%s\033[0m\n' "${PANEL_FRAME[$i]}"
+        else
+            printf '\r%s\n' "${PANEL_FRAME[$i]}"
+        fi
+    done
+}
+
+panel_read_key() {
+    local rest=""
+    PANEL_KEY=""
+    IFS= read -rsn1 PANEL_KEY || PANEL_KEY=""
+    if [[ "$PANEL_KEY" == $'\033' ]]; then
+        IFS= read -rsn2 -t 0.1 rest || rest=""
+        PANEL_KEY="${PANEL_KEY}${rest}"
+    fi
+}
+
+panel_close() {
+    local i
+    printf '\033[%dA' "${#PANEL_FRAME[@]}"
+    for i in "${!PANEL_FRAME[@]}"; do
+        printf '\033[2K'
+        if [[ "$i" -lt $(( ${#PANEL_FRAME[@]} - 1 )) ]]; then
+            printf '\n'
+        fi
+    done
+    printf '\033[%dA' $(( ${#PANEL_FRAME[@]} - 1 ))
+    printf '\033[?25h'
+    trap - INT TERM
+}
+# --- Panel machinery (end) ------------------------------------
+
 desktop_pick_tui() {
     local -a labels=("MATE" "Cinnamon" "Xfce" "Openbox" "LXDE" "None")
     local -a values=("mate" "cinnamon" "xfce" "openbox" "lxde" "none")
     local -a on=(0 0 0 0 0 1)
-    local cursor=0 i j any first=1
-    local inner=44 dashes="" border="" line="" key="" rest=""
-    local -a frame=()
+    local cursor=0 i j any
+    local inner=44 dashes="" border="" line=""
     printf -v dashes '%*s' 46 ''
     dashes="${dashes// /-}"
     border="+${dashes}+"
-    printf '\033[?25l'
-    trap 'printf "\033[?25h" >&2; exit 130' INT TERM
+    panel_open
+    PANEL_FIRST=1
     while true; do
-        frame=()
-        frame+=("$border")
+        PANEL_FRAME=()
+        PANEL_FRAME+=("$border")
         printf -v line '| %-*s |' "$inner" "Desktop environments"
-        frame+=("$line")
-        frame+=("$border")
+        PANEL_FRAME+=("$line")
+        PANEL_FRAME+=("$border")
         for i in 0 1 2 3 4 5; do
             local mark="  " box="[ ]"
             [[ "$i" -eq "$cursor" ]] && mark="> "
             [[ "${on[$i]}" -eq 1 ]] && box="[x]"
             printf -v line '| %-*s |' "$inner" "${mark}${box} ${labels[$i]}"
-            frame+=("$line")
+            PANEL_FRAME+=("$line")
         done
-        frame+=("$border")
+        PANEL_FRAME+=("$border")
         printf -v line '| %-*s |' "$inner" "arrows or j/k move, space toggles,"
-        frame+=("$line")
+        PANEL_FRAME+=("$line")
         printf -v line '| %-*s |' "$inner" "a toggles all five, enter confirms"
-        frame+=("$line")
-        frame+=("$border")
-        if [[ "$first" -eq 1 ]]; then
-            first=0
-        else
-            printf '\033[%dA' "${#frame[@]}"
-        fi
-        for i in "${!frame[@]}"; do
-            if [[ "$i" -eq $((cursor + 3)) ]]; then
-                printf '\r\033[7m%s\033[0m\n' "${frame[$i]}"
-            else
-                printf '\r%s\n' "${frame[$i]}"
-            fi
-        done
-        key=""
-        rest=""
-        IFS= read -rsn1 key || key=""
-        if [[ "$key" == $'\033' ]]; then
-            IFS= read -rsn2 -t 0.1 rest || rest=""
-            key="${key}${rest}"
-        fi
-        case "$key" in
+        PANEL_FRAME+=("$line")
+        PANEL_FRAME+=("$border")
+        panel_draw $((cursor + 3))
+        panel_read_key
+        case "$PANEL_KEY" in
             $'\033[A'|k) cursor=$(( (cursor + 5) % 6 )) ;;
             $'\033[B'|j) cursor=$(( (cursor + 1) % 6 )) ;;
             ' ')
@@ -477,16 +551,7 @@ desktop_pick_tui() {
                 ;;
         esac
     done
-    printf '\033[%dA' "${#frame[@]}"
-    for i in "${!frame[@]}"; do
-        printf '\033[2K'
-        if [[ "$i" -lt $(( ${#frame[@]} - 1 )) ]]; then
-            printf '\n'
-        fi
-    done
-    printf '\033[%dA' $(( ${#frame[@]} - 1 ))
-    printf '\033[?25h'
-    trap - INT TERM
+    panel_close
     if [[ "${on[5]}" -eq 1 ]]; then
         DESKTOP="none"
     else
@@ -597,6 +662,215 @@ desktop_step() {
     return 0
 }
 # --- Desktop step (end) -----------------------------------------
+
+# --- Guided launch (begin) ------------------------------------
+# The --guided walk. Before anything runs, the choices the
+# invocation left open are asked as panels on the shared
+# machinery above: the form itself when no form was named,
+# then a laptop's designation, then the desktop choice
+# through the desktop panel itself, unchanged. The walk ends
+# on a summary screen listing every choice and the steps
+# that will run, with Run and Cancel. Confirming feeds the
+# same ROLE, BOX_KIND, and DESKTOP variables the flags and
+# the plain prompts set, and the legs below then proceed
+# through their existing code untouched. A choice the
+# invocation already made is never asked again, so a fully
+# flagged guided run shows only the summary. The panels need
+# the same terminal the desktop panel needs (stdin and
+# stdout terminals, TERM set and not dumb): with choices
+# still open and no such terminal, the run stops with the
+# usage exit before anything runs; with every choice already
+# determined by the flags, guided adds nothing at all, not
+# even the summary, and the run proceeds exactly as the flag
+# path. Cancelling at any panel (q, or Cancel on the
+# summary) prints the cancellation line and exits 0 having
+# run nothing; Ctrl-C is the panel trap's standing exit 130
+# with the cursor restored.
+PICK_LABELS=()
+PICK_INFO=()
+PICK_INDEX=0
+
+# pick_one_tui <title> <hint>: a single-choice panel over
+# the rows in PICK_LABELS, with any lines in PICK_INFO shown
+# above the choices. Sets PICK_INDEX to the chosen row, or
+# -1 when the operator cancels with q.
+pick_one_tui() {
+    local title="$1" hint="$2"
+    local n="${#PICK_LABELS[@]}"
+    local cursor=0 i
+    local inner=44 dashes="" border="" line="" mark=""
+    printf -v dashes '%*s' 46 ''
+    dashes="${dashes// /-}"
+    border="+${dashes}+"
+    panel_open
+    PANEL_FIRST=1
+    while true; do
+        PANEL_FRAME=()
+        PANEL_FRAME+=("$border")
+        printf -v line '| %-*s |' "$inner" "$title"
+        PANEL_FRAME+=("$line")
+        PANEL_FRAME+=("$border")
+        for i in "${!PICK_INFO[@]}"; do
+            printf -v line '| %-*s |' "$inner" "${PICK_INFO[$i]}"
+            PANEL_FRAME+=("$line")
+        done
+        for i in "${!PICK_LABELS[@]}"; do
+            mark="  "
+            [[ "$i" -eq "$cursor" ]] && mark="> "
+            printf -v line '| %-*s |' "$inner" "${mark}${PICK_LABELS[$i]}"
+            PANEL_FRAME+=("$line")
+        done
+        PANEL_FRAME+=("$border")
+        printf -v line '| %-*s |' "$inner" "$hint"
+        PANEL_FRAME+=("$line")
+        PANEL_FRAME+=("$border")
+        panel_draw $((cursor + 3 + ${#PICK_INFO[@]}))
+        panel_read_key
+        case "$PANEL_KEY" in
+            $'\033[A'|k) cursor=$(( (cursor + n - 1) % n )) ;;
+            $'\033[B'|j) cursor=$(( (cursor + 1) % n )) ;;
+            q)
+                PICK_INDEX=-1
+                break
+                ;;
+            ''|$'\n'|$'\r')
+                PICK_INDEX=$cursor
+                break
+                ;;
+        esac
+    done
+    panel_close
+}
+
+guided_cancel() {
+    echo "Guided launch cancelled; nothing was run."
+    exit 0
+}
+
+guided_summary() {
+    local -a info=()
+    info+=("Form: $ROLE")
+    if [[ "$ROLE" == "laptop" ]]; then
+        if [[ "$BOX_KIND" == "work" ]]; then
+            info+=("Designation: work box")
+        else
+            info+=("Designation: personal box")
+        fi
+        local full="Desktops: ${DESKTOP// /, }"
+        local -a words=()
+        read -r -a words <<< "$full"
+        local cur="" w
+        for w in "${words[@]}"; do
+            if [[ -z "$cur" ]]; then
+                cur="$w"
+            elif [[ $(( ${#cur} + 1 + ${#w} )) -le 44 ]]; then
+                cur="$cur $w"
+            else
+                info+=("$cur")
+                cur="  $w"
+            fi
+        done
+        [[ -n "$cur" ]] && info+=("$cur")
+    fi
+    if [[ "$WITH_GPU" -eq 1 ]]; then
+        if [[ "$ROLE" == "server" ]]; then
+            info+=("GPU step: requested (server runs skip it)")
+        else
+            info+=("GPU step: requested")
+        fi
+    else
+        info+=("GPU step: not requested")
+    fi
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        info+=("Dry run: the plan prints, nothing runs")
+    fi
+    info+=("Steps that will run:")
+    local -a steps=()
+    if [[ "$ROLE" == "laptop" ]]; then
+        steps=("git setup" "ssh setup" "Proton VPN")
+        if [[ "$BOX_KIND" == "work" ]]; then
+            steps+=("laptop role prep")
+        else
+            steps+=("laptop role prep (skipped)")
+        fi
+        steps+=("desktop environments")
+        if [[ "$WITH_GPU" -eq 1 ]]; then
+            steps+=("GPU tuning")
+        fi
+    else
+        steps=("server init (conservative)" "git setup for the michael user")
+    fi
+    local s idx=0
+    for s in "${steps[@]}"; do
+        idx=$((idx + 1))
+        info+=("  $idx. $s")
+    done
+    PICK_INFO=("${info[@]}")
+    PICK_LABELS=("Run" "Cancel")
+    pick_one_tui "Guided launch summary" "arrows or j/k move, enter chooses"
+    if [[ "$PICK_INDEX" -ne 0 ]]; then
+        guided_cancel
+    fi
+}
+
+guided_preflight() {
+    local determined=1
+    if [[ -z "$ROLE" ]]; then
+        determined=0
+    elif [[ "$ROLE" == "laptop" && ( -z "$BOX_KIND" || -z "$DESKTOP" ) ]]; then
+        determined=0
+    fi
+    if [[ ! -t 0 || ! -t 1 || -z "${TERM:-}" || "${TERM:-}" == "dumb" ]]; then
+        if [[ "$determined" -eq 1 ]]; then
+            return 0
+        fi
+        echo "--guided asks the choices the flags left open as panels, and this terminal cannot draw them; pass the choices as flags instead, or drop --guided; nothing was run" >&2
+        usage
+    fi
+    if [[ -z "$ROLE" ]]; then
+        PICK_INFO=()
+        PICK_LABELS=("Laptop" "Server")
+        pick_one_tui "New-box workflow" "arrows or j/k move, enter chooses, q cancels"
+        if [[ "$PICK_INDEX" -lt 0 ]]; then
+            guided_cancel
+        elif [[ "$PICK_INDEX" -eq 1 ]]; then
+            ROLE="server"
+        else
+            ROLE="laptop"
+        fi
+        if [[ "$ROLE" == "server" && -n "$BOX_KIND" ]]; then
+            echo "the work/personal designation is for laptops; a server run does not take one" >&2
+            usage
+        fi
+        if [[ "$ROLE" == "server" && -n "$DESKTOP" ]]; then
+            echo "the desktop choice is for laptops; a server run does not take one" >&2
+            usage
+        fi
+    fi
+    if [[ "$ROLE" == "laptop" ]]; then
+        if [[ -z "$BOX_KIND" ]]; then
+            PICK_INFO=()
+            PICK_LABELS=("Work box" "Personal box")
+            pick_one_tui "Laptop designation" "arrows or j/k move, enter chooses, q cancels"
+            if [[ "$PICK_INDEX" -lt 0 ]]; then
+                guided_cancel
+            elif [[ "$PICK_INDEX" -eq 0 ]]; then
+                BOX_KIND="work"
+            else
+                BOX_KIND="personal"
+            fi
+        fi
+        if [[ -z "$DESKTOP" ]]; then
+            desktop_pick_tui
+        fi
+    fi
+    guided_summary
+}
+# --- Guided launch (end) --------------------------------------
+
+if [[ "$GUIDED" -eq 1 ]]; then
+    guided_preflight
+fi
 
 if [[ "$ROLE" == "laptop" ]]; then
     if [[ -z "$BOX_KIND" ]]; then
