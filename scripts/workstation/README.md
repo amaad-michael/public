@@ -8,12 +8,12 @@ The Ansible patching counterpart for Nobara lives in
 
 ## The single new-box workflow
 
-`new-box-prep-v1.4.sh` is the entry point for prepping any new
+`new-box-prep-v1.5.sh` is the entry point for prepping any new
 box or server. It sequences the repo's existing prep scripts
 (newest version of each wins); its own steps are the Proton
 VPN install and the desktop-environment install:
 
-- `new-box-prep-v1.4.sh laptop [--work|--personal] [--desktop=<list>] [--with-gpu] [--dry-run]`:
+- `new-box-prep-v1.5.sh laptop [--guided] [--work|--personal] [--desktop=<list>] [--with-gpu] [--dry-run]`:
   git setup, ssh setup, the Proton VPN step, then the laptop
   role prep, then the desktop step. The Proton step installs the Proton VPN app from
   Proton's own repo on the Fedora and Debian families (the
@@ -36,11 +36,21 @@ VPN install and the desktop-environment install:
   `--personal`, or the runner asks on the terminal), and the
   role prep runs only on a work box; a scripted run must pass
   the flags, because an undesignated or desktop-less run
-  stops and runs nothing.
+  stops and runs nothing. With `--guided`, the choices the
+  flags leave open are asked as panels on the desktop
+  panel's own machinery (the designation, then the desktop
+  choice through the desktop panel itself), ending on a
+  summary screen that lists every choice and the steps
+  that will run, with Run and Cancel; the bare form
+  `--guided` with no form named makes the form itself the
+  first panel, and cancelling at any panel runs nothing.
+  A fully flagged guided run shows only the summary, and
+  with no terminal that can draw, guided stops and runs
+  nothing unless the flags already determine every choice.
   `--with-gpu`
   appends the GPU tuning step, which skips cleanly on boxes
   without a discrete AMD GPU.
-- `new-box-prep-v1.4.sh server [--dry-run]` (as root on the
+- `new-box-prep-v1.5.sh server [--guided] [--dry-run]` (as root on the
   target): the conservative secure-server-init, then git setup
   for the michael user, then it prints the controller-side
   follow-ons (the fleet password cycle, the node_exporter
@@ -94,7 +104,7 @@ environment ready. The checklist is the specification; the script
 produces every CLI-able part of it and prints the rest as a manual
 list.
 
-### linux-laptop-role-prep-checklist-v2.3.md
+### linux-laptop-role-prep-checklist-v2.4.md
 
 The checklist itself: base system, separation of personal and work
 lives, the security core, the Linux administrator kit, the coding
@@ -105,7 +115,8 @@ tested bare-metal restore are the load-bearing items. The setup
 script is embedded in section 11, byte-identical to the standalone
 file below. Version 2.3 adds the desktop-environment line in
 section 1 for the new-box workflow's desktop step (runner
-v1.4).
+v1.4); version 2.4 adds the guided-launch line in section 1
+for the runner's `--guided` option (runner v1.5).
 
 ### laptop-role-prep-setup-v2.0.sh
 
