@@ -72,7 +72,7 @@ docker compose ps | grep -c "healthy"  # Should show 9
 | **Traefik** | 80/443/8080 | Reverse proxy | Rate limiting, BasicAuth |
 | **Ntfy** | 8081 | Push notifications | deny-all auth |
 | **step-ca** | 9000 | Certificate authority | Self-signed, encrypted |
-| **Headscale** | 8082 | VPN orchestration | DB encrypted, ACL policy |
+| **Headscale** | 8082 | VPN orchestration | SQLite volume, ACL policy |
 | **Vaultwarden** | 8000 | Password manager | HTTPS enforced, no signups |
 | **Uptime Kuma** | 3001 | Status monitoring | UI only, health checks |
 
@@ -130,7 +130,7 @@ docker compose ps | grep -c "healthy"  # Should show 9
 **headscale.conf** (host-local, git-ignored)
 
 - VPN orchestration configuration
-- Database encryption enabled
+- SQLite database in its own volume
 - Metrics on port 9091 (no conflict with Prometheus)
 - ACL policy file reference
 
@@ -184,7 +184,7 @@ volumes:
 services:
   # Prometheus - metrics collection
   prometheus:
-    image: prom/prometheus:v2.45.0
+    image: prom/prometheus:v3.15.1
     container_name: standby-prometheus
     networks:
       - standby-net
@@ -198,7 +198,7 @@ services:
       - '--storage.tsdb.path=/prometheus'
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
       - '--web.console.templates=/usr/share/prometheus/consoles'
-      - '--web.enable-admin-api=false'
+      - '--no-web.enable-admin-api'
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -225,7 +225,7 @@ services:
 
   # Grafana - dashboards & visualization
   grafana:
-    image: grafana/grafana:10.2.0
+    image: grafana/grafana:13.3.0
     container_name: standby-grafana
     networks:
       - standby-net
@@ -273,7 +273,7 @@ services:
 
   # Alertmanager - alert routing & aggregation
   alertmanager:
-    image: prom/alertmanager:v0.26.0
+    image: prom/alertmanager:v0.34.1
     container_name: standby-alertmanager
     networks:
       - standby-net
@@ -359,7 +359,7 @@ services:
 
   # Ntfy - push notifications
   ntfy:
-    image: binwiederhier/ntfy:v2.4.0
+    image: binwiederhier/ntfy:v2.34.0
     container_name: standby-ntfy
     networks:
       - standby-net
@@ -399,21 +399,19 @@ services:
 
   # step-ca - certificate authority
   step-ca:
-    image: smallstep/step-ca:0.24.2
+    image: smallstep/step-ca:0.30.2
     container_name: standby-step-ca
     networks:
       - standby-net
     ports:
       - "9000:9000"
     environment:
-      - STEPCA_INIT_NAME=Standby
-      - STEPCA_INIT_DNS_NAMES=localhost,127.0.0.1
-      - STEPCA_INIT_ADMIN_SUBJECT=admin@standby
-      - STEPCA_INIT_PROVISIONER_NAME=admin
+      - DOCKER_STEPCA_INIT_NAME=Nobara-Standby
+      - DOCKER_STEPCA_INIT_DNS_NAMES=localhost,127.0.0.1
+      - DOCKER_STEPCA_INIT_ADMIN_SUBJECT=admin@nobara-standby
+      - DOCKER_STEPCA_INIT_PROVISIONER_NAME=admin
     volumes:
       - step_ca_data:/home/step
-    entrypoint: /bin/bash
-    command: -c 'step-ca-init --helm && /usr/bin/step-ca /home/step/config/ca.json'
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -437,7 +435,7 @@ services:
 
   # Headscale - VPN orchestration
   headscale:
-    image: headscale/headscale:0.22.3
+    image: headscale/headscale:0.29.6
     container_name: standby-headscale
     networks:
       - standby-net
@@ -518,7 +516,7 @@ services:
 
   # Uptime Kuma - status monitoring
   uptime-kuma:
-    image: louislam/uptime-kuma:1.23.11-alpine
+    image: louislam/uptime-kuma:2.5.8
     container_name: standby-uptime-kuma
     networks:
       - standby-net
@@ -558,6 +556,8 @@ api:
   insecure: false
   dashboard: true
 
+ping: {}
+
 entryPoints:
   web:
     address: ":80"
@@ -576,7 +576,6 @@ entryPoints:
 certificatesResolvers:
   letsencrypt:
     acme:
-      email: admin@standby
       storage: /letsencrypt/acme.json
       httpChallenge:
         entryPoint: web
@@ -612,7 +611,7 @@ http:
     BasicAuth:
       basicAuth:
         users:
-          - "admin:${TRAEFIK_AUTH_HASH}"
+          - '{{ env "TRAEFIK_AUTH_HASH" }}'
 
   routers:
     api-router:
@@ -649,9 +648,10 @@ metrics:
     addServicesLabels: true
 ```
 
-> **Note:** TRAEFIK_AUTH_HASH must be set (in .env) before Traefik loads
-> this file. There is no fallback value; without it Traefik fails to load
-> the BasicAuth middleware.
+> **Note:** TRAEFIK_AUTH_HASH is templated into this file by Traefik's
+> file provider from the container's environment; compose passes it from
+> .env. The value is the full user:hash pair. If it is unset, the rendered
+> entry is empty and dashboard login fails closed (Traefik itself starts).
 
 ---
 
@@ -768,87 +768,82 @@ visitor-subscription-limit: 30
 ### 6. headscale.conf (host-local)
 
 ```yaml
-server:
-  listen_addr: 0.0.0.0:8080
-  metrics_listen_addr: 0.0.0.0:9091
+---
+server_url: http://headscale.standby.internal:8080
+listen_addr: 0.0.0.0:8080
+metrics_listen_addr: 0.0.0.0:9091
+grpc_listen_addr: 0.0.0.0:50443
+grpc_allow_insecure: false
 
-grpc:
-  listen_addr: 0.0.0.0:50443
-  allow_insecure: false
+noise:
+  private_key_path: /var/lib/headscale/noise_private.key
 
 prefixes:
   v4: 100.64.0.0/10
   v6: fd7a:115c:a1e0::/48
 
-private_key_file: /var/lib/headscale/private.key
-noise:
-  private_key_file: /var/lib/headscale/noise_private.key
-
-db:
-  type: sqlite3
+database:
+  type: sqlite
   sqlite:
     path: /var/lib/headscale/db.sqlite
-
-db_encryption:
-  enabled: true
-
-acme:
-  provider: http-01
-  email: admin@standby
-  tls_letsencrypt_certs_dir: /var/lib/headscale/certs
-
-log:
-  level: info
-  format: json
 
 dns:
   magic_dns: true
   base_domain: headscale.local
+  override_local_dns: true
   nameservers:
-    - 8.8.8.8
-    - 8.8.4.4
+    global:
+      - 8.8.8.8
+      - 8.8.4.4
 
 unix_socket: /var/run/headscale/headscale.sock
 unix_socket_permission: "0770"
 
-policy_file: /etc/headscale/policy.hujson
+policy:
+  mode: file
+  path: /etc/headscale/policy.hujson
 
-oidc:
-  only_start_if_oidc_is_available: false
+log:
+  level: info
+  format: json
 ```
 
 ---
 
 ### 7. policy.hujson (host-local)
 
+Headscale 0.29 reads the v2 policy format (lowercase keys, `src`/`dst`,
+usernames with `@`; group members below are examples to replace with
+the real user accounts at deploy).
+
 ```json
 {
-  "Groups": {
-    "group:admin": ["*"],
-    "group:users": ["user:*"]
+  "groups": {
+    "group:admin": ["admin@headscale.local"],
+    "group:users": ["user@headscale.local"]
   },
-  "Hosts": {},
-  "TagOwners": {
+  "hosts": {},
+  "tagOwners": {
     "tag:admin": ["group:admin"]
   },
-  "ACLs": [
+  "acls": [
     {
-      "Action": "accept",
-      "Sources": ["group:admin"],
-      "Destinations": ["*:*"]
+      "action": "accept",
+      "src": ["group:admin"],
+      "dst": ["*:*"]
     },
     {
-      "Action": "accept",
-      "Sources": ["group:users"],
-      "Destinations": ["group:users:*"]
+      "action": "accept",
+      "src": ["group:users"],
+      "dst": ["group:users:*"]
     }
   ],
-  "SSH": [
+  "ssh": [
     {
-      "Action": "accept",
-      "Sources": ["group:admin"],
-      "Destinations": ["group:admin"],
-      "Users": ["root"]
+      "action": "accept",
+      "src": ["group:admin"],
+      "dst": ["tag:admin"],
+      "users": ["root"]
     }
   ]
 }
@@ -981,7 +976,9 @@ cp .env.example .env
 
 # Generate strong secrets into .env
 sed -i "s|^GRAFANA_ADMIN_PASSWORD=.*|GRAFANA_ADMIN_PASSWORD=$(openssl rand -base64 32)|" .env
-echo "TRAEFIK_AUTH_HASH=admin:$(htpasswd -bcB -C 10 /dev/null admin $(openssl rand -base64 32) | cut -d: -f2)" >> .env
+TRAEFIK_PASS=$(openssl rand -base64 32)
+echo "TRAEFIK_AUTH_HASH=admin:$(htpasswd -bcB -C 10 /dev/null admin \"$TRAEFIK_PASS\" | cut -d: -f2)" >> .env
+echo "Traefik dashboard password (save it now; only its hash is stored): $TRAEFIK_PASS"
 
 # Optional: Email for alerts
 # ALERTMANAGER_SMTP_PASSWORD=your-app-password
@@ -1079,9 +1076,10 @@ provisioned read-only, so it cannot be edited in the UI.
 ### 4. Test Traefik Dashboard
 
 ```bash
-# Extract Traefik password from .env
+# Use the password you saved when the hash was generated (Step 2).
+# Only the bcrypt hash is stored in .env; the password cannot be extracted from it.
 TRAEFIK_USER="admin"
-TRAEFIK_PASS=$(grep TRAEFIK_AUTH_HASH .env | cut -d= -f2 | awk '{print $NF}')
+TRAEFIK_PASS="<the password you saved>"
 
 # Test dashboard access
 curl -u "$TRAEFIK_USER:$TRAEFIK_PASS" http://localhost:8080/api/version
@@ -1089,7 +1087,7 @@ curl -u "$TRAEFIK_USER:$TRAEFIK_PASS" http://localhost:8080/api/version
 # If successful, navigate to:
 # http://localhost:8080/ (will redirect to dashboard)
 # Username: admin
-# Password: (from TRAEFIK_PASS above)
+# Password: the one you saved in Step 2
 ```
 
 ### 5. Initialize Headscale
@@ -1164,7 +1162,7 @@ docker compose exec headscale headscale preauthkeys create --user admin
 | Container escape | ✓ Mitigated (cap drop, read-only) |
 | Network exposure | ✓ Inter-service traffic isolated on standby-net; host ports on a trusted LAN |
 | DDoS protection | ✓ Rate limiting enabled |
-| Encryption at rest | ✓ Headscale DB encrypted |
+| Encryption at rest | — Headscale DB is SQLite (no at-rest encryption option) |
 | Encryption in transit | ✓ HTTPS ready (Traefik) |
 
 ---
@@ -1506,7 +1504,9 @@ cd public/containers/monitoring
 ```bash
 cp .env.example .env
 sed -i "s|^GRAFANA_ADMIN_PASSWORD=.*|GRAFANA_ADMIN_PASSWORD=$(openssl rand -base64 32)|" .env
-echo "TRAEFIK_AUTH_HASH=admin:$(htpasswd -bcB -C 10 /dev/null admin $(openssl rand -base64 32) | cut -d: -f2)" >> .env
+TRAEFIK_PASS=$(openssl rand -base64 32)
+echo "TRAEFIK_AUTH_HASH=admin:$(htpasswd -bcB -C 10 /dev/null admin \"$TRAEFIK_PASS\" | cut -d: -f2)" >> .env
+echo "Traefik dashboard password (save it now; only its hash is stored): $TRAEFIK_PASS"
 chmod 600 .env
 ```
 
@@ -1564,7 +1564,9 @@ scp ~/public/containers/monitoring/*.conf user@newbox.com:~/public/containers/mo
 cd public/containers/monitoring
 cp .env.example .env
 sed -i "s|^GRAFANA_ADMIN_PASSWORD=.*|GRAFANA_ADMIN_PASSWORD=$(openssl rand -base64 32)|" .env
-echo "TRAEFIK_AUTH_HASH=admin:$(htpasswd -bcB -C 10 /dev/null admin $(openssl rand -base64 32) | cut -d: -f2)" >> .env
+TRAEFIK_PASS=$(openssl rand -base64 32)
+echo "TRAEFIK_AUTH_HASH=admin:$(htpasswd -bcB -C 10 /dev/null admin \"$TRAEFIK_PASS\" | cut -d: -f2)" >> .env
+echo "Traefik dashboard password (save it now; only its hash is stored): $TRAEFIK_PASS"
 chmod 600 .env
 docker compose up -d && sleep 60
 

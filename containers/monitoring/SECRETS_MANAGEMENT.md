@@ -10,7 +10,7 @@ Traefik:       admin / the password whose bcrypt hash is TRAEFIK_AUTH_HASH in .e
 Vaultwarden:   (no default - requires master account setup)
 ```
 
-Compose fails closed without them: Grafana will not start until GRAFANA_ADMIN_PASSWORD is set, and Traefik fails to load its BasicAuth middleware until TRAEFIK_AUTH_HASH is set.
+Compose fails closed without them: Grafana will not start until GRAFANA_ADMIN_PASSWORD is set, and Traefik's dashboard login renders its BasicAuth user from TRAEFIK_AUTH_HASH (unset, the rendered entry is empty and login fails closed).
 
 ---
 
@@ -53,6 +53,10 @@ cat >> .env << 'EOF'
 # Traefik BasicAuth (format: user:bcrypt-hash)
 TRAEFIK_AUTH_HASH=admin:<htpasswd-hash>
 
+# Lets Encrypt account email for the Traefik ACME resolver (a real
+# address you control; compose passes it to the resolver at runtime)
+ACME_EMAIL=
+
 # Optional: SMTP password, used only by the section 5 alertmanager.yml variant
 ALERTMANAGER_SMTP_AUTH_PASSWORD=<app-password>
 EOF
@@ -86,17 +90,17 @@ environment:
 
 ## 4. Traefik BasicAuth in traefik.yml
 
-The shipped traefik.yml reads the hash from the environment with no fallback:
+The shipped traefik.yml templates the value from the container's environment (compose passes it through from .env; the file provider renders the template when it loads the file):
 
 ```yaml
 middlewares:
   BasicAuth:
     basicAuth:
       users:
-        - "admin:${TRAEFIK_AUTH_HASH}"
+        - '{{ env "TRAEFIK_AUTH_HASH" }}'
 ```
 
-TRAEFIK_AUTH_HASH must be set (in .env) or Traefik fails to load. To rotate the dashboard password, generate a new hash and update .env:
+TRAEFIK_AUTH_HASH must be set (in .env, passed through by compose) or the rendered user entry is empty and dashboard login fails closed; Traefik itself still starts. To rotate the dashboard password, generate a new hash and update .env:
 
 ```bash
 # Generate hash locally:

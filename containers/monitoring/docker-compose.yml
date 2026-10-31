@@ -16,7 +16,7 @@ volumes:
 services:
   # Prometheus - metrics collection
   prometheus:
-    image: prom/prometheus:v2.45.0
+    image: prom/prometheus:v3.15.1
     container_name: standby-prometheus
     networks:
       - standby-net
@@ -30,7 +30,7 @@ services:
       - '--storage.tsdb.path=/prometheus'
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
       - '--web.console.templates=/usr/share/prometheus/consoles'
-      - '--web.enable-admin-api=false'
+      - '--no-web.enable-admin-api'
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -57,7 +57,7 @@ services:
 
   # Grafana - dashboards & visualization
   grafana:
-    image: grafana/grafana:10.2.0
+    image: grafana/grafana:13.3.0
     container_name: standby-grafana
     networks:
       - standby-net
@@ -105,7 +105,7 @@ services:
 
   # Alertmanager - alert routing & aggregation
   alertmanager:
-    image: prom/alertmanager:v0.26.0
+    image: prom/alertmanager:v0.34.1
     container_name: standby-alertmanager
     networks:
       - standby-net
@@ -160,6 +160,8 @@ services:
       - TRAEFIK_PROVIDERS_DOCKER_EXPOSEDBYDEFAULT=false
       - TRAEFIK_ENTRYPOINTS_WEBSECURE_TLS=true
       - TRAEFIK_ACCESSLOG=true
+      - TRAEFIK_AUTH_HASH=${TRAEFIK_AUTH_HASH}
+      - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL=${ACME_EMAIL}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik_data:/letsencrypt
@@ -191,7 +193,7 @@ services:
 
   # Ntfy - push notifications
   ntfy:
-    image: binwiederhier/ntfy:v2.4.0
+    image: binwiederhier/ntfy:v2.34.0
     container_name: standby-ntfy
     networks:
       - standby-net
@@ -231,21 +233,19 @@ services:
 
   # step-ca - certificate authority
   step-ca:
-    image: smallstep/step-ca:0.24.2
+    image: smallstep/step-ca:0.30.2
     container_name: standby-step-ca
     networks:
       - standby-net
     ports:
       - "9000:9000"
     environment:
-      - STEPCA_INIT_NAME=Nobara-Standby
-      - STEPCA_INIT_DNS_NAMES=localhost,127.0.0.1
-      - STEPCA_INIT_ADMIN_SUBJECT=admin@nobara-standby
-      - STEPCA_INIT_PROVISIONER_NAME=admin
+      - DOCKER_STEPCA_INIT_NAME=Nobara-Standby
+      - DOCKER_STEPCA_INIT_DNS_NAMES=localhost,127.0.0.1
+      - DOCKER_STEPCA_INIT_ADMIN_SUBJECT=admin@nobara-standby
+      - DOCKER_STEPCA_INIT_PROVISIONER_NAME=admin
     volumes:
       - step_ca_data:/home/step
-    entrypoint: /bin/bash
-    command: -c 'step-ca-init --helm && /usr/bin/step-ca /home/step/config/ca.json'
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -269,7 +269,7 @@ services:
 
   # Headscale - VPN orchestration
   headscale:
-    image: headscale/headscale:0.22.3
+    image: headscale/headscale:0.29.6
     container_name: standby-headscale
     networks:
       - standby-net
@@ -350,7 +350,7 @@ services:
 
   # Uptime Kuma - status monitoring
   uptime-kuma:
-    image: louislam/uptime-kuma:1.23.11-alpine
+    image: louislam/uptime-kuma:2.5.8
     container_name: standby-uptime-kuma
     networks:
       - standby-net
