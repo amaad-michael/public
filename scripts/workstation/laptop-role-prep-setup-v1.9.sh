@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# laptop-role-prep-setup-v1.8.sh
+# laptop-role-prep-setup-v1.9.sh
 #
 # Produce the desired state from "Linux Laptop Prep Checklist: Coding
 # Instructor and Linux Administrator" (linux-laptop-role-prep-checklist)
@@ -65,7 +65,7 @@ step() { printf '\n== %s ==\n' "$*"; }
 # ---------------------------------------------------------------------------
 
 if [[ ${EUID} -ne 0 ]]; then
-    say "This script must run as root: sudo ./laptop-role-prep-setup-v1.8.sh"
+    say "This script must run as root: sudo ./laptop-role-prep-setup-v1.9.sh"
     exit 1
 fi
 
@@ -297,12 +297,22 @@ fi
 
 # ---------------------------------------------------------------------------
 # Vendor applications (added at Michael's direction 2026-10-18):
-# TickTick, Proton VPN, Proton Pass. Distribution methods verified
-# against each vendor's own site and feeds on 2026-10-18; see the
-# per-app comments. Downloads land in a scratch directory that is
-# removed when the section finishes. Every app degrades to a warning
-# plus a manual item when its download or checksum does not check
-# out; nothing unverified is ever installed.
+# TickTick and Proton Pass. Distribution methods verified against
+# each vendor's own site and feeds on 2026-10-18; see the per-app
+# comments. Downloads land in a scratch directory that is removed
+# when the section finishes. Every app degrades to a warning plus
+# a manual item when its download or checksum does not check out;
+# nothing unverified is ever installed.
+#
+# Proton VPN is not installed here anymore. Through version 1.8
+# this section carried its own Proton VPN install (Proton's repos
+# on Debian/Ubuntu and Fedora, a manual item on the RHEL family);
+# version 1.9 retires it, because the new-box workflow's Proton
+# step (new-box-prep) now installs Proton VPN on every
+# workstation before this script runs, work box or personal, and
+# the pins live in that one place. A standalone run of this
+# script no longer installs Proton VPN; run the workflow, or
+# follow the verified install guide, instead.
 # ---------------------------------------------------------------------------
 
 step "Vendor applications"
@@ -433,77 +443,6 @@ PYEOF
     fi
 }
 
-# --- Proton VPN ------------------------------------------------------
-# Official repository, per Proton's own install guides
-# (protonvpn.com/support/linux-vpn-debian-ubuntu and
-# protonvpn.com/support/official-linux-vpn-fedora). Debian/Ubuntu: a
-# small release package configures the repo; the SHA256 pinned below
-# is the checksum Proton publishes on that guide (verified 2026-10-18;
-# if Proton bumps the release package, the checksum check fails
-# closed and the manual item takes over). Fedora: a release RPM does
-# the same job; Proton publishes no checksum for it, and the repo it
-# configures is GPG-signed. RHEL-family distros are not officially
-# supported by Proton on the RPM side, so they get a manual item.
-PROTONVPN_DEB_VERSION="1.0.8"
-PROTONVPN_DEB_SHA256="0b14e71586b22e498eb20926c48c7b434b751149b1f2af9902ef1cfe6b03e180"
-PROTONVPN_RPM_VERSION="1.0.4-1"
-
-install_proton_vpn() {
-    if [[ "${FAMILY}" == "apt" ]]; then
-        if [[ ! -f /etc/apt/sources.list.d/protonvpn-stable.sources ]]; then
-            local deb="${VENDOR_DIR}/protonvpn-stable-release_${PROTONVPN_DEB_VERSION}_all.deb"
-            local deb_url="https://repo.protonvpn.com/debian/dists/stable/main/binary-all/protonvpn-stable-release_${PROTONVPN_DEB_VERSION}_all.deb"
-            if ! fetch "${deb_url}" "${deb}" || ! printf '%s  %s\n' "${PROTONVPN_DEB_SHA256}" "${deb}" | sha256sum --check - >/dev/null 2>&1; then
-                warn_item "proton vpn: release package download or checksum failed; repo not configured"
-                manual_item "Proton VPN: configure the repo by hand from https://protonvpn.com/support/linux-vpn-debian-ubuntu (the release package did not verify during this run; Proton may have published a newer one)."
-                return 0
-            fi
-            if ! dpkg -i "${deb}" >/dev/null 2>&1; then
-                warn_item "proton vpn: release package failed to install; repo not configured"
-                manual_item "Proton VPN: configure the repo by hand from https://protonvpn.com/support/linux-vpn-debian-ubuntu (the release package would not install during this run)."
-                return 0
-            fi
-            apt-get update >/dev/null 2>&1 || warn_item "apt-get update after adding the Proton VPN repo failed; the app install may fail"
-        fi
-        install_pkgs proton-vpn-gnome-desktop
-        if pkg_installed proton-vpn-gnome-desktop; then
-            done_item "proton vpn installed: proton-vpn-gnome-desktop $(pkg_version proton-vpn-gnome-desktop) (GUI app and CLI from Proton's repo)"
-            manual_item "Proton VPN: sign in with your Proton account on first launch."
-        else
-            warn_item "proton-vpn-gnome-desktop not installed"
-            manual_item "Proton VPN: install proton-vpn-gnome-desktop by hand once the repo is configured (it failed during this run)."
-        fi
-    elif [[ "${RHELISH}" == "1" ]]; then
-        manual_item "Proton VPN: Proton officially supports Fedora only on the RPM side, so there is no supported repo install for this distro. Use the WireGuard configs from your Proton account, or see https://protonvpn.com/support/linux-vpn-setup for the manual paths."
-    else
-        if ! pkg_installed protonvpn-stable-release; then
-            local fed_ver="${VERSION_ID%%.*}"
-            local rpmf="${VENDOR_DIR}/protonvpn-stable-release-${PROTONVPN_RPM_VERSION}.noarch.rpm"
-            local rpm_url="https://repo.protonvpn.com/fedora-${fed_ver}-stable/protonvpn-stable-release/protonvpn-stable-release-${PROTONVPN_RPM_VERSION}.noarch.rpm"
-            if ! fetch "${rpm_url}" "${rpmf}"; then
-                warn_item "proton vpn: Fedora release package download failed; repo not configured"
-                manual_item "Proton VPN: configure the repo by hand from https://protonvpn.com/support/official-linux-vpn-fedora (the release package download failed during this run)."
-                return 0
-            fi
-            if ! dnf install -y "${rpmf}" >/dev/null 2>&1; then
-                warn_item "proton vpn: Fedora release package failed to install; repo not configured"
-                manual_item "Proton VPN: configure the repo by hand from https://protonvpn.com/support/official-linux-vpn-fedora (the release package would not install during this run)."
-                return 0
-            fi
-            # Vendor's next step; exit 100 just means updates exist.
-            dnf check-update --refresh >/dev/null 2>&1 || true
-        fi
-        install_pkgs proton-vpn-gnome-desktop
-        if pkg_installed proton-vpn-gnome-desktop; then
-            done_item "proton vpn installed: proton-vpn-gnome-desktop $(pkg_version proton-vpn-gnome-desktop) (GUI app and CLI from Proton's repo)"
-            manual_item "Proton VPN: sign in with your Proton account on first launch."
-        else
-            warn_item "proton-vpn-gnome-desktop not installed"
-            manual_item "Proton VPN: install proton-vpn-gnome-desktop by hand once the repo is configured (it failed during this run)."
-        fi
-    fi
-}
-
 # --- TickTick --------------------------------------------------------
 # TickTick's download page offers DEB, RPM, and AppImage builds. The
 # page's download button calls a version-less endpoint on
@@ -548,7 +487,6 @@ install_ticktick() {
 }
 
 install_proton_pass
-install_proton_vpn
 install_ticktick
 
 rm -rf "${VENDOR_DIR}"

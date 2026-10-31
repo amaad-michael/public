@@ -8,12 +8,19 @@ The Ansible patching counterpart for Nobara lives in
 
 ## The single new-box workflow
 
-`new-box-prep-v1.2.sh` is the entry point for prepping any new
+`new-box-prep-v1.3.sh` is the entry point for prepping any new
 box or server. It sequences the repo's existing prep scripts
-(newest version of each wins) and adds nothing of its own:
+(newest version of each wins); its one step of its own is the
+Proton VPN install:
 
-- `new-box-prep-v1.2.sh laptop [--work|--personal] [--with-gpu] [--dry-run]`:
-  git setup, ssh setup, then the laptop role prep. A laptop run
+- `new-box-prep-v1.3.sh laptop [--work|--personal] [--with-gpu] [--dry-run]`:
+  git setup, ssh setup, the Proton VPN step, then the laptop
+  role prep. The Proton step installs the Proton VPN app from
+  Proton's own repo on the Fedora and Debian families (the
+  release package's checksum verified on the Debian side) and
+  records the manual WireGuard/OpenVPN route on the RHEL
+  family, where Proton publishes no app; signing in stays
+  manual. A laptop run
   carries a work or personal designation (`--work` or
   `--personal`, or the runner asks on the terminal), and the
   role prep runs only on a work box; a scripted run must pass
@@ -21,7 +28,7 @@ box or server. It sequences the repo's existing prep scripts
   `--with-gpu`
   appends the GPU tuning step, which skips cleanly on boxes
   without a discrete AMD GPU.
-- `new-box-prep-v1.2.sh server [--dry-run]` (as root on the
+- `new-box-prep-v1.3.sh server [--dry-run]` (as root on the
   target): the conservative secure-server-init, then git setup
   for the michael user, then it prints the controller-side
   follow-ons (the fleet password cycle, the node_exporter
@@ -75,7 +82,7 @@ environment ready. The checklist is the specification; the script
 produces every CLI-able part of it and prints the rest as a manual
 list.
 
-### linux-laptop-role-prep-checklist-v2.0.md
+### linux-laptop-role-prep-checklist-v2.1.md
 
 The checklist itself: base system, separation of personal and work
 lives, the security core, the Linux administrator kit, the coding
@@ -86,22 +93,22 @@ tested bare-metal restore are the load-bearing items. The setup
 script is embedded in section 11, byte-identical to the standalone
 file below.
 
-### laptop-role-prep-setup-v1.8.sh
+### laptop-role-prep-setup-v1.9.sh
 
-Run as root (`sudo ./laptop-role-prep-setup-v1.8.sh`). It creates
+Run as root (`sudo ./laptop-role-prep-setup-v1.9.sh`). It creates
 the per-role user accounts, installs the admin and instructor
 tooling, wires the per-role SSH and git separation, sets the screen
 lock, the host firewall, and persistent journaling, adds the fleet /etc/hosts entries, the cluster MOTD, and the fastfetch login setup, and prints whatever still needs hands,
 hardware, or a sign-in as a manual list. The toolchain installs on
-both package families (apt and dnf) and includes the three vendor
+both package families (apt and dnf) and includes the two vendor
 apps from the checklist: Proton Pass (no repository; the newest
 Stable release is taken from Proton's version feed and installed
-only after its SHA512 checksum verifies), Proton VPN (Proton's
-signed repository on the apt family and on Fedora; RHEL-family
-systems get the manual WireGuard path instead, since Proton
-supports Fedora only on the RPM side), and TickTick (the official
+only after its SHA512 checksum verifies) and TickTick (the official
 download endpoint, with an `rpm --replacefiles` fallback for the
-Proton Pass / TickTick build-id collision on the RPM side). Docker
+Proton Pass / TickTick build-id collision on the RPM side). Proton
+VPN is not one of them anymore: the new-box workflow's Proton step
+installs it on every workstation before the role prep runs.
+Docker
 on the Debian family, Podman on the RHEL family. Tested on Ubuntu
 24.04 and Rocky 10: both distro branches passed two consecutive
 live runs during the script's 2026-10-18 build, the second run
@@ -143,6 +150,12 @@ session, via /etc/profile.d/00-motd.sh ahead of fastfetch.sh for
 login shells and the same guarded block in /etc/bashrc for
 non-login terminals, once per session. The matching checklist
 is version 2.0.
+Version 1.9 retires the script's own Proton VPN install: the
+new-box workflow's Proton step (new-box-prep v1.3) now installs
+Proton VPN on every workstation ahead of the role prep, so the
+pins live in one place and personal boxes get it too. A
+standalone run of this script no longer installs Proton VPN.
+The matching checklist is version 2.1.
 
 ## update-gpu-box.sh
 

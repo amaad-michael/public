@@ -1,6 +1,6 @@
 # Linux Laptop Prep Checklist: Coding Instructor and Linux Administrator
 
-**Version:** 2.0
+**Version:** 2.1
 **Date:** 2026-10-30
 **Scope:** Role-agnostic. Built for a personal Linux laptop that has to walk into either a classroom or a server environment and be ready, with personal and work life kept cleanly apart.
 
@@ -50,7 +50,7 @@ The laptop is personal property doing professional work, so the walls matter mor
 
 - [ ] Proton Pass installed and signed in; work credentials go in their own vault
 - [ ] Proton Pass SSH agent set up, so SSH keys are served by the vault instead of sitting as loose files in ~/.ssh (handoff already written: proton-pass-ssh-handoff-v1.0.md)
-- [ ] Proton VPN installed and signed in (the setup script configures Proton's own repo on Debian/Ubuntu and Fedora; Proton supports Fedora only on the RPM side, so on RHEL-family systems use the WireGuard configs from your Proton account instead)
+- [ ] Proton VPN installed and signed in (the new-box workflow's Proton step installs the app from Proton's own repo on Debian/Ubuntu and Fedora before the role prep runs; on RHEL-family systems Proton publishes no app, so use the WireGuard configs from your Proton account instead; signing in on first launch is the remaining manual action)
 - [ ] Authenticator app ready for employer 2FA enrollment on day one; recovery codes for every account saved to both clouds, the same pattern as the Gumroad codes
 - [ ] SSH config hardened for work hosts: key-only auth, IdentitiesOnly set per host so the wrong key is never offered
 - [ ] sudo requires a password; no passwordless sudo carried over from homelab habits
@@ -128,7 +128,7 @@ The laptop is personal property doing professional work, so the walls matter mor
 
 ## 11. Automation: the setup script
 
-The state this checklist describes can be produced from the command line for every item that is CLI-able. The script below does it: it creates the michael and michael-work accounts, installs the admin and instructor tooling, wires the per-role SSH and git separation, sets the screen lock and the host firewall, and prints whatever still needs hands, hardware, or a sign-in as a manual list at the end. Version 1.7 of the script installs the GitHub CLI from section 6 (a per-distro package install; GitHub's own repo is the RHEL-family fallback, and the sign-in stays a manual step), sets persistent journaling and the fleet personalization from section 1, and installs the three vendor applications from sections 3 and 10, each by the vendor's own distribution method. Proton Pass has no repository: the script reads Proton's version feed, takes the newest Stable release at full rollout, verifies the package's SHA512 checksum against the feed, and only then installs it; the sign-in and the SSH agent setup stay manual (see the companion handoff). Proton VPN uses Proton's own repository: on Debian and Ubuntu the script verifies and installs Proton's signed release package, then installs the proton-vpn-gnome-desktop app from the repo, and on Fedora it follows the same pattern with Proton's Fedora release package. Proton officially supports Fedora only on the RPM side, so on RHEL-family systems the script installs no VPN package and prints the manual path instead (the WireGuard configs from your Proton account). TickTick has no repository either: the script downloads from TickTick's official version-less endpoint, the same one the download page uses. All three install through the distro package manager, so dependencies resolve instead of failing the way the vendors' bare dpkg -i and rpm -i instructions can. One vendor collision is handled on the RPM side: the Proton Pass and TickTick RPMs both ship the same /usr/lib/.build-id debug symlinks with different targets (both apps are built on the stock Electron binary), so rpm refuses the second install; the script pulls the package's dependencies with dnf and retries with rpm --replacefiles, which changes only which app the debug links point at. Run it on the laptop as root: `sudo ./laptop-role-prep-setup-v1.8.sh`. The same script ships as a standalone file, laptop-role-prep-setup-v1.8.sh, byte-identical to the block below; the standalone is the copy to take to the laptop.
+The state this checklist describes can be produced from the command line for every item that is CLI-able. The script below does it: it creates the michael and michael-work accounts, installs the admin and instructor tooling, wires the per-role SSH and git separation, sets the screen lock and the host firewall, and prints whatever still needs hands, hardware, or a sign-in as a manual list at the end. Version 1.7 of the script installs the GitHub CLI from section 6 (a per-distro package install; GitHub's own repo is the RHEL-family fallback, and the sign-in stays a manual step), sets persistent journaling and the fleet personalization from section 1, and installs the two vendor applications from sections 3 and 10, each by the vendor's own distribution method. Proton Pass has no repository: the script reads Proton's version feed, takes the newest Stable release at full rollout, verifies the package's SHA512 checksum against the feed, and only then installs it; the sign-in and the SSH agent setup stay manual (see the companion handoff). Proton VPN is not this script's job anymore: the new-box workflow's own Proton step installs it on every workstation before the role prep runs, from Proton's own repository on Debian/Ubuntu and Fedora, with the manual WireGuard path on RHEL-family systems, where Proton publishes no app; the sign-in stays manual (version 1.9 note below). TickTick has no repository either: the script downloads from TickTick's official version-less endpoint, the same one the download page uses. Both install through the distro package manager, so dependencies resolve instead of failing the way the vendors' bare dpkg -i and rpm -i instructions can. One vendor collision is handled on the RPM side: the Proton Pass and TickTick RPMs both ship the same /usr/lib/.build-id debug symlinks with different targets (both apps are built on the stock Electron binary), so rpm refuses the second install; the script pulls the package's dependencies with dnf and retries with rpm --replacefiles, which changes only which app the debug links point at. Run it on the laptop as root: `sudo ./laptop-role-prep-setup-v1.9.sh`. The same script ships as a standalone file, laptop-role-prep-setup-v1.9.sh, byte-identical to the block below; the standalone is the copy to take to the laptop.
 
 Version 1.4 (2026-10-30) fixes two defects the first real-metal run, on the travel laptop the same day, exposed. Distro detection no longer treats every dnf-family system whose ID is not exactly "fedora" as RHEL-family: an exact RHEL-family ID (rhel, rocky, almalinux, centos) decides first, because Rocky declares fedora in its ID_LIKE, and a derivative under its own ID is judged by its declared lineage, so Nobara (ID nobara, ID_LIKE fedora) is Fedora-family and gets zenmap, Python IDLE, flameshot, and virt-manager instead of the RHEL-family substitutions. And the account and group changes now check their results: account creation and the docker, libvirt, and optional sudo-group adds report a warning when they fail, never a done line. On a first run the package phase precedes account creation, so those group adds land on a re-run; the report now says so instead of claiming memberships that do not exist yet.
 
@@ -152,9 +152,13 @@ Version 1.8 (2026-10-30) makes the terminal greeting a written default. PAM prin
 
 The version 1.8 changes were verified on 2026-10-30 with an executed simulation of the shell startup chain: the personalization block was extracted from the shipped script and run against a fixture /etc (bound over /etc) to produce the payload files, and the payloads were then sourced in documented shell order with fastfetch stubbed. In login-shell order the output was the MOTD content followed by the fastfetch marker, with the session flag set; a second interactive shell in the same session printed no MOTD; a non-login interactive shell printed the MOTD once via the bashrc block; with SSH_CONNECTION set, neither script path printed anything and the flag stayed unset. The pre-change chain (fastfetch.sh alone, no greeting files) printed the fastfetch marker with no MOTD above it. The bashrc step run twice over the same fixture left exactly one greeting block. ShellCheck and the repository's pre-commit hooks pass on the changed files. A live run of the version 1.8 script itself on a fresh machine is the remaining proof and had not happened when this version was cut; the greeting behavior it writes is the hand-built config that was verified live on the laptop earlier the same day.
 
+Version 1.9 (2026-10-30) retires this script's own Proton VPN install and moves the job to the new-box workflow. Through version 1.8 the vendor section installed Proton VPN itself (Proton's repos on Debian/Ubuntu and Fedora, the release-package pins verified on 2026-10-18, and a manual item on the RHEL family), which meant only work boxes, the boxes this script runs on, ever got it from the tooling. The workflow's runner (new-box-prep v1.3) now carries a Proton step of its own, ahead of the role prep, so every workstation gets the install, work box or personal. The step reads the exact /etc/os-release ID: the Fedora family (fedora, nobara) takes the release RPM from Proton's per-version fedora stable tree (fedora-44-stable today; pin 1.0.5-1), reachable-checked first, and a tree without it reports the step as not completable for that version while the workflow continues; the Debian family (debian, ubuntu) takes the release deb (pin 1.0.10) only after its SHA256 matches the checksum Proton publishes on its guide, and a mismatch aborts the step and installs nothing; the RHEL family (rocky, rhel, centos, almalinux) gets no install at all, because Proton publishes no EL repository, and the workflow records the manual WireGuard/OpenVPN route as a follow-on. The tray packages follow the desktop (the GNOME set where gnome-shell is present, libappindicator-gtk3 alone otherwise), and no service commands are run, because the daemon package's own scriptlet enables its service. Signing in on first launch stays manual, and section 3's Proton VPN line now points at the workflow step. TickTick and Proton Pass are unchanged.
+
+The version 1.9 changes were verified on 2026-10-30 by executing the shipped step code, extracted verbatim from new-box-prep-v1.3.sh, in the three reference trees, with the runner's ordering proven in a stub harness inside the Rocky tree (the real runner sequencing stub siblings, its Proton step executing for real against that tree's own os-release). Fedora 44: in the tree the verified install guide was tested in, the step reported the app already in place and skipped; in a copy of that tree with the Proton packages removed, it ran the full path (the release package reachable-checked, downloaded, and installed; check-update; the app set installed at proton-vpn-gnome-desktop 0.11.0-1.fc44, with libappindicator-gtk3 since no gnome-shell is present; the daemon package's own scriptlet created the split-tunneling service's enable symlink), reported the sign-in as the remaining manual action, and a re-run reported the app in place. Ubuntu 24.04: the step downloaded the release deb, verified its SHA256 against Proton's published checksum, installed it with dpkg, updated, and installed proton-vpn-gnome-desktop 0.11.0 (gtk-app 4.18.8, cli 1.0.5); the negative control, the same run with the downloaded deb corrupted by one byte, aborted at the checksum with nothing installed; a download failure likewise stops the step with nothing installed; and a re-run reported the app in place. Rocky 10: the step printed the RHEL-family lines, recorded the manual WireGuard/OpenVPN follow-on in the workflow footer under both designations, installed nothing, and exited clean; on the server leg the step does not appear at all. Two sandbox adaptations are harness, not procedure: chrooted processes cannot open HTTPS tunnels through this sandbox's egress proxy, so the chroot runs spoke to a local relay process that pipes bytes to the proxy (TLS stayed end to end, and the checksums and repo signatures verified against the real servers), and the bare container trees first needed the stock state a workstation ships with (curl and gnupg installed, /tmp at 1777, the stock Ubuntu sources restored, a CA pointer for dnf). A live run of the full workflow on real hardware is the remaining proof and had not happened when this version was cut.
+
 ```bash
 #!/usr/bin/env bash
-# laptop-role-prep-setup-v1.8.sh
+# laptop-role-prep-setup-v1.9.sh
 #
 # Produce the desired state from "Linux Laptop Prep Checklist: Coding
 # Instructor and Linux Administrator" (linux-laptop-role-prep-checklist)
@@ -220,7 +224,7 @@ step() { printf '\n== %s ==\n' "$*"; }
 # ---------------------------------------------------------------------------
 
 if [[ ${EUID} -ne 0 ]]; then
-    say "This script must run as root: sudo ./laptop-role-prep-setup-v1.8.sh"
+    say "This script must run as root: sudo ./laptop-role-prep-setup-v1.9.sh"
     exit 1
 fi
 
@@ -452,12 +456,22 @@ fi
 
 # ---------------------------------------------------------------------------
 # Vendor applications (added at Michael's direction 2026-10-18):
-# TickTick, Proton VPN, Proton Pass. Distribution methods verified
-# against each vendor's own site and feeds on 2026-10-18; see the
-# per-app comments. Downloads land in a scratch directory that is
-# removed when the section finishes. Every app degrades to a warning
-# plus a manual item when its download or checksum does not check
-# out; nothing unverified is ever installed.
+# TickTick and Proton Pass. Distribution methods verified against
+# each vendor's own site and feeds on 2026-10-18; see the per-app
+# comments. Downloads land in a scratch directory that is removed
+# when the section finishes. Every app degrades to a warning plus
+# a manual item when its download or checksum does not check out;
+# nothing unverified is ever installed.
+#
+# Proton VPN is not installed here anymore. Through version 1.8
+# this section carried its own Proton VPN install (Proton's repos
+# on Debian/Ubuntu and Fedora, a manual item on the RHEL family);
+# version 1.9 retires it, because the new-box workflow's Proton
+# step (new-box-prep) now installs Proton VPN on every
+# workstation before this script runs, work box or personal, and
+# the pins live in that one place. A standalone run of this
+# script no longer installs Proton VPN; run the workflow, or
+# follow the verified install guide, instead.
 # ---------------------------------------------------------------------------
 
 step "Vendor applications"
@@ -588,77 +602,6 @@ PYEOF
     fi
 }
 
-# --- Proton VPN ------------------------------------------------------
-# Official repository, per Proton's own install guides
-# (protonvpn.com/support/linux-vpn-debian-ubuntu and
-# protonvpn.com/support/official-linux-vpn-fedora). Debian/Ubuntu: a
-# small release package configures the repo; the SHA256 pinned below
-# is the checksum Proton publishes on that guide (verified 2026-10-18;
-# if Proton bumps the release package, the checksum check fails
-# closed and the manual item takes over). Fedora: a release RPM does
-# the same job; Proton publishes no checksum for it, and the repo it
-# configures is GPG-signed. RHEL-family distros are not officially
-# supported by Proton on the RPM side, so they get a manual item.
-PROTONVPN_DEB_VERSION="1.0.8"
-PROTONVPN_DEB_SHA256="0b14e71586b22e498eb20926c48c7b434b751149b1f2af9902ef1cfe6b03e180"
-PROTONVPN_RPM_VERSION="1.0.4-1"
-
-install_proton_vpn() {
-    if [[ "${FAMILY}" == "apt" ]]; then
-        if [[ ! -f /etc/apt/sources.list.d/protonvpn-stable.sources ]]; then
-            local deb="${VENDOR_DIR}/protonvpn-stable-release_${PROTONVPN_DEB_VERSION}_all.deb"
-            local deb_url="https://repo.protonvpn.com/debian/dists/stable/main/binary-all/protonvpn-stable-release_${PROTONVPN_DEB_VERSION}_all.deb"
-            if ! fetch "${deb_url}" "${deb}" || ! printf '%s  %s\n' "${PROTONVPN_DEB_SHA256}" "${deb}" | sha256sum --check - >/dev/null 2>&1; then
-                warn_item "proton vpn: release package download or checksum failed; repo not configured"
-                manual_item "Proton VPN: configure the repo by hand from https://protonvpn.com/support/linux-vpn-debian-ubuntu (the release package did not verify during this run; Proton may have published a newer one)."
-                return 0
-            fi
-            if ! dpkg -i "${deb}" >/dev/null 2>&1; then
-                warn_item "proton vpn: release package failed to install; repo not configured"
-                manual_item "Proton VPN: configure the repo by hand from https://protonvpn.com/support/linux-vpn-debian-ubuntu (the release package would not install during this run)."
-                return 0
-            fi
-            apt-get update >/dev/null 2>&1 || warn_item "apt-get update after adding the Proton VPN repo failed; the app install may fail"
-        fi
-        install_pkgs proton-vpn-gnome-desktop
-        if pkg_installed proton-vpn-gnome-desktop; then
-            done_item "proton vpn installed: proton-vpn-gnome-desktop $(pkg_version proton-vpn-gnome-desktop) (GUI app and CLI from Proton's repo)"
-            manual_item "Proton VPN: sign in with your Proton account on first launch."
-        else
-            warn_item "proton-vpn-gnome-desktop not installed"
-            manual_item "Proton VPN: install proton-vpn-gnome-desktop by hand once the repo is configured (it failed during this run)."
-        fi
-    elif [[ "${RHELISH}" == "1" ]]; then
-        manual_item "Proton VPN: Proton officially supports Fedora only on the RPM side, so there is no supported repo install for this distro. Use the WireGuard configs from your Proton account, or see https://protonvpn.com/support/linux-vpn-setup for the manual paths."
-    else
-        if ! pkg_installed protonvpn-stable-release; then
-            local fed_ver="${VERSION_ID%%.*}"
-            local rpmf="${VENDOR_DIR}/protonvpn-stable-release-${PROTONVPN_RPM_VERSION}.noarch.rpm"
-            local rpm_url="https://repo.protonvpn.com/fedora-${fed_ver}-stable/protonvpn-stable-release/protonvpn-stable-release-${PROTONVPN_RPM_VERSION}.noarch.rpm"
-            if ! fetch "${rpm_url}" "${rpmf}"; then
-                warn_item "proton vpn: Fedora release package download failed; repo not configured"
-                manual_item "Proton VPN: configure the repo by hand from https://protonvpn.com/support/official-linux-vpn-fedora (the release package download failed during this run)."
-                return 0
-            fi
-            if ! dnf install -y "${rpmf}" >/dev/null 2>&1; then
-                warn_item "proton vpn: Fedora release package failed to install; repo not configured"
-                manual_item "Proton VPN: configure the repo by hand from https://protonvpn.com/support/official-linux-vpn-fedora (the release package would not install during this run)."
-                return 0
-            fi
-            # Vendor's next step; exit 100 just means updates exist.
-            dnf check-update --refresh >/dev/null 2>&1 || true
-        fi
-        install_pkgs proton-vpn-gnome-desktop
-        if pkg_installed proton-vpn-gnome-desktop; then
-            done_item "proton vpn installed: proton-vpn-gnome-desktop $(pkg_version proton-vpn-gnome-desktop) (GUI app and CLI from Proton's repo)"
-            manual_item "Proton VPN: sign in with your Proton account on first launch."
-        else
-            warn_item "proton-vpn-gnome-desktop not installed"
-            manual_item "Proton VPN: install proton-vpn-gnome-desktop by hand once the repo is configured (it failed during this run)."
-        fi
-    fi
-}
-
 # --- TickTick --------------------------------------------------------
 # TickTick's download page offers DEB, RPM, and AppImage builds. The
 # page's download button calls a version-less endpoint on
@@ -703,7 +646,6 @@ install_ticktick() {
 }
 
 install_proton_pass
-install_proton_vpn
 install_ticktick
 
 rm -rf "${VENDOR_DIR}"
@@ -1173,4 +1115,4 @@ say ""
 say "Re-running this script is safe; it converges to the same state."
 ```
 
-*Companion records: proton-pass-ssh-handoff-v1.0.md (open item [ee7f5b] on the action board), ansible-hosts-inventory (homelab reference), the public repo at github.com/amaad-michael/public (toolkit and playbooks source); laptop-role-prep-setup-v1.8.sh, the standalone form of the section 11 script (byte-identical; the two files travel together).*
+*Companion records: proton-pass-ssh-handoff-v1.0.md (open item [ee7f5b] on the action board), ansible-hosts-inventory (homelab reference), the public repo at github.com/amaad-michael/public (toolkit and playbooks source); laptop-role-prep-setup-v1.9.sh, the standalone form of the section 11 script (byte-identical; the two files travel together).*
