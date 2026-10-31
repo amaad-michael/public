@@ -173,6 +173,26 @@ family because neither is in the distro repos and this script
 adds no vendor repos), and it enables the Cockpit socket where
 Cockpit is installed. The matching checklist is version 2.2.
 
+### role-prep-preflight.snippet.sh
+
+An optional pre-flight settings review for the setup script
+above: a sourceable snippet (not a standalone script) defining
+one function, `role_prep_preflight`, which shows the
+Configuration block's nine settings (the two user names, the
+four git identity values, the INSTALL_VIRT and GRANT_SUDO_WORK
+toggles, and the public repo URL) on a terminal panel and lets
+the operator edit or toggle them before the run starts, writing
+the reviewed values back into the same variables the script
+reads. It changes nothing by itself and the setup script never
+calls it: the maintainer sources this file from the setup
+script, or pastes the marked block into a copy of it, after the
+Configuration block, and calls the function there. The
+snippet's header carries the exact embed instructions and the
+return contract (0 proceeds; 1 is a cancel with the settings
+restored; 130 is an interrupt, also restored, and the calling
+shell is never killed). With no terminal the function returns
+at once and the run proceeds with the settings as configured.
+
 ## update-gpu-box.sh
 
 Recurring update pass for the Nobara GPU box. Run as root: it writes
