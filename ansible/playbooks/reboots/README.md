@@ -30,3 +30,12 @@ confirm the return, within the same 600 second timeout);
 `./scripts/fleet-reboot.sh --simple --limit pi0,pi2,pi3,pi4`. There
 is no Docker form: rebooting a host is an operation on the host
 itself.
+
+Run without `--limit` on a terminal, the bash form opens a
+host-selection panel over the `[pi_all]` hosts (checkboxes, all
+starting checked) to build the host set, then requires a typed
+confirmation (the word `reboot`) before the first host is
+touched; the panel only selects, and declining the confirmation
+reboots nothing. Off a terminal the bare form keeps its
+long-standing meaning: all of `pi_all`, no panel, no
+confirmation.
