@@ -1,0 +1,154 @@
+---
+# node_exporter fleet rollout — pi0..pi4 (mixed Debian-family + Rocky, mixed arm64/armv7)
+# Strategy: static binary + hardened systemd unit; identical everywhere.
+# OS branches ONLY for: firewall (firewalld vs ufw) + SELinux relabel (Rocky).
+#
+#   ansible-playbook -i inventory.ini playbook.yml
+#
+- name: Deploy node_exporter to fleet
+  hosts: fleet
+  become: true
+
+  vars:
+    arch_map:
+      aarch64: arm64
+      armv7l: armv7
+      armv6l: armv6
+    ne_arch: "{{ arch_map[ansible_architecture] | default('UNSUPPORTED') }}"
+    ne_ver: "{{ node_exporter_version }}"
+    ne_sha: "{{ node_exporter_checksums[ne_arch] | default('') }}"
+    ne_tarball: "node_exporter-{{ ne_ver }}.linux-{{ ne_arch }}.tar.gz"
+    ne_url: "https://github.com/prometheus/node_exporter/releases/download/v{{ ne_ver }}/{{ ne_tarball }}"
+
+  tasks:
+    - name: "GATE: version pinned, arch supported, checksum present for this node's arch"
+      ansible.builtin.assert:
+        that:
+          - ne_ver | length > 0
+          - ne_arch != 'UNSUPPORTED'
+          - ne_sha | length > 0
+        fail_msg: >-
+          Refusing to proceed on {{ inventory_hostname }}
+          (arch={{ ansible_architecture }} -> {{ ne_arch }}).
+          Set node_exporter_version and the matching checksum in group_vars/all.yml.
+
+    - name: System user
+      ansible.builtin.user:
+        name: nodeexp
+        system: true
+        create_home: false
+        shell: /usr/sbin/nologin
+
+    - name: Fetch + checksum-verify release tarball
+      ansible.builtin.get_url:
+        url: "{{ ne_url }}"
+        dest: "/tmp/{{ ne_tarball }}"
+        checksum: "sha256:{{ ne_sha }}"
+        mode: "0644"
+
+    - name: Unpack
+      ansible.builtin.unarchive:
+        src: "/tmp/{{ ne_tarball }}"
+        dest: /tmp
+        remote_src: true
+
+    - name: Install binary
+      ansible.builtin.copy:
+        src: "/tmp/node_exporter-{{ ne_ver }}.linux-{{ ne_arch }}/node_exporter"
+        dest: /usr/local/bin/node_exporter
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0755"
+      notify: restart node_exporter
+
+    - name: SELinux relabel (Rocky/RHEL family, enforcing or not — harmless if permissive)
+      ansible.builtin.command: restorecon -v /usr/local/bin/node_exporter
+      when: ansible_os_family == "RedHat"
+      register: restorecon_out
+      changed_when: "'relabeled' in restorecon_out.stdout"
+
+    - name: Unit file
+      ansible.builtin.template:
+        src: templates/node_exporter.service.j2
+        dest: /etc/systemd/system/node_exporter.service
+        mode: "0644"
+      notify: restart node_exporter
+
+    - name: Enable + start
+      ansible.builtin.systemd:
+        name: node_exporter
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    # --- Firewall: 9100 open ONLY to neo1 ---
+    - name: "firewalld rich rule (Rocky): 9100 from {{ prometheus_host }} only"
+      ansible.posix.firewalld:
+        rich_rule: 'rule family=ipv4 source address={{ prometheus_host }}/32 port port=9100 protocol=tcp accept'
+        permanent: true
+        immediate: true
+        state: enabled
+      when: ansible_os_family == "RedHat"
+
+    - name: Check ufw presence (Debian family)
+      ansible.builtin.command: which ufw
+      register: ufw_bin
+      failed_when: false
+      changed_when: false
+      when: ansible_os_family == "Debian"
+
+    - name: "ufw rule (Debian): 9100 from {{ prometheus_host }} only"
+      community.general.ufw:
+        rule: allow
+        from_ip: "{{ prometheus_host }}"
+        port: "9100"
+        proto: tcp
+        comment: "node_exporter <- neo1"
+      when:
+        - ansible_os_family == "Debian"
+        - ufw_bin.rc == 0
+
+    - name: "WARN if Debian node has no ufw (9100 unfiltered by host firewall)"
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: no ufw found — 9100 relies on network controls only."
+      when:
+        - ansible_os_family == "Debian"
+        - ufw_bin.rc != 0
+
+    # --- Verify on the node itself ---
+    - name: Metrics endpoint answers locally
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:9100/metrics"
+        return_content: false
+        status_code: 200
+      retries: 3
+      delay: 3
+
+    - name: Cleanup
+      ansible.builtin.file:
+        path: "/tmp/{{ item }}"
+        state: absent
+      loop:
+        - "{{ ne_tarball }}"
+        - "node_exporter-{{ ne_ver }}.linux-{{ ne_arch }}"
+
+  handlers:
+    - name: restart node_exporter
+      ansible.builtin.systemd:
+        name: node_exporter
+        state: restarted
+        daemon_reload: true
+
+- name: Post-rollout — verify reachability FROM neo1 (the scrape path that matters)
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Note
+      ansible.builtin.debug:
+        msg: >-
+          Run from neo1 or workstation:
+          for ip in 100 101 102 103 104; do
+            curl -sf -o /dev/null http://192.168.0.$ip:9100/metrics && echo "OK 192.168.0.$ip" || echo "FAIL 192.168.0.$ip";
+          done
+          Then confirm all node targets are live in neo1's prometheus.yml (they ship enabled).
