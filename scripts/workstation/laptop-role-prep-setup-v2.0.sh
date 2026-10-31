@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# laptop-role-prep-setup-v1.9.sh
+# laptop-role-prep-setup-v2.0.sh
 #
 # Produce the desired state from "Linux Laptop Prep Checklist: Coding
 # Instructor and Linux Administrator" (linux-laptop-role-prep-checklist)
@@ -38,9 +38,11 @@ WORK_GIT_EMAIL=""
 
 # 1 also adds the work user to the libvirt group when virt is installed.
 INSTALL_VIRT=1
-# 1 would add the work user to the sudo/wheel group. Default 0: the
-# checklist requires only that sudo demands a password; it does not grant
-# either new account admin rights. Your existing account stays the admin.
+# 1 would add the work user to the sudo/wheel group. Default 0: neither
+# new account gets admin rights unless asked; your existing account
+# stays the admin. Sudo posture itself is checklist 3: your users are
+# NOPASSWD by design (your ruling, deliberate, for convenience), and
+# this script neither adds nor removes sudoers entries.
 GRANT_SUDO_WORK=0
 
 PUBLIC_REPO_URL="https://github.com/amaad-michael/public.git"
@@ -65,7 +67,7 @@ step() { printf '\n== %s ==\n' "$*"; }
 # ---------------------------------------------------------------------------
 
 if [[ ${EUID} -ne 0 ]]; then
-    say "This script must run as root: sudo ./laptop-role-prep-setup-v1.9.sh"
+    say "This script must run as root: sudo ./laptop-role-prep-setup-v2.0.sh"
     exit 1
 fi
 
@@ -256,6 +258,48 @@ if [[ "${FAMILY}" == "apt" ]] && command -v docker >/dev/null 2>&1; then
     fi
     # The docker group add for the work user runs in the Users
     # section, after the account exists; see there.
+fi
+
+# Desktop applications (Michael's software list, scoped 2026-10-22,
+# completed in v2.0): Firefox, Tilix, htop, GtkHash, PyChess,
+# FileZilla, Transmission (the GTK client), Remmina, rkhunter, Lynis,
+# Cockpit, and luckyBackup. Package names verified 2026-10-30
+# against the Fedora 44, Rocky 10 + EPEL 10, and Ubuntu 24.04
+# indexes: the full set exists on Fedora and on Ubuntu under the
+# names below (Ubuntu's firefox package is the snap-transitional
+# one; installing it is how Ubuntu ships Firefox). On the RHEL
+# family gtkhash, pychess, and luckybackup are not packaged (the
+# same Rocky 10 + EPEL 10 indexes that have no IDLE or flameshot),
+# so that family gets manual items for those three instead of the
+# same failed install on every run. Remmina is packaged for the
+# RHEL family but cannot install today (checked 2026-10-30): its
+# EPEL 10 dependency libappindicator-gtk3 requires the
+# libdbusmenu libraries, and no RHEL-family repo provides them
+# (verified against Rocky 10 BaseOS/AppStream and the live EPEL
+# 10 index, not just the local mirror), so that family gets a
+# manual item for remmina too, until EPEL fixes the chain. Brave
+# and LibreFox are in no stock repo on any family; this script
+# adds no vendor repos and downloads no vendor installers, so
+# both are manual items below.
+if [[ "${FAMILY}" == "dnf" && "${RHELISH}" == "1" ]]; then
+    install_pkgs firefox tilix htop filezilla transmission-gtk rkhunter lynis cockpit
+    done_item "desktop applications installed: firefox, tilix, htop, filezilla, transmission (GTK), rkhunter, lynis, cockpit"
+    manual_item "Desktop applications: gtkhash is not packaged for the RHEL family (Rocky 10 + EPEL 10 indexes, checked 2026-10-30); install it by hand if you want it."
+    manual_item "Desktop applications: pychess is not packaged for the RHEL family (Rocky 10 + EPEL 10 indexes, checked 2026-10-30); install it by hand if you want it."
+    manual_item "Desktop applications: luckyBackup is not packaged for the RHEL family (Rocky 10 + EPEL 10 indexes, checked 2026-10-30); install it by hand if you want it."
+    manual_item "Desktop applications: remmina is packaged in EPEL 10 but cannot install today (checked 2026-10-30): its dependency libappindicator-gtk3 requires the libdbusmenu libraries, which no RHEL-family repo provides; install it by hand if a future EPEL update fixes the chain."
+else
+    install_pkgs firefox tilix htop gtkhash pychess filezilla transmission-gtk remmina rkhunter lynis cockpit luckybackup
+    done_item "desktop applications installed: firefox, tilix, htop, gtkhash, pychess, filezilla, transmission (GTK), remmina, rkhunter, lynis, cockpit, luckybackup"
+fi
+manual_item "Brave browser: not in the distro repos (Fedora 44, Rocky 10 + EPEL 10, and Ubuntu 24.04 indexes checked 2026-10-30), and this script adds no vendor repos; install it from brave.com if you want it."
+manual_item "LibreFox (LibreWolf): not in the distro repos (Fedora 44, Rocky 10 + EPEL 10, and Ubuntu 24.04 indexes checked 2026-10-30), and this script adds no vendor repos; install it from librewolf.net if you want it."
+if systemctl list-unit-files 2>/dev/null | grep '^cockpit\.socket' >/dev/null; then
+    if systemctl enable --now cockpit.socket >/dev/null 2>&1; then
+        done_item "cockpit web console enabled (cockpit.socket)"
+    else
+        warn_item "cockpit present but its socket could not be enabled"
+    fi
 fi
 
 # Container runtime (section 4): Podman on both families.
@@ -768,21 +812,24 @@ if [[ "${INSTALL_VIRT}" == "1" ]]; then
     fi
 fi
 
-# Sudo posture (checklist 3): sudo must require a password. New accounts
-# get no sudoers entries from this script; membership only on request.
+# Sudo posture (checklist 3): your users are NOPASSWD by design
+# (Michael's ruling: deliberate, for convenience). New accounts get
+# no sudoers entries from this script; membership only on request.
+# The report states the posture it finds as fact, never as a
+# defect: NOPASSWD present is the intended configuration.
 SUDO_GROUP="wheel"
 [[ "${FAMILY}" == "apt" ]] && SUDO_GROUP="sudo"
 if [[ "${GRANT_SUDO_WORK}" == "1" ]]; then
     if usermod -aG "${SUDO_GROUP}" "${WORK_USER}"; then
-        done_item "${WORK_USER} added to ${SUDO_GROUP} (GRANT_SUDO_WORK=1); sudo still requires a password (checklist 3)"
+        done_item "${WORK_USER} added to ${SUDO_GROUP} (GRANT_SUDO_WORK=1) (checklist 3)"
     else
         warn_item "${WORK_USER} could not be added to ${SUDO_GROUP} (checklist 3)"
     fi
 fi
 if grep -Rqs 'NOPASSWD' /etc/sudoers /etc/sudoers.d 2>/dev/null; then
-    warn_item "a NOPASSWD entry exists in sudoers; the checklist says sudo requires a password - review /etc/sudoers.d"
+    done_item "sudo posture: NOPASSWD entry present in sudoers, the intended configuration (your users are NOPASSWD by design) (checklist 3)"
 else
-    done_item "sudo posture verified: no NOPASSWD entries (checklist 3)"
+    done_item "sudo posture: no NOPASSWD entry found in sudoers on this box; your standing design is NOPASSWD for your users, so this box does not match it yet (checklist 3)"
 fi
 
 # Per-user environment. Runs as the user so file ownership is right.
