@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Version: 1.0 (2026-10-22)
+# Version: 1.1 (2026-10-31)
 # neo1-observability-stack.sh - bring the neo1 native observability stack up or down
 #
 # Controls the bare-metal systemd units installed by the neo1 observability
@@ -29,6 +29,8 @@
 #   neo1-observability-stack.sh down [--dry-run]
 #   neo1-observability-stack.sh restart [--with-grafana] [--dry-run]
 #   neo1-observability-stack.sh status
+#   neo1-observability-stack.sh          (no arguments, on a terminal:
+#                                          the interactive panel below)
 #
 # Exit codes: 0 = stack in the requested state, 1 = a unit did not reach it
 # (or status found a core unit down), 2 = usage error.
@@ -201,8 +203,184 @@ do_status() {
   echo "Core stack is fully active (Grafana is on-demand)."
 }
 
+# --- Interactive panel (begin) ---------------------------------------
+# With no arguments on a terminal, the script opens a panel instead
+# of printing usage: the live status table on top (the status
+# subcommand's own output, captured verbatim) and an action menu
+# below it. The panel is an added entry path only. Any argument,
+# no terminal, or TERM=dumb takes the exact paths the script has
+# always taken, byte for byte, and the status subcommand's exit
+# code contract is untouched. Pure bash and ANSI in the new-box
+# runner's panel conventions: no external TUI tool, an ASCII
+# frame, a reverse-video cursor row, the cursor hidden while the
+# panel is drawn and restored on every exit from it, and a trap
+# on INT/TERM that restores the cursor and exits 130. The actions
+# call the same do_up/do_down functions the subcommands call,
+# with the same flag defaults: Up is do_up without Grafana, Up
+# with Grafana is do_up with it, Down is do_down, and Restart is
+# do_down then do_up (stopping there if the down half fails,
+# exactly as the restart subcommand does under set -e). Refresh
+# re-reads the status table; after an action its output stays on
+# screen until a keypress, then the panel redraws with fresh
+# status. Quit (or q) erases the panel and exits 0.
+
+PANEL_ITEMS=("Up" "Up with Grafana" "Down" "Restart" "Refresh" "Quit")
+PANEL_ROWS=()
+PANEL_CURSOR=0
+PANEL_FIRST=1
+PANEL_FRAME_LINES=0
+
+panel_status_rows() {
+  mapfile -t PANEL_ROWS < <(do_status)
+}
+
+panel_erase() {
+  local i
+  printf '\033[%dA' "$PANEL_FRAME_LINES"
+  for ((i = 0; i < PANEL_FRAME_LINES; i++)); do
+    printf '\033[2K'
+    if [[ $i -lt $((PANEL_FRAME_LINES - 1)) ]]; then
+      printf '\n'
+    fi
+  done
+  printf '\033[%dA' $((PANEL_FRAME_LINES - 1))
+  printf '\033[?25h'
+}
+
+panel_draw() {
+  local -a frame=()
+  local line="" dashes="" border=""
+  local width=44 len i mark=""
+  for line in "${PANEL_ROWS[@]}"; do
+    len=${#line}
+    if [[ $len -gt $width ]]; then
+      width=$len
+    fi
+  done
+  printf -v dashes '%*s' $((width + 2)) ''
+  dashes="${dashes// /-}"
+  border="+${dashes}+"
+  frame+=("$border")
+  printf -v line '| %-*s |' "$width" "neo1 observability stack"
+  frame+=("$line")
+  frame+=("$border")
+  for line in "${PANEL_ROWS[@]}"; do
+    printf -v line '| %-*s |' "$width" "$line"
+    frame+=("$line")
+  done
+  frame+=("$border")
+  for i in "${!PANEL_ITEMS[@]}"; do
+    mark="  "
+    if [[ $i -eq $PANEL_CURSOR ]]; then
+      mark="> "
+    fi
+    printf -v line '| %-*s |' "$width" "${mark}${PANEL_ITEMS[$i]}"
+    frame+=("$line")
+  done
+  frame+=("$border")
+  printf -v line '| %-*s |' "$width" "arrows or j/k move, enter selects, q quits"
+  frame+=("$line")
+  frame+=("$border")
+  PANEL_FRAME_LINES=${#frame[@]}
+  if [[ $PANEL_FIRST -eq 1 ]]; then
+    PANEL_FIRST=0
+  else
+    printf '\033[%dA' "${#frame[@]}"
+  fi
+  for i in "${!frame[@]}"; do
+    if [[ $i -eq $((PANEL_CURSOR + 4 + ${#PANEL_ROWS[@]})) ]]; then
+      printf '\r\033[7m%s\033[0m\n' "${frame[$i]}"
+    else
+      printf '\r%s\n' "${frame[$i]}"
+    fi
+  done
+}
+
+panel_run_action() {
+  local choice=$1 rc=0
+  panel_erase
+  trap - INT TERM
+  WITH_GRAFANA=0
+  case $choice in
+    0)
+      do_up || rc=$?
+      ;;
+    1)
+      WITH_GRAFANA=1
+      do_up || rc=$?
+      ;;
+    2)
+      do_down || rc=$?
+      ;;
+    3)
+      do_down || rc=$?
+      if [[ $rc -eq 0 ]]; then
+        do_up || rc=$?
+      fi
+      ;;
+  esac
+  WITH_GRAFANA=0
+  if [[ $rc -ne 0 ]]; then
+    printf 'Action exited with status %d.\n' "$rc"
+  fi
+  printf 'Press Enter to return to the panel.'
+  IFS= read -rsn1 _ || true
+  printf '\n'
+}
+
+panel() {
+  local key="" rest=""
+  PANEL_CURSOR=0
+  PANEL_FIRST=1
+  panel_status_rows
+  printf '\033[?25l'
+  trap 'printf "\033[?25h" >&2; exit 130' INT TERM
+  while true; do
+    panel_draw
+    key=""
+    rest=""
+    IFS= read -rsn1 key || key=""
+    if [[ $key == $'\033' ]]; then
+      IFS= read -rsn2 -t 0.1 rest || rest=""
+      key="${key}${rest}"
+    fi
+    case $key in
+      $'\033[A' | k)
+        PANEL_CURSOR=$(((PANEL_CURSOR + 5) % 6))
+        ;;
+      $'\033[B' | j)
+        PANEL_CURSOR=$(((PANEL_CURSOR + 1) % 6))
+        ;;
+      q)
+        break
+        ;;
+      '' | $'\n' | $'\r')
+        if [[ $PANEL_CURSOR -eq 5 ]]; then
+          break
+        elif [[ $PANEL_CURSOR -eq 4 ]]; then
+          panel_status_rows
+        else
+          panel_run_action "$PANEL_CURSOR"
+          panel_status_rows
+          PANEL_FIRST=1
+          printf '\033[?25l'
+          trap 'printf "\033[?25h" >&2; exit 130' INT TERM
+        fi
+        ;;
+    esac
+  done
+  panel_erase
+  trap - INT TERM
+  return 0
+}
+# --- Interactive panel (end) -----------------------------------------
+
 main() {
   if [[ $# -lt 1 ]]; then
+    if [[ -t 0 && -t 1 && ${TERM:-} != "dumb" ]]; then
+      panel
+      return
+    fi
     usage >&2
     return 2
   fi
