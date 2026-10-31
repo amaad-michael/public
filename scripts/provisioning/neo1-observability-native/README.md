@@ -71,6 +71,12 @@ only with `--with-grafana` and is always stopped by `down`).
 It starts and stops units only — it never enables or disables
 them, so boot behaviour stays exactly as install.sh left it.
 `--dry-run` prints the systemctl commands without running them.
+Run with no arguments on a terminal, the script opens an
+interactive panel instead: the live status table on top and an
+action menu (Up, Up with Grafana, Down, Restart, Refresh, Quit)
+below it, driving the same code paths as the subcommands. With
+no terminal (or TERM=dumb) the no-argument form prints usage
+and exits 2, as before.
 
 ## 📌 Open items (tracked, deliberate)
 
