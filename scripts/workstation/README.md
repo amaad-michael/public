@@ -70,7 +70,7 @@ environment ready. The checklist is the specification; the script
 produces every CLI-able part of it and prints the rest as a manual
 list.
 
-### linux-laptop-role-prep-checklist-v1.9.md
+### linux-laptop-role-prep-checklist-v2.0.md
 
 The checklist itself: base system, separation of personal and work
 lives, the security core, the Linux administrator kit, the coding
@@ -81,9 +81,9 @@ tested bare-metal restore are the load-bearing items. The setup
 script is embedded in section 11, byte-identical to the standalone
 file below.
 
-### laptop-role-prep-setup-v1.7.sh
+### laptop-role-prep-setup-v1.8.sh
 
-Run as root (`sudo ./laptop-role-prep-setup-v1.7.sh`). It creates
+Run as root (`sudo ./laptop-role-prep-setup-v1.8.sh`). It creates
 the per-role user accounts, installs the admin and instructor
 tooling, wires the per-role SSH and git separation, sets the screen
 lock, the host firewall, and persistent journaling, adds the fleet /etc/hosts entries, the cluster MOTD, and the fastfetch login setup, and prints whatever still needs hands,
@@ -132,6 +132,12 @@ the sudo-group add, under their original gates, and a failure is
 reported as the real failure it is. The repository-clone warning
 no longer guesses at a cause; it states the failure and lists
 the usual causes instead.
+Version 1.8 makes the terminal greeting the default config: the
+cluster MOTD prints above fastfetch in the first terminal of a
+session, via /etc/profile.d/00-motd.sh ahead of fastfetch.sh for
+login shells and the same guarded block in /etc/bashrc for
+non-login terminals, once per session. The matching checklist
+is version 2.0.
 
 ## update-gpu-box.sh
 

@@ -24,3 +24,34 @@
       ansible.builtin.file:
         path: /etc/profile.d/nfetch.sh
         state: absent
+
+    - name: Create /etc/profile.d/00-motd.sh script (MOTD above fastfetch, once per session)
+      ansible.builtin.copy:
+        content: |
+          if [[ $- == *i* && -r /etc/motd && -z "${SSH_CONNECTION:-}" && ! -e "${XDG_RUNTIME_DIR}/.motd-shown" ]]; then
+            cat /etc/motd
+            touch "${XDG_RUNTIME_DIR}/.motd-shown"
+          fi
+        dest: /etc/profile.d/00-motd.sh
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Check whether /etc/bashrc already carries the MOTD greeting block
+      ansible.builtin.command: "grep -q '\\.motd-shown' /etc/bashrc"
+      register: motd_greeting_check
+      changed_when: false
+      failed_when: false
+
+    - name: Append the MOTD greeting block to /etc/bashrc for non-login terminals
+      ansible.builtin.shell: |
+        cat >> /etc/bashrc <<'MOTD_GREETING_EOF'
+
+        if [[ $- == *i* && -r /etc/motd && -z "${SSH_CONNECTION:-}" && ! -e "${XDG_RUNTIME_DIR}/.motd-shown" ]]; then
+          cat /etc/motd
+          touch "${XDG_RUNTIME_DIR}/.motd-shown"
+        fi
+        MOTD_GREETING_EOF
+      args:
+        executable: /bin/bash
+      when: motd_greeting_check.rc != 0
