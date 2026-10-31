@@ -19,10 +19,11 @@ pre-publication repo scanner.
 
 ## secure-server-init family
 
-Seven scripts across three variants, that take a fresh
+Eight scripts across three variants, that take a fresh
 Debian-family or RHEL-family install to a hardened baseline. The
-conservative variant is the workflow default and runs to v1.2; the
-standard and legacy variants stop at v1.1. All are run as root on
+conservative variant is the workflow default; the standard and
+conservative variants run to v1.2 and the legacy variant stops
+at v1.1. All are run as root on
 the target, right after a clean install.
 
 ### Pre-flight (read before running anything)
