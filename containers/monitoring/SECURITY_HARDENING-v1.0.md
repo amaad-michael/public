@@ -261,7 +261,7 @@ All images pinned to specific versions (NOT `:latest`):
 - prom/prometheus:v2.45.0
 - grafana/grafana:10.2.0
 - prom/alertmanager:v0.26.0
-- traefik:v2.10.4
+- traefik:v3.7.16
 - binwiederhier/ntfy:v2.4.0
 - smallstep/step-ca:0.24.2
 - headscale/headscale:0.22.3

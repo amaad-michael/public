@@ -311,7 +311,7 @@ services:
 
   # Traefik - reverse proxy & ingress
   traefik:
-    image: traefik:v2.10.4
+    image: traefik:v3.7.16
     container_name: standby-traefik
     networks:
       - standby-net
