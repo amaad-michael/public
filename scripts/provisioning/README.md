@@ -245,4 +245,9 @@ the same values, checks, and defaults as the playbooks. Every
 subcommand accepts `--dry-run`; the `api-check` subcommand validates
 an API token against the Proxmox REST API. There is no Docker form —
 Proxmox VE is a bare-metal hypervisor. The full mapping and run
-order are in the Proxmox playbooks' README.
+order are in the Proxmox playbooks' README. Run `prep` or `all` on
+a terminal with no setting flags and the script first opens a
+pre-flight panel listing the prep settings (NFS storage, server
+and export, the firewall toggle, the management CIDR, the notify
+email, and a dry-run toggle) to confirm or adjust before anything
+runs; any setting flag, or no terminal, runs directly as before.
