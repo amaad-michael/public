@@ -20,6 +20,15 @@ set -euo pipefail
 
 JENKINS_PORT=8080
 AGENT_PORT=50000
+JENKINS_REPO_URL="${JENKINS_REPO_URL:-https://pkg.jenkins.io/redhat-stable/jenkins.repo}"
+JENKINS_KEY_URL="${JENKINS_KEY_URL:-https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key}"
+# SHA-256 pins for the two Jenkins downloads, captured from
+# pkg.jenkins.io on 2026-10-28 (the key's fingerprint is
+# 6366 7EE7 4BBA 1F0A 08A6 9872 5BA3 1D57 EF59 75CA, Jenkins
+# Project). A mismatch aborts before either file is used. If
+# Jenkins rotates either file, refresh the pins deliberately.
+JENKINS_REPO_SHA256="e0c5dfddcb06856e319b2e4c78a6997a2edf7a8bf87554075105e35bc49e6859"
+JENKINS_KEY_SHA256="f1c175f9e68915d8d861e2884b40b77a9b763a32735bc996cd6a29639b2563e5"
 # Default Java version is chosen per OS release below (21 on Rocky 10+, 17 on
 # 8/9); override with --java or the JAVA_VER environment variable.
 JAVA_VER="${JAVA_VER:-}"
@@ -67,20 +76,34 @@ if [[ -z "${JAVA_VER:-}" ]]; then
 fi
 [[ $JAVA_VER == 17 || $JAVA_VER == 21 ]] || die "--java must be 17 or 21"
 
+# --- Jenkins repository (hash-verified before any dnf transaction) ---------
+REPO_FILE=/etc/yum.repos.d/jenkins.repo
+TMPKEY=""
+TMPREPO=""
+cleanup() { [[ -n "$TMPKEY" ]] && rm -f "$TMPKEY"; [[ -n "$TMPREPO" ]] && rm -f "$TMPREPO"; }
+trap cleanup EXIT
+if [[ -s $REPO_FILE ]]; then
+    info "jenkins repo already present at $REPO_FILE; verifying its pinned hash"
+    printf '%s  %s\n' "$JENKINS_REPO_SHA256" "$REPO_FILE" | sha256sum -c - >/dev/null \
+        || die "existing $REPO_FILE does not match the pinned SHA-256; refusing to use an unverified repo file"
+else
+    info "adding Jenkins stable repository (hash-verified)"
+    TMPREPO=$(mktemp)
+    curl -fsSL "$JENKINS_REPO_URL" -o "$TMPREPO"
+    printf '%s  %s\n' "$JENKINS_REPO_SHA256" "$TMPREPO" | sha256sum -c - >/dev/null \
+        || die "downloaded jenkins.repo does not match the pinned SHA-256; aborting before install"
+    install -m 0644 "$TMPREPO" "$REPO_FILE"
+fi
+info "importing Jenkins GPG key (hash-verified)"
+TMPKEY=$(mktemp)
+curl -fsSL "$JENKINS_KEY_URL" -o "$TMPKEY"
+printf '%s  %s\n' "$JENKINS_KEY_SHA256" "$TMPKEY" | sha256sum -c - >/dev/null \
+    || die "downloaded Jenkins key does not match the pinned SHA-256; aborting before import"
+rpm --import "$TMPKEY"
+
 # --- Java + prerequisites ---------------------------------------------------
 info "installing Java ${JAVA_VER} and prerequisites"
 dnf install -y "java-${JAVA_VER}-openjdk" fontconfig curl
-
-# --- Jenkins repository ------------------------------------------------------
-REPO_FILE=/etc/yum.repos.d/jenkins.repo
-if [[ -s $REPO_FILE ]]; then
-    info "jenkins repo already present at $REPO_FILE"
-else
-    info "adding Jenkins stable repository"
-    curl -fsSL https://pkg.jenkins.io/redhat-stable/jenkins.repo -o "$REPO_FILE"
-fi
-info "importing Jenkins GPG key"
-rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
 
 # --- Install Jenkins ----------------------------------------------------------
 info "installing jenkins"

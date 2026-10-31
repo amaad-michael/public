@@ -11,6 +11,13 @@
 # JNLP agents only with -e with_agent_port=true; -e configure_firewall=false
 # skips firewall changes).
 #
+# The repository file and the GPG key are both verified against
+# pinned SHA-256 hashes (captured from pkg.jenkins.io on
+# 2026-10-28; key fingerprint 6366 7EE7 4BBA 1F0A 08A6 9872 5BA3
+# 1D57 EF59 75CA, Jenkins Project) before any dnf transaction can
+# use them; a mismatch aborts the run. If Jenkins rotates either
+# file, refresh the pins deliberately.
+#
 # Idempotent: safe to re-run. It never removes or downgrades anything.
 # The companion removal playbook is
 # ansible/playbooks/cleanup/uninstall_jenkins.yml; it removes exactly
@@ -38,6 +45,8 @@
     jenkins_repo_url: "https://pkg.jenkins.io/redhat-stable/jenkins.repo"
     jenkins_repo_file: "/etc/yum.repos.d/jenkins.repo"
     jenkins_key_url: "https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key"
+    jenkins_repo_sha256: "e0c5dfddcb06856e319b2e4c78a6997a2edf7a8bf87554075105e35bc49e6859"
+    jenkins_key_sha256: "f1c175f9e68915d8d861e2884b40b77a9b763a32735bc996cd6a29639b2563e5"
     jenkins_home: "/var/lib/jenkins"
     # In a chroot or container test harness there is no running
     # systemd; set jenkins_service_state=stopped there so the enable
@@ -64,6 +73,74 @@
         msg: "java_ver must be 17 or 21 (got '{{ java_ver_effective }}')"
       when: java_ver_effective | string not in ["17", "21"]
 
+    # The repository and key gate runs before every dnf
+    # transaction, so an unverified repo file can never influence
+    # even the Java install. Tagged jenkins_repo_gate so tests can
+    # run the gate alone.
+    - name: Check for an existing Jenkins repository file
+      ansible.builtin.stat:
+        path: "{{ jenkins_repo_file }}"
+        checksum_algorithm: sha256
+      register: jenkins_repo_stat
+      tags: [jenkins_repo_gate]
+
+    - name: Refuse an existing repository file that fails the pin
+      ansible.builtin.fail:
+        msg: "ABORT: existing {{ jenkins_repo_file }} does not match the pinned SHA-256; refusing to use an unverified repo file"
+      when:
+        - jenkins_repo_stat.stat.exists
+        - jenkins_repo_stat.stat.size | default(0) > 0
+        - jenkins_repo_stat.stat.checksum | default('') != jenkins_repo_sha256
+      tags: [jenkins_repo_gate]
+
+    # Retried: a single TLS hiccup fetching the small repo file
+    # should not fail the whole install. (Observed in testing.)
+    # get_url verifies the checksum before the file lands at its
+    # destination; a mismatch fails the task and aborts the run.
+    - name: Add the Jenkins stable repository (hash-verified)
+      ansible.builtin.get_url:
+        url: "{{ jenkins_repo_url }}"
+        dest: "{{ jenkins_repo_file }}"
+        mode: "0644"
+        checksum: "sha256:{{ jenkins_repo_sha256 }}"
+      register: jenkins_repo_dl
+      retries: 5
+      delay: 5
+      until: jenkins_repo_dl is succeeded
+      when: not (jenkins_repo_stat.stat.exists and jenkins_repo_stat.stat.size > 0)
+      tags: [jenkins_repo_gate]
+
+    - name: Create a tempfile for the Jenkins GPG key
+      ansible.builtin.tempfile:
+        state: file
+        suffix: .key
+      register: jenkins_key_tmp
+      tags: [jenkins_repo_gate]
+
+    - name: Download the Jenkins GPG key (hash-verified)
+      ansible.builtin.get_url:
+        url: "{{ jenkins_key_url }}"
+        dest: "{{ jenkins_key_tmp.path }}"
+        mode: "0600"
+        checksum: "sha256:{{ jenkins_key_sha256 }}"
+      register: jenkins_key_dl
+      retries: 5
+      delay: 5
+      until: jenkins_key_dl is succeeded
+      tags: [jenkins_repo_gate]
+
+    - name: Import the verified Jenkins GPG key
+      ansible.builtin.rpm_key:
+        key: "{{ jenkins_key_tmp.path }}"
+        state: present
+      tags: [jenkins_repo_gate]
+
+    - name: Remove the temporary key file
+      ansible.builtin.file:
+        path: "{{ jenkins_key_tmp.path }}"
+        state: absent
+      tags: [jenkins_repo_gate]
+
     - name: Install Java and prerequisites
       ansible.builtin.dnf:
         name:
@@ -71,33 +148,6 @@
           - fontconfig
           - curl
         state: present
-
-    - name: Check for an existing Jenkins repository file
-      ansible.builtin.stat:
-        path: "{{ jenkins_repo_file }}"
-      register: jenkins_repo_stat
-
-    # Retried: a single TLS hiccup fetching the small repo file
-    # should not fail the whole install. (Observed in testing.)
-    - name: Add the Jenkins stable repository
-      ansible.builtin.get_url:
-        url: "{{ jenkins_repo_url }}"
-        dest: "{{ jenkins_repo_file }}"
-        mode: "0644"
-      register: jenkins_repo_dl
-      retries: 5
-      delay: 5
-      until: jenkins_repo_dl is succeeded
-      when: not (jenkins_repo_stat.stat.exists and jenkins_repo_stat.stat.size > 0)
-
-    - name: Import the Jenkins GPG key
-      ansible.builtin.rpm_key:
-        key: "{{ jenkins_key_url }}"
-        state: present
-      register: jenkins_key_import
-      retries: 5
-      delay: 5
-      until: jenkins_key_import is succeeded
 
     - name: Install Jenkins pinned to the LTS version
       ansible.builtin.dnf:
