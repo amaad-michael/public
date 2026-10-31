@@ -11,6 +11,10 @@ This toolkit provides ready-to-use Bash scripts and systemd timers for routine L
 - Weekly Service Uptime Review (`service-uptime.sh`)
 - Weekly Temp & Junk File Cleanup (`tmp-clean.sh`)
 
+## 🖥️ Launcher (optional)
+
+`launcher.sh` is a menu front end for the six jobs above: on a terminal it opens an arrow-key panel over the job list, and off a terminal it prints the same list as a numbered text menu and reads the choice as a line. Choosing a job runs it in the foreground and the launcher exits with the job's exit status. The jobs locate `common.sh` and `/etc/ops/ops.conf` themselves, so the launcher works from any directory; none of the six jobs takes command-line arguments (all tuning is in `/etc/ops/ops.conf`), and any arguments given to the launcher are forwarded to the chosen job unchanged. The jobs themselves are unchanged.
+
 ## 📋 Requirements
 
 - systemd (timers and services)
