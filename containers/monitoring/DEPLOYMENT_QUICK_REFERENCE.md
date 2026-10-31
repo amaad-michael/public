@@ -10,7 +10,9 @@ ls -lah docker-compose.yml prometheus.yml alertmanager.yml ntfy.conf headscale.c
 # 2. Create .env from .env.example with secrets (DO NOT COMMIT .env)
 cp .env.example .env
 sed -i "s|^GRAFANA_ADMIN_PASSWORD=.*|GRAFANA_ADMIN_PASSWORD=$(openssl rand -base64 32)|" .env
-echo "TRAEFIK_AUTH_HASH=admin:$(htpasswd -bcB -C 10 /dev/null admin $(openssl rand -base64 32) | cut -d: -f2)" >> .env
+TRAEFIK_PASS=$(openssl rand -base64 32)
+echo "TRAEFIK_AUTH_HASH=admin:$(htpasswd -bcB -C 10 /dev/null admin \"$TRAEFIK_PASS\" | cut -d: -f2)" >> .env
+echo "Traefik dashboard password (save it now; only its hash is stored): $TRAEFIK_PASS"
 chmod 600 .env
 
 # 3. Validate compose syntax

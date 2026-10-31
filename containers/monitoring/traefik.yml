@@ -3,6 +3,8 @@ api:
   insecure: false
   dashboard: true
 
+ping: {}
+
 entryPoints:
   web:
     address: ":80"
@@ -21,7 +23,6 @@ entryPoints:
 certificatesResolvers:
   letsencrypt:
     acme:
-      email: admin@nobara-standby
       storage: /letsencrypt/acme.json
       httpChallenge:
         entryPoint: web
@@ -57,7 +58,7 @@ http:
     BasicAuth:
       basicAuth:
         users:
-          - "admin:${TRAEFIK_AUTH_HASH}"
+          - '{{ env "TRAEFIK_AUTH_HASH" }}'
 
   routers:
     api-router:

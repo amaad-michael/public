@@ -84,7 +84,7 @@ Content-Security-Policy: default-src 'self'    # Inline scripts/styles blocked
 
 #### Prometheus (CWE-200: Information Disclosure)
 
-- `--web.enable-admin-api=false` (no config/rule changes via API)
+- `--no-web.enable-admin-api` (no config/rule changes via API)
 - Read-only scrape targets
 
 #### Grafana (CWE-284: Access Control, CWE-352: CSRF)

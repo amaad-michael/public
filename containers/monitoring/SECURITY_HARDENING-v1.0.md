@@ -177,7 +177,7 @@ Traefik (8080)       → Protected by BasicAuth
 ### Prometheus
 
 ```
---web.enable-admin-api=false  # Disable admin endpoints
+--no-web.enable-admin-api  # Disable admin endpoints
 ```
 
 **Why:** Prevents API-based config changes, rule reloads.
@@ -258,15 +258,15 @@ oidc:
 
 All images pinned to specific versions (NOT `:latest`):
 
-- prom/prometheus:v2.45.0
-- grafana/grafana:10.2.0
-- prom/alertmanager:v0.26.0
+- prom/prometheus:v3.15.1
+- grafana/grafana:13.3.0
+- prom/alertmanager:v0.34.1
 - traefik:v3.7.16
-- binwiederhier/ntfy:v2.4.0
-- smallstep/step-ca:0.24.2
-- headscale/headscale:0.22.3
+- binwiederhier/ntfy:v2.34.0
+- smallstep/step-ca:0.30.2
+- headscale/headscale:0.29.6
 - vaultwarden/server:1.37.4
-- louislam/uptime-kuma:1.23.11-alpine
+- louislam/uptime-kuma:2.5.8
 
 **Why:** Prevents surprise breaking changes; reproducible deployments.
 
