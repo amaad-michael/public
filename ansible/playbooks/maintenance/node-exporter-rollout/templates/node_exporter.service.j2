@@ -1,0 +1,24 @@
+[Unit]
+Description=node_exporter (fleet metrics — managed by Ansible)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=nodeexp
+Group=nodeexp
+ExecStart=/usr/local/bin/node_exporter \
+  --web.listen-address={{ node_exporter_listen }} \
+  --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run)($|/)
+Restart=on-failure
+RestartSec=5
+MemoryMax=48M
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

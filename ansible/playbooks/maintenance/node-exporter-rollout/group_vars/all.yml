@@ -1,0 +1,14 @@
+---
+# ZERO-GUESSWORK GATE: playbook asserts these are set before doing anything.
+# Verify latest at github.com/prometheus/node_exporter/releases + sha256sums.txt
+node_exporter_version: "1.12.1"      # matches neo1 (native kit v2.6.1 pin, verified 2026-10-26)
+
+# Per-arch sha256 of node_exporter-<ver>.linux-<arch>.tar.gz — fill only the
+# arches your fleet actually has; the play fails loudly on a missing one.
+node_exporter_checksums:
+  arm64: "ad35b605f9954b9f1ffddf5ba054bdc5a98d790b9eae5291e1eeb83f1ecbd0e7"  # pi1, pi3 (Rocky is 64-bit-only), + any 64-bit Debian/Armbian nodes
+  armv7: "ae3d72fbf77f9ebed553c24465310e0880383f45d3d1566357ce7a31a997acb2"  # 32-bit nodes, if any (same build neo1 runs)
+  armv6: ""     # only if a Pi Zero/1 ever joins
+
+node_exporter_listen: "0.0.0.0:9100"
+prometheus_host: "192.168.0.105"     # neo1 — the only source allowed through the firewall
