@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# laptop-role-prep-setup-v1.7.sh
+# laptop-role-prep-setup-v1.8.sh
 #
 # Produce the desired state from "Linux Laptop Prep Checklist: Coding
 # Instructor and Linux Administrator" (linux-laptop-role-prep-checklist)
@@ -65,7 +65,7 @@ step() { printf '\n== %s ==\n' "$*"; }
 # ---------------------------------------------------------------------------
 
 if [[ ${EUID} -ne 0 ]]; then
-    say "This script must run as root: sudo ./laptop-role-prep-setup-v1.7.sh"
+    say "This script must run as root: sudo ./laptop-role-prep-setup-v1.8.sh"
     exit 1
 fi
 
@@ -621,9 +621,11 @@ fi
 # the server leg and the motd playbook write, grep-guarded the same
 # way) so fleet names resolve on this box, the cluster MOTD the motd
 # playbook writes to /etc/motd (banner plus the same subnet block,
-# so console and SSH logins show the fleet map), and fastfetch as
-# the login presentation, via the same /etc/profile.d mechanism the
-# fleet's fastfetch playbook uses (checklist 1).
+# so console and SSH logins show the fleet map), fastfetch as the
+# login presentation via the same /etc/profile.d mechanism the
+# fleet's fastfetch playbook uses, and the terminal greeting:
+# /etc/motd printed above fastfetch, once per desktop session
+# (checklist 1).
 if ! grep -q 'pi0' /etc/hosts 2>/dev/null; then
     cat >> /etc/hosts <<'EOF'
 
@@ -678,6 +680,44 @@ fastfetch
 EOF
     chmod 755 /etc/profile.d/fastfetch.sh
     done_item "fastfetch login presentation set: /etc/profile.d/fastfetch.sh (checklist 1)"
+fi
+
+# Terminal greeting: /etc/motd above fastfetch, once per desktop
+# session (the config verified live on the travel laptop on
+# 2026-10-30 and adopted as the default). Desktop terminals are
+# not logins, so PAM never prints /etc/motd there; the greeting
+# prints it from the shell instead, on two paths sharing one
+# flag: for login shells, /etc/profile.d/00-motd.sh sorts ahead
+# of fastfetch.sh and prints first; for non-login interactive
+# terminals, which never source profile.d, the same guarded
+# block rides at the end of /etc/bashrc (every user's ~/.bashrc
+# sources it). The flag in the session runtime dir is set by
+# whichever path fires first, so the MOTD prints exactly once
+# per session. The SSH guard keeps both paths silent on SSH
+# logins, where PAM has already printed /etc/motd natively.
+# Nobara (like Fedora) ships no /etc/bashrc.d sourcing, so the
+# block goes into /etc/bashrc itself, appended only when the
+# flag string is absent, so re-runs never stack copies.
+# shellcheck disable=SC2016 # the block is payload text for other shells; its $ expressions must stay literal
+greeting_block='if [[ $- == *i* && -r /etc/motd && -z "${SSH_CONNECTION:-}" && ! -e "${XDG_RUNTIME_DIR}/.motd-shown" ]]; then
+  cat /etc/motd
+  touch "${XDG_RUNTIME_DIR}/.motd-shown"
+fi'
+mkdir -p /etc/profile.d
+if [[ -f /etc/profile.d/00-motd.sh ]] && [[ "$(cat /etc/profile.d/00-motd.sh 2>/dev/null)" == "${greeting_block}" ]]; then
+    done_item "terminal greeting in place: /etc/profile.d/00-motd.sh carries the MOTD-first block (checklist 1)"
+elif printf '%s\n' "${greeting_block}" > /etc/profile.d/00-motd.sh; then
+    chmod 755 /etc/profile.d/00-motd.sh
+    done_item "terminal greeting set: /etc/profile.d/00-motd.sh prints /etc/motd before fastfetch, once per session (checklist 1)"
+else
+    warn_item "terminal greeting could not be written to /etc/profile.d/00-motd.sh (checklist 1)"
+fi
+if grep -q '\.motd-shown' /etc/bashrc 2>/dev/null; then
+    done_item "terminal greeting in place: /etc/bashrc carries the MOTD-first block (checklist 1)"
+elif printf '\n%s\n' "${greeting_block}" >> /etc/bashrc; then
+    done_item "terminal greeting set: MOTD-first block appended to /etc/bashrc for non-login terminals (checklist 1)"
+else
+    warn_item "terminal greeting could not be appended to /etc/bashrc (checklist 1)"
 fi
 
 # Screen lock at 5 minutes with password on wake, as system dconf defaults

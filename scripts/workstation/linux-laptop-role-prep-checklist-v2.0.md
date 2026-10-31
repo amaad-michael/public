@@ -1,6 +1,6 @@
 # Linux Laptop Prep Checklist: Coding Instructor and Linux Administrator
 
-**Version:** 1.9
+**Version:** 2.0
 **Date:** 2026-10-30
 **Scope:** Role-agnostic. Built for a personal Linux laptop that has to walk into either a classroom or a server environment and be ready, with personal and work life kept cleanly apart.
 
@@ -29,7 +29,7 @@
 - [ ] Persistent journaling on (the journal survives reboots, so a failed boot still leaves logs)
 - [ ] Fleet /etc/hosts entries present (pi0-pi4 and neo1 resolve by name)
 - [ ] Cluster MOTD in place (the fleet subnet block greets console and SSH logins)
-- [ ] Login presentation set (fastfetch runs on login shells)
+- [ ] Terminal greeting set (the cluster MOTD prints above fastfetch in the first terminal of a session: /etc/profile.d/00-motd.sh ahead of fastfetch.sh for login shells, the same guarded block in /etc/bashrc for non-login terminals, once per session via the .motd-shown session flag; SSH logins keep PAM's native MOTD print)
 - [ ] Screen lock at 5 minutes or less, with password required on wake
 - [ ] Host firewall on, default deny inbound
 - [ ] A full system backup taken before the first workday, plus a bare-metal restore method you have actually tested (installer USB + backup is not a plan until a restore has succeeded once)
@@ -128,7 +128,7 @@ The laptop is personal property doing professional work, so the walls matter mor
 
 ## 11. Automation: the setup script
 
-The state this checklist describes can be produced from the command line for every item that is CLI-able. The script below does it: it creates the michael and michael-work accounts, installs the admin and instructor tooling, wires the per-role SSH and git separation, sets the screen lock and the host firewall, and prints whatever still needs hands, hardware, or a sign-in as a manual list at the end. Version 1.7 of the script installs the GitHub CLI from section 6 (a per-distro package install; GitHub's own repo is the RHEL-family fallback, and the sign-in stays a manual step), sets persistent journaling and the fleet personalization from section 1, and installs the three vendor applications from sections 3 and 10, each by the vendor's own distribution method. Proton Pass has no repository: the script reads Proton's version feed, takes the newest Stable release at full rollout, verifies the package's SHA512 checksum against the feed, and only then installs it; the sign-in and the SSH agent setup stay manual (see the companion handoff). Proton VPN uses Proton's own repository: on Debian and Ubuntu the script verifies and installs Proton's signed release package, then installs the proton-vpn-gnome-desktop app from the repo, and on Fedora it follows the same pattern with Proton's Fedora release package. Proton officially supports Fedora only on the RPM side, so on RHEL-family systems the script installs no VPN package and prints the manual path instead (the WireGuard configs from your Proton account). TickTick has no repository either: the script downloads from TickTick's official version-less endpoint, the same one the download page uses. All three install through the distro package manager, so dependencies resolve instead of failing the way the vendors' bare dpkg -i and rpm -i instructions can. One vendor collision is handled on the RPM side: the Proton Pass and TickTick RPMs both ship the same /usr/lib/.build-id debug symlinks with different targets (both apps are built on the stock Electron binary), so rpm refuses the second install; the script pulls the package's dependencies with dnf and retries with rpm --replacefiles, which changes only which app the debug links point at. Run it on the laptop as root: `sudo ./laptop-role-prep-setup-v1.7.sh`. The same script ships as a standalone file, laptop-role-prep-setup-v1.7.sh, byte-identical to the block below; the standalone is the copy to take to the laptop.
+The state this checklist describes can be produced from the command line for every item that is CLI-able. The script below does it: it creates the michael and michael-work accounts, installs the admin and instructor tooling, wires the per-role SSH and git separation, sets the screen lock and the host firewall, and prints whatever still needs hands, hardware, or a sign-in as a manual list at the end. Version 1.7 of the script installs the GitHub CLI from section 6 (a per-distro package install; GitHub's own repo is the RHEL-family fallback, and the sign-in stays a manual step), sets persistent journaling and the fleet personalization from section 1, and installs the three vendor applications from sections 3 and 10, each by the vendor's own distribution method. Proton Pass has no repository: the script reads Proton's version feed, takes the newest Stable release at full rollout, verifies the package's SHA512 checksum against the feed, and only then installs it; the sign-in and the SSH agent setup stay manual (see the companion handoff). Proton VPN uses Proton's own repository: on Debian and Ubuntu the script verifies and installs Proton's signed release package, then installs the proton-vpn-gnome-desktop app from the repo, and on Fedora it follows the same pattern with Proton's Fedora release package. Proton officially supports Fedora only on the RPM side, so on RHEL-family systems the script installs no VPN package and prints the manual path instead (the WireGuard configs from your Proton account). TickTick has no repository either: the script downloads from TickTick's official version-less endpoint, the same one the download page uses. All three install through the distro package manager, so dependencies resolve instead of failing the way the vendors' bare dpkg -i and rpm -i instructions can. One vendor collision is handled on the RPM side: the Proton Pass and TickTick RPMs both ship the same /usr/lib/.build-id debug symlinks with different targets (both apps are built on the stock Electron binary), so rpm refuses the second install; the script pulls the package's dependencies with dnf and retries with rpm --replacefiles, which changes only which app the debug links point at. Run it on the laptop as root: `sudo ./laptop-role-prep-setup-v1.8.sh`. The same script ships as a standalone file, laptop-role-prep-setup-v1.8.sh, byte-identical to the block below; the standalone is the copy to take to the laptop.
 
 Version 1.4 (2026-10-30) fixes two defects the first real-metal run, on the travel laptop the same day, exposed. Distro detection no longer treats every dnf-family system whose ID is not exactly "fedora" as RHEL-family: an exact RHEL-family ID (rhel, rocky, almalinux, centos) decides first, because Rocky declares fedora in its ID_LIKE, and a derivative under its own ID is judged by its declared lineage, so Nobara (ID nobara, ID_LIKE fedora) is Fedora-family and gets zenmap, Python IDLE, flameshot, and virt-manager instead of the RHEL-family substitutions. And the account and group changes now check their results: account creation and the docker, libvirt, and optional sudo-group adds report a warning when they fail, never a done line. On a first run the package phase precedes account creation, so those group adds land on a re-run; the report now says so instead of claiming memberships that do not exist yet.
 
@@ -148,9 +148,13 @@ Version 1.7 (2026-10-30) fixes the order of operations in the users section. The
 
 The version 1.7 changes were verified on 2026-10-30 with an executed fresh-box harness: useradd, usermod, getent, and id stubbed against a state directory, so the order of operations has real consequences - a group add for an account that does not exist yet fails the way the real usermod fails. The account creation, the two relocated adds, and the sudo-group add, extracted from the shipped script and executed in the script's own order on a simulated fresh box, put the work account into the libvirt group, the docker group (apt variant), and the admin group in a single pass, the done lines printed, with no could-not-be-added warnings; a second pass over that state changed nothing. The same harness running the version 1.6 order ended its first pass with the work account in neither group and both convergence warnings printed, and converged only on its second pass. A full live run on a genuinely fresh machine is the remaining proof and had not happened when this version was cut.
 
+Version 1.8 (2026-10-30) makes the terminal greeting a written default. PAM prints /etc/motd only at real logins (SSH and console), so desktop terminal windows never showed the cluster MOTD at all, and in login terminals fastfetch printed with nothing above it. The config Michael built by hand on the travel laptop the same day and verified live in a fresh terminal (banner and fleet list first, fastfetch below, exactly once) is now what the script writes: /etc/profile.d/00-motd.sh carries a guarded block (interactive shell, /etc/motd readable, not an SSH session, session flag absent) that cats /etc/motd and sets the flag in the session runtime dir; its 00- prefix sorts it ahead of fastfetch.sh, so the MOTD prints first. Non-login interactive terminals never source profile.d, so the same block is appended to /etc/bashrc, which every user's ~/.bashrc sources; the append is grep-guarded on the flag string, so re-runs never stack copies, and the shared flag means whichever path fires first is the one that prints. The SSH guard is in both copies: on an SSH login PAM has already printed /etc/motd natively before the shell starts, and the profile.d copy's deliberate skip does not set the flag, so without the guard the bashrc copy would print the MOTD a second time in the same session; with it, exactly one printing happens on every path. Nobara 44 (verified by grep on the machine) sources no /etc/bashrc.d directory, so the block goes into /etc/bashrc itself, not a drop-in. An existing 00-motd.sh is recognized by content and reported as in place rather than rewritten. Section 1's presentation line now describes the greeting to verify.
+
+The version 1.8 changes were verified on 2026-10-30 with an executed simulation of the shell startup chain: the personalization block was extracted from the shipped script and run against a fixture /etc (bound over /etc) to produce the payload files, and the payloads were then sourced in documented shell order with fastfetch stubbed. In login-shell order the output was the MOTD content followed by the fastfetch marker, with the session flag set; a second interactive shell in the same session printed no MOTD; a non-login interactive shell printed the MOTD once via the bashrc block; with SSH_CONNECTION set, neither script path printed anything and the flag stayed unset. The pre-change chain (fastfetch.sh alone, no greeting files) printed the fastfetch marker with no MOTD above it. The bashrc step run twice over the same fixture left exactly one greeting block. ShellCheck and the repository's pre-commit hooks pass on the changed files. A live run of the version 1.8 script itself on a fresh machine is the remaining proof and had not happened when this version was cut; the greeting behavior it writes is the hand-built config that was verified live on the laptop earlier the same day.
+
 ```bash
 #!/usr/bin/env bash
-# laptop-role-prep-setup-v1.7.sh
+# laptop-role-prep-setup-v1.8.sh
 #
 # Produce the desired state from "Linux Laptop Prep Checklist: Coding
 # Instructor and Linux Administrator" (linux-laptop-role-prep-checklist)
@@ -216,7 +220,7 @@ step() { printf '\n== %s ==\n' "$*"; }
 # ---------------------------------------------------------------------------
 
 if [[ ${EUID} -ne 0 ]]; then
-    say "This script must run as root: sudo ./laptop-role-prep-setup-v1.7.sh"
+    say "This script must run as root: sudo ./laptop-role-prep-setup-v1.8.sh"
     exit 1
 fi
 
@@ -772,9 +776,11 @@ fi
 # the server leg and the motd playbook write, grep-guarded the same
 # way) so fleet names resolve on this box, the cluster MOTD the motd
 # playbook writes to /etc/motd (banner plus the same subnet block,
-# so console and SSH logins show the fleet map), and fastfetch as
-# the login presentation, via the same /etc/profile.d mechanism the
-# fleet's fastfetch playbook uses (checklist 1).
+# so console and SSH logins show the fleet map), fastfetch as the
+# login presentation via the same /etc/profile.d mechanism the
+# fleet's fastfetch playbook uses, and the terminal greeting:
+# /etc/motd printed above fastfetch, once per desktop session
+# (checklist 1).
 if ! grep -q 'pi0' /etc/hosts 2>/dev/null; then
     cat >> /etc/hosts <<'EOF'
 
@@ -829,6 +835,44 @@ fastfetch
 EOF
     chmod 755 /etc/profile.d/fastfetch.sh
     done_item "fastfetch login presentation set: /etc/profile.d/fastfetch.sh (checklist 1)"
+fi
+
+# Terminal greeting: /etc/motd above fastfetch, once per desktop
+# session (the config verified live on the travel laptop on
+# 2026-10-30 and adopted as the default). Desktop terminals are
+# not logins, so PAM never prints /etc/motd there; the greeting
+# prints it from the shell instead, on two paths sharing one
+# flag: for login shells, /etc/profile.d/00-motd.sh sorts ahead
+# of fastfetch.sh and prints first; for non-login interactive
+# terminals, which never source profile.d, the same guarded
+# block rides at the end of /etc/bashrc (every user's ~/.bashrc
+# sources it). The flag in the session runtime dir is set by
+# whichever path fires first, so the MOTD prints exactly once
+# per session. The SSH guard keeps both paths silent on SSH
+# logins, where PAM has already printed /etc/motd natively.
+# Nobara (like Fedora) ships no /etc/bashrc.d sourcing, so the
+# block goes into /etc/bashrc itself, appended only when the
+# flag string is absent, so re-runs never stack copies.
+# shellcheck disable=SC2016 # the block is payload text for other shells; its $ expressions must stay literal
+greeting_block='if [[ $- == *i* && -r /etc/motd && -z "${SSH_CONNECTION:-}" && ! -e "${XDG_RUNTIME_DIR}/.motd-shown" ]]; then
+  cat /etc/motd
+  touch "${XDG_RUNTIME_DIR}/.motd-shown"
+fi'
+mkdir -p /etc/profile.d
+if [[ -f /etc/profile.d/00-motd.sh ]] && [[ "$(cat /etc/profile.d/00-motd.sh 2>/dev/null)" == "${greeting_block}" ]]; then
+    done_item "terminal greeting in place: /etc/profile.d/00-motd.sh carries the MOTD-first block (checklist 1)"
+elif printf '%s\n' "${greeting_block}" > /etc/profile.d/00-motd.sh; then
+    chmod 755 /etc/profile.d/00-motd.sh
+    done_item "terminal greeting set: /etc/profile.d/00-motd.sh prints /etc/motd before fastfetch, once per session (checklist 1)"
+else
+    warn_item "terminal greeting could not be written to /etc/profile.d/00-motd.sh (checklist 1)"
+fi
+if grep -q '\.motd-shown' /etc/bashrc 2>/dev/null; then
+    done_item "terminal greeting in place: /etc/bashrc carries the MOTD-first block (checklist 1)"
+elif printf '\n%s\n' "${greeting_block}" >> /etc/bashrc; then
+    done_item "terminal greeting set: MOTD-first block appended to /etc/bashrc for non-login terminals (checklist 1)"
+else
+    warn_item "terminal greeting could not be appended to /etc/bashrc (checklist 1)"
 fi
 
 # Screen lock at 5 minutes with password on wake, as system dconf defaults
@@ -1129,4 +1173,4 @@ say ""
 say "Re-running this script is safe; it converges to the same state."
 ```
 
-*Companion records: proton-pass-ssh-handoff-v1.0.md (open item [ee7f5b] on the action board), ansible-hosts-inventory (homelab reference), the public repo at github.com/amaad-michael/public (toolkit and playbooks source); laptop-role-prep-setup-v1.7.sh, the standalone form of the section 11 script (byte-identical; the two files travel together).*
+*Companion records: proton-pass-ssh-handoff-v1.0.md (open item [ee7f5b] on the action board), ansible-hosts-inventory (homelab reference), the public repo at github.com/amaad-michael/public (toolkit and playbooks source); laptop-role-prep-setup-v1.8.sh, the standalone form of the section 11 script (byte-identical; the two files travel together).*
