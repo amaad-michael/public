@@ -8,27 +8,39 @@ The Ansible patching counterpart for Nobara lives in
 
 ## The single new-box workflow
 
-`new-box-prep-v1.3.sh` is the entry point for prepping any new
+`new-box-prep-v1.4.sh` is the entry point for prepping any new
 box or server. It sequences the repo's existing prep scripts
-(newest version of each wins); its one step of its own is the
-Proton VPN install:
+(newest version of each wins); its own steps are the Proton
+VPN install and the desktop-environment install:
 
-- `new-box-prep-v1.3.sh laptop [--work|--personal] [--with-gpu] [--dry-run]`:
+- `new-box-prep-v1.4.sh laptop [--work|--personal] [--desktop=<list>] [--with-gpu] [--dry-run]`:
   git setup, ssh setup, the Proton VPN step, then the laptop
-  role prep. The Proton step installs the Proton VPN app from
+  role prep, then the desktop step. The Proton step installs the Proton VPN app from
   Proton's own repo on the Fedora and Debian families (the
   release package's checksum verified on the Debian side) and
   records the manual WireGuard/OpenVPN route on the RHEL
   family, where Proton publishes no app; signing in stays
-  manual. A laptop run
+  manual. The desktop step installs the operator's chosen
+  desktop environments (MATE, Cinnamon, Xfce, Openbox, LXDE)
+  as a multi-select: any one, several, all, or none, chosen
+  with `--desktop=` or asked on the terminal (a checkbox
+  panel in pure bash and ANSI where the terminal can draw
+  one, a plain prompt where it cannot). It installs only and
+  changes no display manager or default session, so the
+  desktop is picked at the login screen's session picker.
+  Fedora and Debian/Ubuntu carry all five desktops; the RHEL
+  family's configured repos carry none of the five today, so
+  there each chosen desktop is reported as a manual item and
+  the rest of the selection proceeds. A laptop run
   carries a work or personal designation (`--work` or
   `--personal`, or the runner asks on the terminal), and the
   role prep runs only on a work box; a scripted run must pass
-  the flag, because an undesignated run stops and runs nothing.
+  the flags, because an undesignated or desktop-less run
+  stops and runs nothing.
   `--with-gpu`
   appends the GPU tuning step, which skips cleanly on boxes
   without a discrete AMD GPU.
-- `new-box-prep-v1.3.sh server [--dry-run]` (as root on the
+- `new-box-prep-v1.4.sh server [--dry-run]` (as root on the
   target): the conservative secure-server-init, then git setup
   for the michael user, then it prints the controller-side
   follow-ons (the fleet password cycle, the node_exporter
@@ -82,7 +94,7 @@ environment ready. The checklist is the specification; the script
 produces every CLI-able part of it and prints the rest as a manual
 list.
 
-### linux-laptop-role-prep-checklist-v2.2.md
+### linux-laptop-role-prep-checklist-v2.3.md
 
 The checklist itself: base system, separation of personal and work
 lives, the security core, the Linux administrator kit, the coding
@@ -91,7 +103,9 @@ carry kit, a dry run before day one, and ongoing hygiene. Full-disk
 encryption, per-role accounts, SSH keys, and git identities, and a
 tested bare-metal restore are the load-bearing items. The setup
 script is embedded in section 11, byte-identical to the standalone
-file below.
+file below. Version 2.3 adds the desktop-environment line in
+section 1 for the new-box workflow's desktop step (runner
+v1.4).
 
 ### laptop-role-prep-setup-v2.0.sh
 
