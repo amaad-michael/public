@@ -9,7 +9,7 @@ stack for the cluster is `containers/monitoring/`.
 
 **Design:** No Docker. Static Go binaries + hardened systemd units.
 **Always-on set (5):** prometheus, alertmanager, blackbox_exporter, node_exporter, ntfy
-**On-demand (1):** grafana — `systemctl start grafana`, auto-kills after 6h, never enabled
+**On-demand (1):** grafana — `systemctl start grafana`, auto-kills after 6h, never enabled. Its admin password lives in `/etc/grafana/grafana.env` (root-only, created by the installer); the unit refuses to start without that file, so a session can never come up on the factory password
 **Timers (2):** pihole-backup, unbound-backup (03:15 / 03:30 nightly)
 
 ## 💾 Memory budget (target)

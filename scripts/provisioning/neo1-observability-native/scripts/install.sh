@@ -120,6 +120,28 @@ install -o root -g blackbox     -m 640 configs/blackbox.yml    /etc/blackbox/
 install -o root -g ntfy         -m 640 configs/ntfy-server.yml /etc/ntfy/server.yml
 install -o root -g grafana      -m 640 configs/grafana.ini     /etc/grafana/
 
+# --- Grafana admin password (created once, never overwritten) ---
+# grafana.service carries a REQUIRED EnvironmentFile pointing here: without
+# this file a grafana start fails closed instead of coming up on the factory
+# admin/admin password. root:root 0600 — systemd reads it as root before the
+# unit drops to the grafana user, so the grafana user never reads it.
+if [[ ! -e /etc/grafana/grafana.env ]]; then
+  if [[ -n "${GRAFANA_ADMIN_PASSWORD:-}" ]]; then
+    GRAFANA_PW="$GRAFANA_ADMIN_PASSWORD"
+    GRAFANA_PW_NOTE="taken from the GRAFANA_ADMIN_PASSWORD environment variable"
+  else
+    GRAFANA_PW="$(dd if=/dev/urandom bs=32 count=1 2>/dev/null | od -An -tx1 | tr -d ' \n')"
+    GRAFANA_PW="${GRAFANA_PW:0:32}"
+    GRAFANA_PW_NOTE="GENERATED — save it now; it is shown only here"
+  fi
+  [[ -n "$GRAFANA_PW" ]] || { echo "ABORT: Grafana admin password is empty — refusing to write it."; exit 1; }
+  printf 'GF_SECURITY_ADMIN_PASSWORD=%s\n' "$GRAFANA_PW" > /etc/grafana/grafana.env
+  chown root:root /etc/grafana/grafana.env
+  chmod 600 /etc/grafana/grafana.env
+  echo "Grafana admin password ${GRAFANA_PW_NOTE}: ${GRAFANA_PW}"
+  unset GRAFANA_PW
+fi
+
 # --- Units ---
 install -m 644 systemd/*.service systemd/*.timer /etc/systemd/system/
 systemctl daemon-reload

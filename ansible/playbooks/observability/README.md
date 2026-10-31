@@ -18,7 +18,9 @@ ansible-playbook -i hosts playbooks/observability/neo1-observability.yml -l neo1
   loopback only), blackbox_exporter (9115, loopback only),
   node_exporter (9100), ntfy (8081). Grafana (3002) is installed but
   deliberately never enabled — on-demand sessions only, exactly as
-  in the native kit. The two backup timers (03:15 / 03:30) are
+  in the native kit. Its admin password file (/etc/grafana/grafana.env,
+  root-only) is created once by the playbook when absent; the unit
+  refuses to start without it. The two backup timers (03:15 / 03:30) are
   enabled with their services.
 - Pins live at the top of the playbook and are copied verbatim from
   the native kit's `scripts/install.sh` (Prometheus 3.15.0,
