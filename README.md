@@ -17,7 +17,7 @@ scripts for my Raspberry Pi cluster and home network.*
 public/
 ├── ansible/      # playbook groups: accounts, audits, backups, cleanup,
 │                 # cockpit, firewall, Gitea, healthchecks, Jenkins, LAMP,
-│                 # LLM, monitoring, monthly, motd, neo1 observability,
+│                 # LLM, maintenance, monitoring, monthly, motd, neo1 observability,
 │                 # ops toolkit, Pi-hole, Proxmox, reboots, security, vuln,
 │                 # workstation
 ├── containers/   # seventeen Docker Compose stacks: monitoring,
