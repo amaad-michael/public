@@ -67,3 +67,13 @@ logical backup:
 (adjust the database name if `.env` sets a different one). The
 docroot is this repo directory, so it is backed up with the repo
 itself.
+
+## 🐳 On Rocky with Podman
+
+This stack's compose file bind-mounts `./html` and the httpd
+configs (`./httpd/httpd.conf`, `./httpd/lamp.conf`) from the
+host. On Rocky, SELinux will deny the containers access to
+those mounts until they are relabeled (`:Z`). See "Running
+these stacks on Rocky with Podman" in the containers README
+for the full picture; that section is untested until the pi3
+shakedown.
