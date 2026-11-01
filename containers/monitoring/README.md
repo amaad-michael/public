@@ -1,4 +1,4 @@
-# Standby Monitoring Stack - Complete Package
+# Extended Observability Stack - Complete Package
 
 **Everything you need to deploy a production-grade, defense-in-depth hardened 9-service Docker stack.**
 
@@ -60,6 +60,32 @@ docker compose ps  # All 9 should be "Up" and "healthy"
 ```
 
 ---
+
+## 🔁 Lifecycle: one controller, three deploy forms
+
+Day-2 control for this stack lives in one place:
+`scripts/monitoring/extended-observability-control-v1.0.sh`
+(verify, status, up, down, restart, uninstall, with data volumes
+preserved by default and a typed-confirmation purge).
+
+Deployment has three forms, all landing in the same compose
+project: this controller's own container form, the bash wrapper
+`scripts/monitoring/deploy-monitoring-stack.sh`, and the Ansible
+playbook `ansible/playbooks/monitoring/deploy-monitoring.yml`.
+The controller's `deploy --form bash|ansible` delegates to the
+other two; every other verb acts on the project directly,
+whichever form deployed it.
+
+One naming fact the whole package depends on: Compose names data
+volumes `<project>_<volume>`, and every backup and recovery
+command in these docs uses `standby_prometheus_data`,
+`standby_vaultwarden_data`, and so on. Those names exist only
+when the compose project is named `standby`. The controller pins
+that name on every call; if you run bare `docker compose`
+commands from the Quick Start instead, run
+`export COMPOSE_PROJECT_NAME=standby` first, or your volumes land
+under the directory's name and the backup commands will not find
+them.
 
 ## 📋 Services (9)
 

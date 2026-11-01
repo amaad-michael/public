@@ -1,4 +1,4 @@
-# Standby Monitoring Stack - Complete Deployment Guide
+# Extended Observability Stack - Complete Deployment Guide
 
 **Version:** 1.0
 **Date:** May 29, 2026

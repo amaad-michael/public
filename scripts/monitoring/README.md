@@ -1,13 +1,14 @@
 # scripts/monitoring
 
-Two standalone cron checkers, one deploy wrapper, and one SMART
-harvester. The checkers collect cron configuration (one host at a
-time, or the whole fleet over SSH) and change nothing on the hosts
-they inspect. The harvester collects drive-health data and writes
-only its report files; the deploy wrapper is the one script here
-that changes state, and only on the host it runs on. Backup
-manifest integrity lives in `scripts/backups` — see the last
-section.
+Two standalone cron checkers, one deploy wrapper, one lifecycle
+controller, and one SMART harvester. The checkers collect cron
+configuration (one host at a time, or the whole fleet over SSH)
+and change nothing on the hosts they inspect. The harvester
+collects drive-health data and writes only its report files; the
+deploy wrapper and the controller are the scripts here that
+change state, and only on the host they run on (the controller's
+Ansible deploy form acts on its target host). Backup manifest
+integrity lives in `scripts/backups`: see the last section.
 
 ## deploy-monitoring-stack.sh
 
@@ -34,6 +35,43 @@ deployment, and the Ansible form is
   report `(healthy)` within `--wait` seconds (default 120).
 - `--project-dir DIR` deploys a checkout elsewhere; by default the
   project is `containers/monitoring/` relative to this script.
+
+## extended-observability-control-v1.0.sh
+
+Lifecycle controller for the Extended Observability Stack in
+`containers/monitoring/` (the 9-service Docker stack formerly
+called the standby monitoring stack; functional `standby-`
+identifiers did not change). One entry point owns the stack end
+to end, in the shape of the neo1 observability control script:
+
+```bash
+./extended-observability-control-v1.0.sh deploy [--form container|bash|ansible]
+./extended-observability-control-v1.0.sh verify | status | up | down | restart
+./extended-observability-control-v1.0.sh uninstall [--purge]
+```
+
+- The runtime state is the compose project; the three forms are
+  deploy routes into it. `deploy` defaults to the controller's own
+  container form (same gates as the wrapper below, then pull, up,
+  verify); `--form bash` delegates to
+  `deploy-monitoring-stack.sh` and `--form ansible` to
+  `ansible/playbooks/monitoring/deploy-monitoring.yml` (`--host`
+  required). All other verbs act on the project whichever form
+  deployed it.
+- The compose project name is pinned to `standby` on every call
+  (the stack's docs name the data volumes `standby_<volume>`;
+  neither shipped deploy route set a name, so their volumes
+  silently took the checkout directory's name). `status` warns if
+  it finds containers under that default name.
+- Secrets follow `containers/monitoring/SECRETS_MANAGEMENT.md`:
+  `.env` values are never printed, gates check presence only, and
+  rendered compose data is limited to service, volume, and image
+  names (a full `docker compose config` render interpolates the
+  Grafana admin password into its output).
+- `down` and `uninstall` preserve all 8 named volumes, `.env`,
+  and the host-local configs; `uninstall --purge` removes the
+  volumes too, after a typed confirmation (the word is
+  `observability`) and a closing verification pass.
 
 ## smart-harvest.sh
 
