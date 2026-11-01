@@ -256,6 +256,16 @@ or 10. Its guide is `jenkins-consolidated-v1.0.md` in this folder. Run
 the installer with `--help` for its options (Java version selection,
 the optional JNLP agent port, and a no-firewall mode).
 
+`jenkins-control-v1.0.sh` is the lifecycle controller for the Jenkins
+forms. Its `install` verb runs the bash installer as-is (installer
+options pass through after a `--` separator), `up`, `down`, `restart`,
+and `status` drive the service, and `uninstall` removes the package
+footprint while preserving `/var/lib/jenkins` unless `--purge` is
+given. With `--form container` the same verbs drive the compose
+stack in `containers/jenkins`. The Ansible install and uninstall
+playbooks stay parallel paths; the controller's native removal set
+matches the uninstall playbook's footprint.
+
 ## 🛠️ Proxmox VE
 
 `proxmox-setup.sh` is the bash form of the Proxmox VE deployment in
