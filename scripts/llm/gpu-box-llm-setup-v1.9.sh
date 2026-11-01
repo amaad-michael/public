@@ -65,8 +65,8 @@ error() {
     exit 1
 }
 
-container_exists() { docker ps -a --format '{{.Names}}' | grep -qx "$1"; }
-container_running() { docker ps --format '{{.Names}}' | grep -qx "$1"; }
+container_exists() { docker ps -a --format '{{.Names}}' | grep -x "$1" >/dev/null; }
+container_running() { docker ps --format '{{.Names}}' | grep -x "$1" >/dev/null; }
 
 log "GPU Box Ollama + Open WebUI Setup v$SCRIPT_VERSION starting (AMD/ROCm)..."
 
