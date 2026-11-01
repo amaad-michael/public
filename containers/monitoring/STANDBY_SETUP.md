@@ -3,7 +3,7 @@
 > This file keeps its STANDBY_SETUP.md filename from before the
 > 2026-10-31 rename; the stack it documents is the Extended
 > Observability Stack. Names with the standby- prefix inside
-> (containers, the standby-net network, standby_<volume> data
+> (containers, the standby-net network, `standby_<volume>` data
 > volumes) are functional identifiers and did not change.
 
 ## Port Allocation (isolated from LLM stack)
