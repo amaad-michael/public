@@ -11,6 +11,7 @@ the three forms so you can pick the right one.
 - [deploy-llama-ui-raw.sh](#deploy-llama-ui-rawsh)
 - [setup_open_terminal-v1_2.sh](#setup_open_terminal-v1_2sh)
 - [nanopi-llm-setup.sh](#nanopi-llm-setupsh)
+- [nanopi-llm-control-v1.0.sh](#nanopi-llm-control-v10sh)
 - [See it running](#see-it-running)
 - [Which form of each stack](#which-form-of-each-stack)
 
@@ -183,6 +184,39 @@ changing command and changes nothing; `--print-config` prints the
 rendered unit or nginx site and exits. The boards are ARM64; the
 script warns on other architectures instead of refusing, because
 the native build works the same way.
+
+## nanopi-llm-control-v1.0.sh
+
+The lifecycle controller for the NanoPi stack, in the same shape
+as the other LLM stack controllers: setup, start, stop, restart,
+status, and uninstall as verbs of one script, run on the board
+itself. The setup verb delegates to `nanopi-llm-setup.sh` with
+everything after `--` passed through, because the setup needs a
+role the controller will not guess:
+
+```bash
+./nanopi-llm-control-v1.0.sh setup -- --role server --tier 4gb
+./nanopi-llm-control-v1.0.sh setup -- --role lb
+./nanopi-llm-control-v1.0.sh status
+./nanopi-llm-control-v1.0.sh uninstall            # keeps ~/llama.cpp and ~/models
+./nanopi-llm-control-v1.0.sh uninstall --purge    # removes them too
+```
+
+The stack's shape drives the design. A board holds one role
+(server or load balancer); the controller detects the installed
+roles from the footprint and acts on those. There is no service
+account: the unit runs as the operator, and the llama.cpp build
+and the models live in the operator's home, preserved by default
+on uninstall and removed only by `--purge`. The operator account
+is never touched. On a load balancer board the stack's footprint
+is the `llm-lb` nginx site only: uninstall removes the site and
+reloads nginx, which itself stays installed. The container form
+(`containers/llm`) is covered by name: start, stop, status, and
+uninstall handle its `llm-heavy`, `llm-light`, and `llm-lb`
+containers, and its host models directory is never removed. The
+uninstall footprint agrees with the native teardown engine's
+`nanopi-llm` manifest, extended with the UFW rules the setup
+added and the container form's containers.
 
 ## See it running
 
