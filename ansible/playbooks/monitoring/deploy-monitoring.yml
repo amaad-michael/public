@@ -1,12 +1,13 @@
 ---
 # NAME: deploy-monitoring.yml
-# WHAT: Ansible deploy playbook for the cluster standby monitoring
-#       stack (containers/monitoring/: Prometheus 2.45, Grafana 10.2,
-#       Alertmanager 0.26, Traefik, ntfy, step-ca, Headscale,
-#       Vaultwarden, Uptime Kuma on standby-net). Validates the
-#       host-side files on the target, renders the compose project,
-#       pulls the pinned images, brings the stack up, and verifies
-#       every service reports healthy.
+# WHAT: Ansible deploy playbook for the cluster Extended
+#       Observability Stack (containers/monitoring/: Prometheus
+#       v3.15.1, Grafana 13.3.0, Alertmanager v0.34.1, Traefik,
+#       ntfy, step-ca, Headscale, Vaultwarden, Uptime Kuma on
+#       standby-net). Validates the host-side files on the target,
+#       renders the compose project, pulls the pinned images,
+#       brings the stack up, and verifies every service reports
+#       healthy.
 # WHY:  The stack is Docker-native by design; this playbook is the
 #       playbook-run form of its deployment — the same checks and
 #       steps as the bash wrapper
@@ -19,13 +20,25 @@
 # The playbook deploys the checkout that already exists on the
 # target host at monitoring_project_dir; it does not clone the repo.
 # Docker with the Compose v2 plugin must already be installed there.
+#
+# The play pins the compose project name (monitoring_project_name,
+# default "standby") through COMPOSE_PROJECT_NAME: the stack's own
+# docs name the data volumes standby_<volume>, which only exist
+# under that project name, and the lifecycle controller
+# (scripts/monitoring/extended-observability-control-v1.0.sh) owns
+# day-2 verbs for the stack under the same project whichever form
+# deployed it. Without the pin, a deploy here landed under the
+# checkout directory's name and the controller could not see it.
 
-- name: Deploy the standby monitoring stack (compose project wrapper)
+- name: Deploy the Extended Observability Stack (compose project wrapper)
   hosts: all
   become: true
   gather_facts: false
+  environment:
+    COMPOSE_PROJECT_NAME: "{{ monitoring_project_name }}"
 
   vars:
+    monitoring_project_name: standby
     monitoring_project_dir: ""
     monitoring_dry_run: false
     monitoring_skip_pull: false

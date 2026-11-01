@@ -1,4 +1,4 @@
-# Standby Stack - Defense-in-Depth Security Hardening
+# Extended Observability Stack - Defense-in-Depth Security Hardening
 
 **Version:** v1.0 · **Last Updated:** October 7, 2026
 

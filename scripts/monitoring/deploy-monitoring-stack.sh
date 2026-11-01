@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 #
 # NAME: deploy-monitoring-stack.sh
-# WHAT: Bash deploy wrapper for the cluster standby monitoring stack
-#       (containers/monitoring/: Prometheus 2.45, Grafana 10.2,
-#       Alertmanager 0.26, Traefik, ntfy, step-ca, Headscale,
-#       Vaultwarden, Uptime Kuma on standby-net). Validates the
-#       host-side files, renders the compose project, pulls the
-#       pinned images, brings the stack up, and verifies health.
+# WHAT: Bash deploy wrapper for the cluster Extended Observability
+#       Stack (containers/monitoring/: Prometheus v3.15.1, Grafana
+#       13.3.0, Alertmanager v0.34.1, Traefik, ntfy, step-ca,
+#       Headscale, Vaultwarden, Uptime Kuma on standby-net).
+#       Validates the host-side files, renders the compose project,
+#       pulls the pinned images, brings the stack up, and verifies
+#       health. Day-2 lifecycle (verify, status, down, restart,
+#       uninstall) for all three deploy forms is owned by
+#       scripts/monitoring/extended-observability-control-v1.0.sh;
+#       this wrapper remains the bash deploy form it delegates to.
 # WHY:  The stack is Docker-native by design; this wrapper is the
 #       local-run form of its deployment — the same checks and steps
 #       as COMPLETE_DEPLOYMENT_GUIDE.md, scripted so a deploy either
