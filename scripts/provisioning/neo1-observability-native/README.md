@@ -68,15 +68,24 @@ stack for the cluster is `containers/monitoring/`.
 down as a unit: `up [--with-grafana]`, `down`, `restart`, and
 `status` (exit 1 when a core unit is down; Grafana is started
 only with `--with-grafana` and is always stopped by `down`).
-It starts and stops units only — it never enables or disables
-them, so boot behaviour stays exactly as install.sh left it.
-`--dry-run` prints the systemctl commands without running them.
+The up/down verbs start and stop units only — they never enable
+or disable them, so boot behaviour stays exactly as install.sh
+left it. `--dry-run` prints the systemctl commands without
+running them.
+The script also carries an `uninstall [--dry-run] [--purge]`
+verb, the kit's removal path: it prints a labeled plan, asks
+for a typed confirmation, then removes every unit install.sh
+installed (the pihole-backup and unbound-backup services and
+timers included), the binaries, the Grafana tree, and the
+configs. The data directories and the Pi-hole/Unbound backup
+copies are preserved unless `--purge` is given; `--purge` also
+removes the kit's service accounts.
 Run with no arguments on a terminal, the script opens an
 interactive panel instead: the live status table on top and an
-action menu (Up, Up with Grafana, Down, Restart, Refresh, Quit)
-below it, driving the same code paths as the subcommands. With
-no terminal (or TERM=dumb) the no-argument form prints usage
-and exits 2, as before.
+action menu (Up, Up with Grafana, Down, Restart, Uninstall,
+Refresh, Quit) below it, driving the same code paths as the
+subcommands. With no terminal (or TERM=dumb) the no-argument
+form prints usage and exits 2, as before.
 
 ## 📌 Open items (tracked, deliberate)
 

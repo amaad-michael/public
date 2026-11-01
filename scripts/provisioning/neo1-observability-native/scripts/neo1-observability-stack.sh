@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Version: 1.1 (2026-10-31)
+# Version: 1.2 (2026-10-31)
 # neo1-observability-stack.sh - bring the neo1 native observability stack up or down
 #
 # Controls the bare-metal systemd units installed by the neo1 observability
@@ -20,15 +20,19 @@
 #                             --with-grafana; "down" always stops it if it
 #                             is running.
 #
-# Out of scope on purpose: the pihole-backup and unbound-backup services and
-# timers (the DNS spare pair's backup path, a separate decision), and the
-# Docker warm-spare Pi-hole/Unbound pair.
+# Out of scope for up/down/restart on purpose: the pihole-backup and
+# unbound-backup services and timers (the DNS spare pair's backup path, a
+# separate decision), and the Docker warm-spare Pi-hole/Unbound pair.
+# The uninstall verb is the one exception: it removes everything
+# install.sh installed, the backup services and timers included, and
+# says so in its plan before asking for confirmation.
 #
 # Usage:
 #   neo1-observability-stack.sh up [--with-grafana] [--dry-run]
 #   neo1-observability-stack.sh down [--dry-run]
 #   neo1-observability-stack.sh restart [--with-grafana] [--dry-run]
 #   neo1-observability-stack.sh status
+#   neo1-observability-stack.sh uninstall [--dry-run] [--purge]
 #   neo1-observability-stack.sh          (no arguments, on a terminal:
 #                                          the interactive panel below)
 #
@@ -57,6 +61,7 @@ fi
 
 DRY_RUN=0
 WITH_GRAFANA=0
+PURGE=0
 
 usage() {
   cat <<'EOF'
@@ -65,6 +70,7 @@ Usage:
   neo1-observability-stack.sh down [--dry-run]
   neo1-observability-stack.sh restart [--with-grafana] [--dry-run]
   neo1-observability-stack.sh status
+  neo1-observability-stack.sh uninstall [--dry-run] [--purge]
 
   up       Start the core stack (ntfy, node_exporter, blackbox_exporter,
            alertmanager, prometheus). Grafana stays down unless
@@ -72,7 +78,15 @@ Usage:
   down     Stop Grafana (if running) and the whole core stack.
   restart  down, then up.
   status   Show each unit's state; exit 1 if any core unit is not active.
-  --dry-run  Print the systemctl commands without running them.
+  uninstall  Remove the whole kit from this host: every unit install.sh
+           installed (the backup services and timers included), the
+           binaries, the Grafana tree, and the configs. The data
+           directories and the Pi-hole/Unbound backup copies are
+           PRESERVED unless --purge is given; --purge also removes
+           the kit's service accounts. Prints a labeled plan and asks
+           you to type "uninstall" before changing anything.
+  --dry-run  Print the commands (and, for uninstall, the full plan)
+           without running them.
 EOF
 }
 
@@ -203,6 +217,189 @@ do_status() {
   echo "Core stack is fully active (Grafana is on-demand)."
 }
 
+# --- Uninstall (begin) ------------------------------------------------
+# Removes everything the kit installer (install.sh) laid down, in the
+# reverse spirit of the install: units first (stopped and disabled),
+# then binaries and the Grafana tree, then configs. Data outlives a
+# default uninstall on purpose: the metrics and dashboard data under
+# /var/lib, and the Pi-hole/Unbound backup copies under /var/backups,
+# are PRESERVED and labeled in the plan. --purge removes them, the
+# backup account's SSH directory, and the kit's service accounts.
+# A real run prints the whole plan and requires typing "uninstall"
+# before anything changes. --dry-run prints the plan and every command
+# without running any of them. The Docker warm-spare Pi-hole/Unbound
+# pair is a different stack and is never touched.
+
+UNINSTALL_SERVICES=(ntfy node_exporter blackbox_exporter alertmanager prometheus grafana pihole-backup unbound-backup)
+UNINSTALL_TIMERS=(pihole-backup unbound-backup)
+UNINSTALL_BINARIES=(prometheus promtool alertmanager amtool blackbox_exporter node_exporter ntfy)
+UNINSTALL_SBIN=(pihole-backup.sh unbound-backup.sh)
+UNINSTALL_CONFIG_DIRS=(/etc/prometheus /etc/alertmanager /etc/blackbox /etc/ntfy /etc/grafana)
+UNINSTALL_DATA_DIRS=(/var/lib/prometheus /var/lib/alertmanager /var/lib/grafana /var/lib/ntfy)
+UNINSTALL_USERS=(prometheus alertmanager blackbox ntfy grafana backup)
+
+uninstall_rm() {
+  local path=$1
+  if [[ -e $path || -L $path ]]; then
+    printf 'REMOVE    %s\n' "$path"
+    # $SUDO is intentionally unquoted: it is empty (root) or the single word sudo.
+    # shellcheck disable=SC2086
+    run $SUDO rm -rf -- "$path" || true
+  else
+    printf 'skip      %s (already absent)\n' "$path"
+  fi
+}
+
+do_uninstall() {
+  local unit path usr failed=0
+  echo "Uninstall plan for the neo1 observability kit (dry-run=$DRY_RUN purge=$PURGE):"
+  echo "  Step 1: stop and disable these units (the backup timers included;"
+  echo "          up/down leave them alone, uninstall removes the whole kit):"
+  for unit in "${UNINSTALL_SERVICES[@]}"; do printf '  UNIT      %s.service\n' "$unit"; done
+  for unit in "${UNINSTALL_TIMERS[@]}"; do printf '  UNIT      %s.timer\n' "$unit"; done
+  echo "  Step 2: remove the unit files and their enable links."
+  echo "  Step 3: remove the binaries and helper scripts:"
+  for path in "${UNINSTALL_BINARIES[@]}"; do printf '  REMOVE    /usr/local/bin/%s\n' "$path"; done
+  for path in "${UNINSTALL_SBIN[@]}"; do printf '  REMOVE    /usr/local/sbin/%s\n' "$path"; done
+  printf '  REMOVE    /opt/grafana (the Grafana program tree)\n'
+  echo "  Step 4: remove the configs (the Grafana admin password file in"
+  echo "          /etc/grafana goes with them):"
+  for path in "${UNINSTALL_CONFIG_DIRS[@]}"; do printf '  REMOVE    %s\n' "$path"; done
+  printf '  REMOVE    /var/cache/ntfy (cache, not data)\n'
+  if [[ $PURGE -eq 1 ]]; then
+    echo "  Step 5 (--purge): remove the data directories and backup copies:"
+    for path in "${UNINSTALL_DATA_DIRS[@]}"; do printf '  PURGE     %s\n' "$path"; done
+    printf '  PURGE     /var/backups/pihole and /var/backups/unbound\n'
+    printf '  PURGE     /home/backup (the backup account home and its SSH keys)\n'
+    echo "  Step 6 (--purge): remove the service accounts: ${UNINSTALL_USERS[*]}"
+  else
+    echo "  Step 5: data is PRESERVED for a redeploy:"
+    for path in "${UNINSTALL_DATA_DIRS[@]}"; do printf '  PRESERVED %s\n' "$path"; done
+    printf '  PRESERVED /var/backups/pihole and /var/backups/unbound (the backup copies)\n'
+    echo "          Rerun with --purge if you want them gone as well."
+    echo "  Step 6: service accounts are kept (removed only under --purge)."
+  fi
+  echo "  Final step: verify no kit unit file or binary remains."
+  echo "  To redeploy afterwards: run the kit's install.sh again."
+
+  if [[ $DRY_RUN -ne 1 ]]; then
+    local confirm=""
+    printf 'Type uninstall to confirm: '
+    if ( exec 9</dev/tty ) 2>/dev/null; then
+      IFS= read -r confirm < /dev/tty || confirm=""
+    else
+      IFS= read -r confirm || confirm=""
+    fi
+    if [[ $confirm != "uninstall" ]]; then
+      echo "Aborted: confirmation not given. Nothing was removed."
+      return 1
+    fi
+  fi
+
+  echo "Step 1: stopping and disabling units"
+  for unit in "${UNINSTALL_SERVICES[@]}"; do
+    if [[ -e /etc/systemd/system/$unit.service || -L /etc/systemd/system/$unit.service ]]; then
+      printf 'disable   %s.service\n' "$unit"
+      # shellcheck disable=SC2086
+      run $SUDO systemctl disable --now "$unit.service" || true
+    else
+      printf 'skip      %s.service (unit file absent)\n' "$unit"
+    fi
+  done
+  for unit in "${UNINSTALL_TIMERS[@]}"; do
+    if [[ -e /etc/systemd/system/$unit.timer || -L /etc/systemd/system/$unit.timer ]]; then
+      printf 'disable   %s.timer\n' "$unit"
+      # shellcheck disable=SC2086
+      run $SUDO systemctl disable --now "$unit.timer" || true
+    else
+      printf 'skip      %s.timer (unit file absent)\n' "$unit"
+    fi
+  done
+
+  echo "Step 2: removing unit files and enable links"
+  for unit in "${UNINSTALL_SERVICES[@]}"; do
+    uninstall_rm "/etc/systemd/system/$unit.service"
+    local wants
+    for wants in /etc/systemd/system/*.wants; do
+      [[ -d $wants ]] || continue
+      uninstall_rm "$wants/$unit.service"
+    done
+  done
+  for unit in "${UNINSTALL_TIMERS[@]}"; do
+    uninstall_rm "/etc/systemd/system/$unit.timer"
+    for wants in /etc/systemd/system/*.wants; do
+      [[ -d $wants ]] || continue
+      uninstall_rm "$wants/$unit.timer"
+    done
+  done
+  # shellcheck disable=SC2086
+  run $SUDO systemctl daemon-reload || true
+
+  echo "Step 3: removing binaries and the Grafana tree"
+  for path in "${UNINSTALL_BINARIES[@]}"; do uninstall_rm "/usr/local/bin/$path"; done
+  for path in "${UNINSTALL_SBIN[@]}"; do uninstall_rm "/usr/local/sbin/$path"; done
+  uninstall_rm /opt/grafana
+
+  echo "Step 4: removing configs"
+  for path in "${UNINSTALL_CONFIG_DIRS[@]}"; do uninstall_rm "$path"; done
+  uninstall_rm /var/cache/ntfy
+
+  if [[ $PURGE -eq 1 ]]; then
+    echo "Step 5: removing data directories and backup copies (--purge)"
+    for path in "${UNINSTALL_DATA_DIRS[@]}"; do uninstall_rm "$path"; done
+    uninstall_rm /var/backups/pihole
+    uninstall_rm /var/backups/unbound
+    uninstall_rm /home/backup
+    echo "Step 6: removing service accounts (--purge)"
+    for usr in "${UNINSTALL_USERS[@]}"; do
+      if id "$usr" &>/dev/null; then
+        printf 'REMOVE    user %s\n' "$usr"
+        # shellcheck disable=SC2086
+        run $SUDO userdel "$usr" || true
+      else
+        printf 'skip      user %s (absent)\n' "$usr"
+      fi
+    done
+  fi
+
+  if [[ $DRY_RUN -eq 1 ]]; then
+    echo "Dry run complete. Nothing was changed."
+    return 0
+  fi
+
+  echo "Final step: verifying the uninstall"
+  for unit in "${UNINSTALL_SERVICES[@]}"; do
+    if [[ -e /etc/systemd/system/$unit.service || -L /etc/systemd/system/$unit.service ]]; then
+      printf 'STILL PRESENT unit file: %s.service\n' "$unit"
+      failed=1
+    fi
+  done
+  for unit in "${UNINSTALL_TIMERS[@]}"; do
+    if [[ -e /etc/systemd/system/$unit.timer || -L /etc/systemd/system/$unit.timer ]]; then
+      printf 'STILL PRESENT unit file: %s.timer\n' "$unit"
+      failed=1
+    fi
+  done
+  for path in "${UNINSTALL_BINARIES[@]}"; do
+    if [[ -e /usr/local/bin/$path ]]; then
+      printf 'STILL PRESENT binary: /usr/local/bin/%s\n' "$path"
+      failed=1
+    fi
+  done
+  if [[ $failed -eq 1 ]]; then
+    echo "Uninstall finished WITH PROBLEMS: the items above remain."
+    return 1
+  fi
+  echo "Uninstall complete: the neo1 observability kit is removed from this host."
+  if [[ $PURGE -ne 1 ]]; then
+    echo "Kept for a redeploy: ${UNINSTALL_DATA_DIRS[*]} and the backup copies under /var/backups."
+    echo "To remove those too, rerun: uninstall --purge"
+  fi
+  echo "To redeploy: run the kit's install.sh again."
+  return 0
+}
+# --- Uninstall (end) ---------------------------------------------------
+
 # --- Interactive panel (begin) ---------------------------------------
 # With no arguments on a terminal, the script opens a panel instead
 # of printing usage: the live status table on top (the status
@@ -217,14 +414,16 @@ do_status() {
 # on INT/TERM that restores the cursor and exits 130. The actions
 # call the same do_up/do_down functions the subcommands call,
 # with the same flag defaults: Up is do_up without Grafana, Up
-# with Grafana is do_up with it, Down is do_down, and Restart is
+# with Grafana is do_up with it, Down is do_down, Uninstall is
+# do_uninstall (which prints its own labeled plan and requires
+# typing "uninstall" before it removes anything), and Restart is
 # do_down then do_up (stopping there if the down half fails,
 # exactly as the restart subcommand does under set -e). Refresh
 # re-reads the status table; after an action its output stays on
 # screen until a keypress, then the panel redraws with fresh
 # status. Quit (or q) erases the panel and exits 0.
 
-PANEL_ITEMS=("Up" "Up with Grafana" "Down" "Restart" "Refresh" "Quit")
+PANEL_ITEMS=("Up" "Up with Grafana" "Down" "Restart" "Uninstall" "Refresh" "Quit")
 PANEL_ROWS=()
 PANEL_CURSOR=0
 PANEL_FIRST=1
@@ -318,6 +517,9 @@ panel_run_action() {
         do_up || rc=$?
       fi
       ;;
+    4)
+      do_uninstall || rc=$?
+      ;;
   esac
   WITH_GRAFANA=0
   if [[ $rc -ne 0 ]]; then
@@ -346,18 +548,18 @@ panel() {
     fi
     case $key in
       $'\033[A' | k)
-        PANEL_CURSOR=$(((PANEL_CURSOR + 5) % 6))
+        PANEL_CURSOR=$(((PANEL_CURSOR + 6) % 7))
         ;;
       $'\033[B' | j)
-        PANEL_CURSOR=$(((PANEL_CURSOR + 1) % 6))
+        PANEL_CURSOR=$(((PANEL_CURSOR + 1) % 7))
         ;;
       q)
         break
         ;;
       '' | $'\n' | $'\r')
-        if [[ $PANEL_CURSOR -eq 5 ]]; then
+        if [[ $PANEL_CURSOR -eq 6 ]]; then
           break
-        elif [[ $PANEL_CURSOR -eq 4 ]]; then
+        elif [[ $PANEL_CURSOR -eq 5 ]]; then
           panel_status_rows
         else
           panel_run_action "$PANEL_CURSOR"
@@ -391,6 +593,7 @@ main() {
     case $arg in
       --with-grafana) WITH_GRAFANA=1 ;;
       --dry-run) DRY_RUN=1 ;;
+      --purge) PURGE=1 ;;
       *)
         echo "Unknown option: $arg" >&2
         usage >&2
@@ -398,6 +601,11 @@ main() {
         ;;
     esac
   done
+  if [[ $PURGE -eq 1 && $cmd != "uninstall" ]]; then
+    echo "--purge is only valid with uninstall." >&2
+    usage >&2
+    return 2
+  fi
   case $cmd in
     up) do_up ;;
     down) do_down ;;
@@ -412,6 +620,14 @@ main() {
         return 2
       fi
       do_status
+      ;;
+    uninstall)
+      if [[ $WITH_GRAFANA -eq 1 ]]; then
+        echo "uninstall does not take --with-grafana." >&2
+        usage >&2
+        return 2
+      fi
+      do_uninstall
       ;;
     -h | --help | help)
       usage
