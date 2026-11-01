@@ -118,6 +118,27 @@ The SD tighten script adds two steps:
   on the same SD card; they are staging only. Pull them off-node
   before calling the node backed up.
 
+### The controller: gitea-control-v1.0.sh
+
+One script owns the whole lifecycle, in the neo1 observability
+controller's shape. Verbs: `install`, `tighten`, `up`, `down`,
+`restart`, `status`, and `uninstall`, each taking
+`--form native`, `--form sd`, or `--form container`. The native forms
+run the installer and tighten scripts above as-is (nothing is
+reimplemented); the container form wraps `docker compose` in
+`containers/gitea`. `uninstall` prints a labeled plan before touching
+anything, needs the typed confirmation `gitea`, preserves
+`/var/lib/gitea` and the `git` account by default (the `gitea_data`
+volume on the container form), and removes that data only with
+`--purge`. On the SD form it also removes the dump timer units the SD
+tighten script installed; the SD installer's host tuning (zram swap,
+fstab edits, journald drop-in) is host configuration and is left in
+place. `--dry-run` prints the plan and changes nothing. Every verb's
+header output and exit codes are documented in the script's own
+READ THIS block. The Ansible playbook
+(`ansible/playbooks/gitea/install_gitea.yml`) stays a parallel
+install path and is not wrapped.
+
 ## 🛠️ LAMP (bare metal)
 
 Two distro-specific installers for the same stack: Apache, PHP-FPM,
