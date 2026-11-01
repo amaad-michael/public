@@ -30,7 +30,8 @@
 # The monthly maintenance wrapper (scripts/run_monthly_maintenance.sh)
 # reboots pi0, pi2, pi3, and pi4 with the simple playbook; the bash
 # equivalent is:
-#   ./scripts/fleet-reboot.sh --simple --limit pi0,pi2,pi3,pi4
+#   ./scripts/fleet-reboot.sh --simple --limit pi0,pi2,pi3,pi4 --confirm
+# (--confirm because that run is non-interactive; see below.)
 #
 # Usage (from the repo root):
 #   ./scripts/fleet-reboot.sh                      # complex, all of pi_all
@@ -46,7 +47,12 @@
 # "reboot") before the first host is touched, and declining it
 # reboots nothing. Off a terminal (or with TERM=dumb) the bare
 # form keeps its long-standing meaning exactly: all of pi_all,
-# no panel, no confirmation. The --limit path and the Ansible
+# no panel, no confirmation. The --limit path carries the same
+# typed confirmation: on a terminal it stops for the same
+# "reboot" prompt before the first host is touched, and off a
+# terminal (or with TERM=dumb) it refuses to run unless
+# --confirm is given, so a scripted run states its intent
+# explicitly instead of rebooting on a bare list. The Ansible
 # forms are untouched by any of this.
 #
 # Environment: SSH_KEY (default ~/.ssh/pi_cluster_key), SSH_USER (default
@@ -55,7 +61,7 @@
 # substituted).
 set -euo pipefail
 
-SCRIPT_VERSION="1.1"
+SCRIPT_VERSION="1.2"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -70,6 +76,7 @@ SSH_TIMEOUT="${SSH_TIMEOUT:-10}"
 LIMIT=""
 MODE="complex"
 DRY_RUN=false
+CONFIRM=false
 CONTINUE_ON_ERROR=false
 REBOOT_TIMEOUT=600
 DOWN_TIMEOUT=120
@@ -93,6 +100,8 @@ Options:
   --inventory FILE        Ansible inventory to read pi_all from
   --ssh-key PATH          Fleet SSH key (default ~/.ssh/pi_cluster_key)
   --dry-run               Run pre-checks and print the plan; reboot nothing
+  --confirm               For --limit off a terminal only: proceed without
+                          the typed confirmation (a terminal always prompts)
   -h, --help              This help
 EOF
 }
@@ -109,6 +118,7 @@ while [[ $# -gt 0 ]]; do
         --inventory) INVENTORY="$2"; shift 2 ;;
         --ssh-key) SSH_KEY="$2"; shift 2 ;;
         --dry-run) DRY_RUN=true; shift ;;
+        --confirm) CONFIRM=true; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "ERROR: unknown option: $1" >&2; usage >&2; exit 2 ;;
     esac
@@ -162,15 +172,17 @@ done < <(awk '
 # stays open with a notice. The caller also dies on an empty
 # selection rather than ever treating one as the whole fleet.
 #
-# SELECTION ONLY: the panel never authorizes a reboot. This
-# script has never had a confirmation step on any path, so the
-# panel path carries one of its own, after the panel and before
-# main: confirm_panel_selection makes the operator type the
-# word "reboot" at a plain prompt, and anything else aborts the
-# run with nothing rebooted. The confirmation exists only on
-# the panel path: --limit runs, off-terminal runs, and TERM=dumb
-# runs behave exactly as they always have, byte for byte, and
-# never see the panel or the prompt.
+# SELECTION ONLY: the panel never authorizes a reboot. The
+# panel path carries a confirmation step of its own, after the
+# panel and before main: confirm_panel_selection makes the
+# operator type the word "reboot" at a plain prompt, and
+# anything else aborts the run with nothing rebooted. The
+# --limit selection path below reuses the same function, so
+# both interactive paths stop for exactly the same prompt; off
+# a terminal, --limit requires --confirm instead. The bare
+# off-terminal and TERM=dumb forms behave exactly as they
+# always have, byte for byte, and never see the panel or the
+# prompt.
 
 HP_ON=()
 HP_CURSOR=0
@@ -363,6 +375,11 @@ if [[ -n "$LIMIT" ]]; then
         done
         $found || die "--limit names unknown host: $w"
     done
+    if [[ -t 0 && -t 1 && "${TERM:-}" != "dumb" ]]; then
+        confirm_panel_selection
+    elif ! $CONFIRM; then
+        die "--limit without a terminal requires --confirm: refusing to reboot ${SELECTED[*]} on a bare list; re-run with --confirm, or run on a terminal and type 'reboot'"
+    fi
 elif [[ -t 0 && -t 1 && "${TERM:-}" != "dumb" ]]; then
     host_pick_panel
     [[ ${#SELECTED[@]} -gt 0 ]] || die "panel returned an empty host selection; nothing to reboot"
