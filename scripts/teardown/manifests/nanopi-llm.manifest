@@ -1,0 +1,25 @@
+# shellcheck shell=bash
+# shellcheck disable=SC2034 # the variables are consumed by native-stack-teardown-v1.0.sh, which sources this file
+_LLM_HOME=$(getent passwd "${SUDO_USER:-${USER:-root}}" | cut -d: -f6)
+_LLM_HOME="${_LLM_HOME:-/root}"
+STACK_NAME="nanopi-llm"
+CONFIRM_TOKEN="nanopi"
+STACK_DESC="NanoPi LLM node: llama-server unit plus the nginx load-balancer site the setup installs."
+REDEPLOY_HINT="scripts/llm/nanopi-llm-setup.sh"
+UNITS=(llama-server)
+REMOVE_PATHS=(
+    /etc/nginx/sites-available/llm-lb.conf
+    /etc/nginx/sites-enabled/llm-lb.conf
+)
+PRESERVE_PATHS=(
+    "${_LLM_HOME}/llama.cpp"
+    "${_LLM_HOME}/models"
+)
+PURGE_PATHS=()
+USERS=()
+REMOVE_GROUPS=()
+NOTES=(
+    "The llama.cpp checkout and the downloaded models live in the installing user's home and are preserved by default; --purge removes them."
+    "No service account exists for this stack: the setup runs as the installing user, and that account is never touched."
+    "nginx itself stays installed (it is shared infrastructure). The setup removed the default site's enable symlink when it installed; this teardown does not restore it."
+)

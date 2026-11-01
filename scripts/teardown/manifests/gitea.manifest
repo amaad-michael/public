@@ -1,0 +1,28 @@
+# Manifest: Gitea (native install)
+# Covers scripts/provisioning/install-gitea.sh and the Gitea half of
+# scripts/provisioning/install-gitea-sd.sh. Sourced by
+# native-stack-teardown-v1.0.sh. Plain bash assignments and arrays.
+# shellcheck shell=bash
+# shellcheck disable=SC2034 # the variables are consumed by native-stack-teardown-v1.0.sh, which sources this file
+STACK_NAME="gitea"
+CONFIRM_TOKEN="gitea"
+STACK_DESC="Gitea git server, native install (binary, systemd unit, git service account)."
+REDEPLOY_HINT="scripts/provisioning/install-gitea.sh (on SD-card hosts: install-gitea-sd.sh)"
+UNITS=(gitea gitea-dump gitea-dump.timer)
+REMOVE_PATHS=(
+    /etc/gitea
+    /usr/local/bin/gitea
+)
+PRESERVE_PATHS=(
+    /var/lib/gitea
+)
+PURGE_PATHS=(
+    /home/git
+)
+USERS=(git)
+REMOVE_GROUPS=(git)
+NOTES=(
+    "/var/lib/gitea holds the repositories and Gitea's data. It is preserved by default."
+    "The SD-card variant's host tuning (zram swap unit, /etc/fstab edits, journald drop-in) is host configuration, not Gitea state, and is left in place on purpose."
+    "The standard tighten script only adjusts permissions on files this teardown already removes. The SD tighten script additionally installs the gitea-dump backup service and timer; both are listed in UNITS above and are removed with the stack. They are absent, and skipped, on server installs."
+)
