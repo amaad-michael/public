@@ -70,3 +70,105 @@ chmod 600. The pattern per project:
   `/var/lib/open-terminal/api_key.txt`; reuse that value when
   switching forms) and optionally OPEN_TERMINAL_WORKSPACE. Compose
   refuses to start until the API key is set.
+
+## 🐳 Running these stacks on Rocky with Podman
+
+> **Status: UNTESTED (2026-10-31).** Nothing in this section has
+> been run yet. The stacks are developed and verified against
+> Docker on Debian-family hosts. The first proof is the pi3
+> shakedown, after pi3's rebuild puts a Rocky host with Podman
+> into service; until then, treat every behavioral statement
+> below as an expectation to verify, not a result.
+
+Rocky does not ship Docker; its native container engine is
+Podman. These stacks can in principle run under it, with the
+following known considerations.
+
+### Prerequisites
+
+- **podman**: in the base Rocky repositories.
+- **podman-compose**: in EPEL. It reimplements the Compose spec
+  for Podman; the stacks are written against Docker Compose, so
+  its fidelity is the main open question (see the watch items
+  below).
+- **podman-docker** (optional): a shim that provides the
+  `docker` command name on top of Podman, useful because this
+  repo's tooling calls `docker` (see the tooling caveat below).
+
+### Run rootful
+
+The stacks were written for rootful Docker. Run them rootful
+under Podman as well. Rootless Podman is a fine tool, but it
+networks differently (unprivileged ports, user-mode
+networking), and these compose files were not written or
+tested for that mode.
+
+### SELinux and bind mounts (the main expected friction)
+
+Rocky enforces SELinux. Most compose files here bind-mount
+host files or directories into the containers (config files,
+site content, scripts). Those mounts were written for
+Debian-family Docker hosts, where nothing labels them, and
+SELinux will deny the container access until the content is
+relabeled.
+
+- Append `:Z` to a bind mount to have its content relabeled
+  privately for that container, or `:z` to share the label
+  between containers. Which one is right depends on whether
+  anything else needs the same content; when in doubt, prefer
+  `:Z` on content only that stack uses.
+- Named volumes need no action: Podman labels them
+  automatically.
+
+Stacks whose compose files bind-mount host paths, from a
+survey of every `containers/*/docker-compose.yml` on
+2026-10-31: backup-integrity, cockpit, cron-audit,
+firewall-audit, gitea, gpu-llm, health-smart, lamp, llm,
+monitoring, neo1-observability-docker, open-terminal,
+optiplex-llm, pihole. Stacks that use only named volumes and
+have no bind mounts to relabel: jenkins, ops-toolkit, scanner.
+
+Some bind mounts are special cases worth a second look before
+relabeling: cron-audit mounts the host's `/etc` and
+`/var/spool/cron`, firewall-audit mounts `/etc/firewalld`,
+and neo1-observability-docker mounts the host root filesystem
+read-only. Relabeling shared system directories affects the
+host, not just the container; these three need an explicit
+decision during the shakedown rather than a mechanical `:Z`.
+
+### Compose-fidelity watch items (unverified)
+
+podman-compose covers most of the Compose spec, but the
+following features used in this repo are the ones to test
+first, because they are historically the least uniformly
+implemented. Each is an expectation to verify during the
+shakedown, not a known failure:
+
+- `depends_on` with `condition: service_healthy` (gpu-llm,
+  lamp, llm, pihole)
+- healthchecks (cockpit, gitea, gpu-llm, jenkins, lamp, llm,
+  monitoring, neo1-observability-docker, open-terminal,
+  optiplex-llm, pihole)
+- required-variable interpolation, `${VAR:?}` (gitea,
+  gpu-llm, lamp, llm, monitoring, neo1-observability-docker,
+  open-terminal, pihole)
+- `build:` sections (backup-integrity, cron-audit,
+  firewall-audit, health-smart, lamp,
+  neo1-observability-docker, ops-toolkit, scanner)
+- the Docker API socket: monitoring's Traefik service mounts
+  `/var/run/docker.sock` and reads container state from it.
+  Under Podman the equivalent is the Podman API socket, at a
+  different path and with its own compatibility surface; that
+  wiring is untested.
+
+### Tooling caveat
+
+This repo's lifecycle tooling (the stack controllers and the
+teardown engine) invokes `docker compose`, and the teardown
+engine parses `docker compose config` JSON output to build
+its removal plan. Under the podman-docker shim the simple
+verbs translate, but state reporting and the JSON render
+under Podman are unverified. Until the shakedown proves
+otherwise, treat controller status and verification output
+on a Podman host as unreliable, and read the engine's plan
+output carefully before confirming any teardown there.
