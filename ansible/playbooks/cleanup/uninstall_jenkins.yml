@@ -169,15 +169,15 @@
 
         - name: 9. Remove Jenkins user and group
           block:
-            - name: Remove Jenkins group
-              ansible.builtin.group:
-                name: "{{ jenkins_group }}"
-                state: absent
             - name: Remove Jenkins user
               ansible.builtin.user:
                 name: "{{ jenkins_user }}"
                 state: absent
                 remove: yes
+            - name: Remove Jenkins group
+              ansible.builtin.group:
+                name: "{{ jenkins_group }}"
+                state: absent
 
         - name: 10. Remove all remaining Jenkins directories
           ansible.builtin.file:
