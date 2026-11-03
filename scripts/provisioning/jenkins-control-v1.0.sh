@@ -24,7 +24,7 @@
 #               agent port 50000 is opened only when the installer
 #               was run with --with-agent-port.
 #     container containers/jenkins: a single container named jenkins
-#               (image jenkins/jenkins:2.580.1-lts, the same LTS the
+#               (image jenkins/jenkins:2.580.2-lts, the same LTS the
 #               Ansible form pins), home in the named Docker volume
 #               whose name ends in jenkins_home (mounted at
 #               /var/jenkins_home inside the container), web port

@@ -4,13 +4,13 @@ A single-container Jenkins at the same LTS version as the other two
 forms of this deployment: `scripts/provisioning/install-jenkins-rocky.sh`
 (bash, bare metal under systemd) and
 `ansible/playbooks/jenkins/install_jenkins.yml` (Ansible). The
-Ansible form and this container pin Jenkins LTS 2.580.1; the bash
+Ansible form and this container pin Jenkins LTS 2.580.2; the bash
 form installs the current LTS from the Jenkins repo, unpinned. All
 three serve the web UI on port 8080.
 
-The image tag is `jenkins/jenkins:2.580.1-lts`, the official LTS tag
+The image tag is `jenkins/jenkins:2.580.2-lts`, the official LTS tag
 for the pinned version (Docker Hub also publishes the plain
-`2.580.1` tag; the `-lts` tag is the one that names the release
+`2.580.2` tag; the `-lts` tag is the one that names the release
 line). No `.env` file is required: this stack holds no secrets of
 its own. The first-run setup wizard generates the initial admin
 password inside the container, exactly like the package install.

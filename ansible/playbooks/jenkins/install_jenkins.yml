@@ -1,7 +1,7 @@
 ---
 # install_jenkins.yml — Ansible form of scripts/provisioning/install-jenkins-rocky.sh
 #
-# Installs Jenkins LTS 2.580.1 on Rocky Linux 8/9/10 (RHEL-like systems
+# Installs Jenkins LTS 2.580.2 on Rocky Linux 8/9/10 (RHEL-like systems
 # can override the OS check with -e allow_other_os=true), mirroring the
 # bash installer step for step: Java selection (21 on Rocky 10+, 17 on
 # 8/9), the Jenkins stable repository file and GPG key from
@@ -33,7 +33,7 @@
   gather_facts: yes
 
   vars:
-    jenkins_version: "2.580.1"
+    jenkins_version: "2.580.2"
     jenkins_port: 8080
     jenkins_agent_port: 50000
     # Empty means auto: 21 on Rocky 10+, 17 on 8/9 (Rocky 10 dropped
