@@ -12,6 +12,10 @@ the three forms so you can pick the right one.
 - [setup_open_terminal-v1_2.sh](#setup_open_terminal-v1_2sh)
 - [nanopi-llm-setup.sh](#nanopi-llm-setupsh)
 - [nanopi-llm-control-v1.0.sh](#nanopi-llm-control-v10sh)
+- [gpu-box-llm-control-v1.0.sh](#gpu-box-llm-control-v10sh)
+- [gpu-box-llm-teardown-v1.0.sh](#gpu-box-llm-teardown-v10sh)
+- [optiplex-llm-control-v1.0.sh](#optiplex-llm-control-v10sh)
+- [optiplex-llm-teardown-v1.0.sh](#optiplex-llm-teardown-v10sh)
 - [See it running](#see-it-running)
 - [Which form of each stack](#which-form-of-each-stack)
 
@@ -217,6 +221,49 @@ containers, and its host models directory is never removed. The
 uninstall footprint agrees with the native teardown engine's
 `nanopi-llm` manifest, extended with the UFW rules the setup
 added and the container form's containers.
+
+## gpu-box-llm-control-v1.0.sh
+
+The lifecycle controller for the GPU box stack, in the same shape
+as the other LLM stack controllers: setup, start, stop, restart,
+status, and uninstall as verbs of one script. The setup verb runs
+`gpu-box-llm-setup-v1.9.sh` as-is; the uninstall verb folds in the
+teardown below, preserving the Ollama model state (the native
+models directory and the compose `ollama_data` volume) unless
+`--purge` is given.
+
+## gpu-box-llm-teardown-v1.0.sh
+
+The standalone teardown for the GPU box stack: removes what
+`gpu-box-llm-setup-v1.9.sh` installed in both forms (bare-metal
+Ollama plus the Docker-run Open WebUI and SearXNG, and the
+containers/gpu-llm compose stack). It prints a labeled plan,
+needs a typed confirmation, and preserves the model state by
+default; `--purge` removes it and the ollama system user. The
+controller above supersedes it as the entry point; it remains
+as built.
+
+## optiplex-llm-control-v1.0.sh
+
+The lifecycle controller for the OptiPlex stack, in the same
+shape: setup, start, stop, restart, status, and uninstall as
+verbs of one script. The setup verb runs
+`optiplex-llm-setup-v2.1.sh` as-is (its environment knobs pass
+through unchanged); the uninstall verb folds in the teardown
+below, preserving the model state (the native models directory
+and the compose `optiplex_llm_models` volume) unless `--purge`
+is given.
+
+## optiplex-llm-teardown-v1.0.sh
+
+The standalone teardown for the OptiPlex stack: removes what
+`optiplex-llm-setup-v2.1.sh` installed in both forms (the native
+llama.cpp build, the llama-server unit, and /etc/llm, and the
+containers/optiplex-llm container form). It prints a labeled
+plan, needs a typed confirmation, and preserves the model state
+by default; `--purge` removes it and the llm system user. The
+controller above supersedes it as the entry point; it remains
+as built.
 
 ## See it running
 

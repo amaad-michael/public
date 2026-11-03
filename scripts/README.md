@@ -30,6 +30,10 @@ Utility scripts for the homelab, grouped by job. Each folder's README is the usa
   Proxmox installers, the Gitea post-setup tightening scripts, the
   LUKS Vault Guardian, and the neo1 observability kit (native
   systemd form).
+- [teardown](teardown/stack-teardown-v1.0.sh): the two teardown
+  engines: the generic compose engine, which reads a stack's removal
+  plan from its own rendered compose config, and the manifest-driven
+  native engine (manifests in `teardown/manifests/`).
 - [security](security/README.md): the secure-server-init hardening
   family, SSH access tooling, and repo-public-check.
 - [workstation](workstation/README.md): Nobara setup, the GPU box

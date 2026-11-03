@@ -166,6 +166,12 @@ installer wants. The verification block enforces it: the run fails if
 also runs `restorecon` on its probe page and prints `getenforce` as
 part of verification.
 
+`lamp-control-v1.0.sh` is the lifecycle controller for the LAMP
+forms: its `install` verb runs the distro's installer above as-is,
+`up`, `down`, `restart`, and `status` drive the services, and
+`uninstall` removes the stack footprint (with `--form container`
+the same verbs drive the compose stack in `containers/lamp`).
+
 For the Ansible form of the same stack, see
 `ansible/playbooks/lamp/` (one playbook, distro-conditional tasks
 reconciling both installers). For the container form, see
