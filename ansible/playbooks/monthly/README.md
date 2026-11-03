@@ -14,8 +14,8 @@ The general fleet playbook.
 
 - RedHat family: installs `dnf-utils`, upgrades every package with dnf, and detects a pending reboot with `needs-restarting -r`.
 - Debian family: apt dist-upgrade with autoremove, and checks for `/var/run/reboot-required`.
-- It combines both signals into one `reboot_required` result and prints a summary, including a "Will reboot" line.
-- It does not reboot. The reboot task is present in the file but commented out, so the `reboot_msg`, `reboot_pre_delay`, `reboot_post_delay`, and `reboot_timeout` (900 seconds) variables are defined but currently unused. Reboots after this playbook are a separate step; see `ansible/playbooks/reboots/`.
+- It combines both signals into one `reboot_required` result and prints a summary, including a "Reboot required" line.
+- It does not reboot. Reboots after this playbook are a separate step; see `ansible/playbooks/reboots/`.
 
 ## monthly_maint_pihole.yml
 

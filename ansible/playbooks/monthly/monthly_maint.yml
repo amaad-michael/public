@@ -4,12 +4,6 @@
   become: true
   gather_facts: true
 
-  vars:
-    reboot_msg: "Reboot initiated by Ansible after monthly patching"
-    reboot_pre_delay: 10
-    reboot_post_delay: 45
-    reboot_timeout: 900
-
   tasks:
     # ---------------------------------------------------------
     # RedHat Family Tasks
@@ -59,7 +53,7 @@
       when: ansible_facts['os_family'] == "Debian"
 
     # ---------------------------------------------------------
-    # Summary & Reboot Logic
+    # Summary & Reboot Detection
     # ---------------------------------------------------------
     - name: Set consolidated reboot_required fact
       set_fact:
@@ -81,12 +75,4 @@
           # Fixed crash: checks if .stat is defined before accessing .stat.exists
           - "Debian reboot file: {{ debian_reboot_required_file.stat.exists if (debian_reboot_required_file.stat is defined) else 'n/a' }}"
           - "RedHat needs-restarting: {{ rhel_reboot_required | default('n/a') }}"
-          - "Will reboot: {{ reboot_required }}"
-
-    # - name: Reboot system if updates were applied or reboot is required
-    #   ansible.builtin.reboot:
-    #     msg: "{{ reboot_msg }}"
-    #     pre_reboot_delay: "{{ reboot_pre_delay }}"
-    #     post_reboot_delay: "{{ reboot_post_delay }}"
-    #     reboot_timeout: "{{ reboot_timeout }}"
-    #   when: reboot_required | bool
+          - "Reboot required: {{ reboot_required }} (this playbook does not reboot; reboots are a separate step, see playbooks/reboots/)"
