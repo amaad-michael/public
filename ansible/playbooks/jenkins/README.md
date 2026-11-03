@@ -9,7 +9,7 @@ exactly what the installer creates.
 
 ## install_jenkins.yml
 
-Installs Jenkins LTS 2.580.1 on Rocky Linux 8, 9, or 10:
+Installs Jenkins LTS 2.580.2 on Rocky Linux 8, 9, or 10:
 
 - Fails on non-Rocky/RHEL systems unless `-e allow_other_os=true`.
 - Installs Java with dnf: version 21 on Rocky 10 and later, 17 on
@@ -19,7 +19,7 @@ Installs Jenkins LTS 2.580.1 on Rocky Linux 8, 9, or 10:
   when `/etc/yum.repos.d/jenkins.repo` is absent or empty, like the
   bash installer) and imports the Jenkins GPG key.
 - Installs the `jenkins` package pinned to `jenkins_version`
-  (2.580.1).
+  (2.580.2).
 - Enables the systemd service and starts it, then waits for the
   initial admin password file at
   `/var/lib/jenkins/secrets/initialAdminPassword`.
