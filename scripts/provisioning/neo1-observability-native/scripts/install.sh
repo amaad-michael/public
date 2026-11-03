@@ -25,8 +25,8 @@ NTFY_VERSION="2.32.0"            # ntfy_…_linux_armv7.tar.gz
 NTFY_SHA256="feda554c21ef68176b0defa704815eec64d5751557fa16eb041de778d9c2b476"
 # Grafana: the armhf (linux-armv7) tarball was verified to exist for
 # this version; Grafana has wavered on 32-bit ARM — re-verify on bump.
-GRAFANA_VERSION="13.2.4"         # grafana-…linux-armv7.tar.gz (dl.grafana.com)
-GRAFANA_SHA256="e157812666d3a275f43452c83eefd8d0a5bf9c067275e8a7a7d5b0b579d169cb"
+GRAFANA_VERSION="13.2.5"         # grafana-…linux-armv7.tar.gz (dl.grafana.com)
+GRAFANA_SHA256="b8d74c48d528a7053e33b1eadf1f9f2b657a86c3de8280874df585cbcc35777f"
 ### --------------------------------------------------------------------
 
 for v in PROM_VERSION PROM_SHA256 AM_VERSION AM_SHA256 BB_VERSION BB_SHA256 \
