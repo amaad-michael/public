@@ -279,6 +279,20 @@ the session it would remove. Five desktops are protected and never
 removed: MATE, Xfce, Cinnamon, LXDE, and Openbox. It takes no
 scripted snapshots; read the script's header before a real run.
 
+## find-ebooks-by-topic-v1.0.sh
+
+A Humble Bundle library harvester. It searches the ebook files in
+`~/Downloads/HumbleBundle` (PDF, EPUB, MOBI, and AZW3) by filename
+for topics given as arguments (several per run, quoted phrases
+allowed) or at an interactive prompt, and copies the distinct
+matches into one folder per topic on the Desktop,
+`~/Desktop/<Topic>-Books`, with all spaces hyphenated. The same
+file appearing in several bundles is copied once (same name and
+size counts as the same book); a different book with the same
+filename is kept under a `-2` suffix. Originals are never touched,
+re-runs are idempotent, and `--plan` previews a run without
+copying.
+
 ## Ansible counterpart
 
 `ansible/playbooks/workstation/nobara_first_boot.yml` is the
