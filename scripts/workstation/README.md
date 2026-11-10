@@ -268,6 +268,17 @@ home-directory setup, not `scripts/llm/optiplex-llm-setup-v2.1.sh`,
 which installs to `/opt/llama.cpp` and builds with `GGML_NATIVE`.
 Use this updater only on a host set up the home-directory way.
 
+## fedora-desktop-swap-v1.3.sh
+
+A desktop environment replacement tool for Fedora-family systems
+(Fedora, Nobara). It detects every desktop environment and
+standalone window manager in its 15-entry registry, and replaces
+the installed set with the operator's chosen set in a single run
+from a TTY; a graphical-session gate stops it from running inside
+the session it would remove. Five desktops are protected and never
+removed: MATE, Xfce, Cinnamon, LXDE, and Openbox. It takes no
+scripted snapshots; read the script's header before a real run.
+
 ## Ansible counterpart
 
 `ansible/playbooks/workstation/nobara_first_boot.yml` is the
