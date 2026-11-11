@@ -1,6 +1,10 @@
 #!/bin/bash
 # Pi-hole blocklist initialization script
-# Runs automatically on first container startup via docker-compose
+# Run manually once after the container's first start (see
+# containers/pihole/README.md); the compose file does not invoke it.
+# Uses pihole-FTL's embedded sqlite3 shell: the pihole image ships
+# no standalone sqlite3 binary (all five inserts failed on neo1,
+# 2026-11-11, until they were run through pihole-FTL sqlite3).
 # Idempotent - safe to re-run (uses INSERT OR IGNORE)
 
 set -euo pipefail
@@ -38,7 +42,7 @@ for blocklist in "${BLOCKLISTS[@]}"; do
     NAME="${blocklist#*|}"
 
     # INSERT OR IGNORE - safely re-runnable
-    if sqlite3 "$PIHOLE_DB" \
+    if pihole-FTL sqlite3 "$PIHOLE_DB" \
         "INSERT OR IGNORE INTO adlist (address, enabled, comment) VALUES ('$URL', 1, '$NAME');"; then
         echo "✓ Added: $NAME"
     else
@@ -60,7 +64,7 @@ fi
 
 echo ""
 echo "Blocklist counts:"
-sqlite3 "$PIHOLE_DB" "SELECT COUNT(*) as total_adlists FROM adlist;"
-sqlite3 "$PIHOLE_DB" "SELECT COUNT(*) as total_domains FROM gravity;" 2>/dev/null || echo "Gravity domains: (calculating...)"
+pihole-FTL sqlite3 "$PIHOLE_DB" "SELECT COUNT(*) as total_adlists FROM adlist;"
+pihole-FTL sqlite3 "$PIHOLE_DB" "SELECT COUNT(*) as total_domains FROM gravity;" 2>/dev/null || echo "Gravity domains: (calculating...)"
 
 exit 0

@@ -9,8 +9,8 @@
 # forms this repo carries:
 #
 #   container  The Docker pair in containers/pihole (containers
-#              pihole-backup and unbound-backup on the pihole-backup
-#              bridge network). This is the form install-pihole-unbound.sh
+#              pihole and unbound on the pihole bridge network).
+#              This is the form install-pihole-unbound.sh
 #              deploys. As of 2026-11-11 the fleet (pi4 primary, pi0
 #              secondary, neo1 warm spare) still runs the legacy form
 #              below; this form is the migration target, not the
@@ -19,7 +19,10 @@
 #              is an as-built record, NOT a deployable form: this script
 #              refuses to install it, but down and uninstall work against
 #              it (point --compose-dir at the legacy dir) so an old
-#              deployment can still be taken out cleanly.
+#              deployment can still be taken out cleanly. The legacy
+#              form's containers keep the pihole-backup / unbound-backup
+#              names; this script reads the container and network
+#              names from whichever compose file it is pointed at.
 #   native     The bare-metal install (Pi-hole's own installer plus
 #              the apt Unbound package). Performed by the bash installer
 #              install-pihole-unbound-native-v1.0.sh, which mirrors the
@@ -247,6 +250,8 @@ compose_detect() {
 COMPOSE_FILE=""
 STACK_NAME=""
 STACK_VOLUMES=()
+STACK_CONTAINERS=()
+STACK_NETWORK=""
 compose_setup() {
     [[ -d $COMPOSE_DIR ]] || die "compose directory not found: $COMPOSE_DIR"
     COMPOSE_DIR=$(cd -- "$COMPOSE_DIR" && pwd)
@@ -259,6 +264,25 @@ compose_setup() {
         STACK_VOLUMES=("${STACK_NAME}_pihole_etc" "${STACK_NAME}_pihole_dnsmasq" "${STACK_NAME}_unbound_etc")
     else
         STACK_VOLUMES=("${STACK_NAME}_pihole_etc" "${STACK_NAME}_pihole_dnsmasq" "${STACK_NAME}_unbound_custom")
+    fi
+    # Container and network names as the targeted compose file
+    # declares them. The current form renamed its containers in
+    # 2026-11 (pihole / unbound on the pihole network); the legacy
+    # form and pre-rename stagings still carry the -backup names, so
+    # read them from the file instead of assuming either name set.
+    STACK_CONTAINERS=()
+    local cn
+    while IFS= read -r cn; do
+        if [[ -n $cn ]]; then
+            STACK_CONTAINERS+=("$cn")
+        fi
+    done < <(grep -E '^[[:space:]]+container_name:' "$COMPOSE_FILE" | sed 's/.*container_name:[[:space:]]*//' | tr -d "\"'")
+    if ((${#STACK_CONTAINERS[@]} == 0)); then
+        STACK_CONTAINERS=(pihole-backup unbound-backup)
+    fi
+    STACK_NETWORK=$(awk '/^networks:/ {f=1; next} f && /^  [A-Za-z0-9_-]+:/ {gsub(/:/, "", $1); print $1; exit}' "$COMPOSE_FILE")
+    if [[ -z $STACK_NETWORK ]]; then
+        STACK_NETWORK="pihole-backup"
     fi
 }
 
@@ -337,7 +361,7 @@ status_container() {
     compose_setup
     local present=0 absent=0 c v st
     log "Form: container (compose project in $COMPOSE_DIR)"
-    for c in pihole-backup unbound-backup; do
+    for c in "${STACK_CONTAINERS[@]}"; do
         st=$(container_state "$c")
         log "  container $c: $st"
         if [[ $st == "absent" ]]; then absent=$((absent + 1)); else present=$((present + 1)); fi
@@ -503,8 +527,15 @@ do_logs_clean_native() {
 }
 
 do_logs_clean_container() {
+    local ctr="pihole-backup"
+    if [[ -f "${COMPOSE_DIR}/docker-compose.yml" ]]; then
+        ctr=$(grep -E '^[[:space:]]+container_name:' "${COMPOSE_DIR}/docker-compose.yml" | head -n 1 | sed 's/.*container_name:[[:space:]]*//' | tr -d "\"'" || true)
+        if [[ -z $ctr ]]; then
+            ctr="pihole-backup"
+        fi
+    fi
     log "Nothing to do in the container form: container logs are managed"
-    log "by Docker's log driver (see 'docker logs pihole-backup'), and"
+    log "by Docker's log driver (see 'docker logs $ctr'), and"
     log "Pi-hole's own log files live inside the pihole_etc volume. The"
     log "bare-metal log shredder (logs-clean --form native) does not"
     log "apply here."
@@ -520,8 +551,8 @@ plan_container_uninstall() {
     log "════════════════════════════════════════════════════════════════"
     dns_warning
     log "REMOVE:"
-    log "  containers pihole-backup and unbound-backup"
-    log "  the pihole-backup bridge network (via compose down)"
+    log "  containers ${STACK_CONTAINERS[*]}"
+    log "  the $STACK_NETWORK bridge network (via compose down)"
     if [[ $PURGE -eq 1 ]]; then
         log "PURGE (volumes removed because --purge was given):"
         local v
@@ -551,7 +582,7 @@ do_uninstall_container() {
     fi
     log "Step 2 of 2: verification"
     local failed=0 c v
-    for c in pihole-backup unbound-backup; do
+    for c in "${STACK_CONTAINERS[@]}"; do
         if [[ $(container_state "$c") != "absent" ]]; then
             log "  LEFTOVER: container $c still exists"
             failed=1
