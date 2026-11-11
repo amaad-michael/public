@@ -73,11 +73,21 @@ COMPOSE_DIR=$(cd -- "$COMPOSE_DIR" && pwd)
 COMPOSE_FILE="${COMPOSE_DIR}/docker-compose.yml"
 [[ -f $COMPOSE_FILE ]] || die "compose file not found: $COMPOSE_FILE"
 ENV_FILE="${COMPOSE_DIR}/.env"
-# The example .env ships only with the current stack. Even when
+# The example .env ships only with the current stack, so when
 # --compose-dir points at the legacy directory (where the missing-.env
 # refusal below is the first thing an operator hits), the remediation
-# must name a file that actually exists.
-ENV_EXAMPLE="$(cd -- "${SCRIPT_DIR}/../../containers/pihole" && pwd)/pi-dns-env.example"
+# still has to name a file that exists. Resolve it by probing with
+# plain -f tests, never by a path resolution that can fail the run:
+# the compose directory's own copy first (the staged layout, where
+# the scripts sit flat in their own directory), then the checkout
+# layout's copy, and as a last resort the path in the repo as text.
+if [[ -f ${COMPOSE_DIR}/pi-dns-env.example ]]; then
+    ENV_EXAMPLE="${COMPOSE_DIR}/pi-dns-env.example"
+elif [[ -f ${SCRIPT_DIR}/../../containers/pihole/pi-dns-env.example ]]; then
+    ENV_EXAMPLE="${SCRIPT_DIR}/../../containers/pihole/pi-dns-env.example"
+else
+    ENV_EXAMPLE="containers/pihole/pi-dns-env.example (in the public repo)"
+fi
 
 # --- Prerequisites ---------------------------------------------------------
 command -v docker >/dev/null 2>&1 || die "docker CLI not found in PATH"
