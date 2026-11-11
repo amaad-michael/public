@@ -179,10 +179,11 @@ guard, and health checks stay single-sourced; native `install`
 delegates to `install-pihole-unbound-native-v1.0.sh`, the bash mirror
 of the playbooks (`--attended` passes through for its manual-install
 pause; the playbooks themselves stay available as the parallel
-route). The legacy
-stack under `containers/pihole/legacy` is an as-built record: the
-controller refuses to install it but will take it down and uninstall
-it (point `--compose-dir` at the legacy directory).
+route). The controller reads the
+container and network names from whichever compose file it is
+pointed at (`--compose-dir`), so the same verbs manage pre-rename
+stagings carrying the `-backup` container names as well as the
+current form.
 
 This is production DNS. `down`, `restart`, `logs-clean`, and
 `uninstall` print a plain warning that the host stops answering DNS

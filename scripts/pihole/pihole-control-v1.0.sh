@@ -12,17 +12,14 @@
 #              pihole and unbound on the pihole bridge network).
 #              This is the form install-pihole-unbound.sh
 #              deploys. As of 2026-11-11 the fleet (pi4 primary, pi0
-#              secondary, neo1 warm spare) still runs the legacy form
-#              below; this form is the migration target, not the
-#              as-built state. The legacy stack under
-#              containers/pihole/legacy
-#              is an as-built record, NOT a deployable form: this script
-#              refuses to install it, but down and uninstall work against
-#              it (point --compose-dir at the legacy dir) so an old
-#              deployment can still be taken out cleanly. The legacy
-#              form's containers keep the pihole-backup / unbound-backup
-#              names; this script reads the container and network
-#              names from whichever compose file it is pointed at.
+#              secondary, neo1 warm spare) runs this form: the
+#              migration to it landed the same day (PRs #156-#158),
+#              and the pre-v2 legacy form it replaced was removed
+#              from the repo the same day. This script reads the
+#              container and network names from whichever compose
+#              file it is pointed at, so pre-rename stagings still
+#              carrying the pihole-backup / unbound-backup names are
+#              managed by the same verbs.
 #   native     The bare-metal install (Pi-hole's own installer plus
 #              the apt Unbound package). Performed by the bash installer
 #              install-pihole-unbound-native-v1.0.sh, which mirrors the
@@ -76,8 +73,7 @@
 #               itself keeps working DNS after its resolver is gone.
 #
 # Confirmation tokens: "pihole" for the native form; the compose
-# directory basename ("pihole", or "legacy" for the legacy stack) for
-# the container form.
+# directory basename ("pihole") for the container form.
 #
 # Exit codes: 0 = done (or clean no-op), 1 = a step or the verification
 # pass failed, 2 = usage error.
@@ -260,16 +256,12 @@ compose_setup() {
     STACK_NAME=$(basename -- "$COMPOSE_DIR")
     # Volume names as compose creates them for this directory's project:
     # <project>_<volume>. The project name is the directory basename.
-    if [[ $STACK_NAME == "legacy" ]]; then
-        STACK_VOLUMES=("${STACK_NAME}_pihole_etc" "${STACK_NAME}_pihole_dnsmasq" "${STACK_NAME}_unbound_etc")
-    else
-        STACK_VOLUMES=("${STACK_NAME}_pihole_etc" "${STACK_NAME}_pihole_dnsmasq" "${STACK_NAME}_unbound_custom")
-    fi
+    STACK_VOLUMES=("${STACK_NAME}_pihole_etc" "${STACK_NAME}_pihole_dnsmasq" "${STACK_NAME}_unbound_custom")
     # Container and network names as the targeted compose file
     # declares them. The current form renamed its containers in
-    # 2026-11 (pihole / unbound on the pihole network); the legacy
-    # form and pre-rename stagings still carry the -backup names, so
-    # read them from the file instead of assuming either name set.
+    # 2026-11 (pihole / unbound on the pihole network); pre-rename
+    # stagings still carry the -backup names, so read them from the
+    # file instead of assuming either name set.
     STACK_CONTAINERS=()
     local cn
     while IFS= read -r cn; do
@@ -472,9 +464,6 @@ do_restart_container() {
 
 do_install_container() {
     compose_setup
-    if [[ $STACK_NAME == "legacy" ]]; then
-        die "the legacy stack is an as-built record, not a deployable form. For a rollback, deploy the v2 stack in containers/pihole instead."
-    fi
     [[ -f $INSTALLER ]] || die "installer not found beside this script: $INSTALLER"
     log "Step 1 of 1: delegating to install-pihole-unbound.sh (validation, exposure guard, health checks)"
     local args=(--compose-dir "$COMPOSE_DIR")

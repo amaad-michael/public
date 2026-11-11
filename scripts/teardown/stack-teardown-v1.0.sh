@@ -130,7 +130,7 @@ fi
 if [[ -z "$COMPOSE_FILE" ]]; then
     echo "No compose file found for '$STACK_ARG'." >&2
     echo "Looked in the directory itself and under $STACKS_ROOT." >&2
-    echo "Nested stacks resolve by relative name too, e.g. pihole/legacy." >&2
+    echo "Nested stacks resolve by relative name too." >&2
     exit 2
 fi
 
