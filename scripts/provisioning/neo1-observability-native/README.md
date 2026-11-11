@@ -1,4 +1,4 @@
-# neo1 Observability Node — v2.6.2 (native systemd, ARMv7/512MB)
+# neo1 Observability Node — v2.6.3 (native systemd, ARMv7/512MB)
 
 The bare-metal form of the neo1 observability node: the monitoring
 design for one 512 MB ARMv7 box (neo1, 192.168.0.105, Armbian) as
@@ -11,6 +11,7 @@ stack for the cluster is `containers/monitoring/`.
 **Always-on set (5):** prometheus, alertmanager, blackbox_exporter, node_exporter, ntfy
 **On-demand (1):** grafana — `systemctl start grafana`, auto-kills after 6h, never enabled. Its admin password lives in `/etc/grafana/grafana.env` (root-only, created by the installer); the unit refuses to start without that file, so a session can never come up on the factory password
 **Timers (2):** pihole-backup, unbound-backup (03:15 / 03:30 nightly)
+**Plugins:** Grafana's bundled plugins are pinned to the versions shipped in the kit's verified Grafana tarball; they change only when the kit's Grafana pin is bumped, never by auto-update (see the `[plugins]` note in `configs/grafana.ini`).
 
 ## 💾 Memory budget (target)
 
