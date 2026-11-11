@@ -83,7 +83,15 @@ set -uo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd -- "${SCRIPT_DIR}/../.." && pwd)
-COMPOSE_DIR="${REPO_ROOT}/containers/pihole"
+# The default compose dir exists only in the checkout layout. A staged
+# copy (~/pihole-control) has no checkout beside it, so the default
+# stays unset there and --compose-dir is required (compose_setup
+# enforces it); deriving one from the grandparent would name a
+# directory that does not exist.
+COMPOSE_DIR=""
+if [[ -d ${REPO_ROOT}/containers/pihole ]]; then
+    COMPOSE_DIR="${REPO_ROOT}/containers/pihole"
+fi
 INSTALLER="${SCRIPT_DIR}/install-pihole-unbound.sh"
 NATIVE_INSTALLER="${SCRIPT_DIR}/install-pihole-unbound-native-v1.0.sh"
 LOG_CLEANER="${SCRIPT_DIR}/cleanup_logs_pihole2.sh"
@@ -249,6 +257,7 @@ STACK_VOLUMES=()
 STACK_CONTAINERS=()
 STACK_NETWORK=""
 compose_setup() {
+    [[ -n $COMPOSE_DIR ]] || usage_die "no --compose-dir given and no repo checkout layout found beside this script; pass --compose-dir <dir> (the staged layout always does)"
     [[ -d $COMPOSE_DIR ]] || die "compose directory not found: $COMPOSE_DIR"
     COMPOSE_DIR=$(cd -- "$COMPOSE_DIR" && pwd)
     COMPOSE_FILE="${COMPOSE_DIR}/docker-compose.yml"
@@ -303,7 +312,7 @@ resolve_form() {
     fi
     if any_native_footprint; then
         FORM="native"
-    elif [[ -f "${COMPOSE_DIR}/docker-compose.yml" ]]; then
+    elif [[ -n $COMPOSE_DIR && -f "${COMPOSE_DIR}/docker-compose.yml" ]]; then
         FORM="container"
     else
         FORM="native"
@@ -517,7 +526,7 @@ do_logs_clean_native() {
 
 do_logs_clean_container() {
     local ctr="pihole-backup"
-    if [[ -f "${COMPOSE_DIR}/docker-compose.yml" ]]; then
+    if [[ -n $COMPOSE_DIR && -f "${COMPOSE_DIR}/docker-compose.yml" ]]; then
         ctr=$(grep -E '^[[:space:]]+container_name:' "${COMPOSE_DIR}/docker-compose.yml" | head -n 1 | sed 's/.*container_name:[[:space:]]*//' | tr -d "\"'" || true)
         if [[ -z $ctr ]]; then
             ctr="pihole-backup"
