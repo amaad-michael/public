@@ -74,9 +74,10 @@ COMPOSE_FILE="${COMPOSE_DIR}/docker-compose.yml"
 [[ -f $COMPOSE_FILE ]] || die "compose file not found: $COMPOSE_FILE"
 ENV_FILE="${COMPOSE_DIR}/.env"
 # The example .env ships only with the current stack, so when
-# --compose-dir points at the legacy directory (where the missing-.env
-# refusal below is the first thing an operator hits), the remediation
-# still has to name a file that exists. Resolve it by probing with
+# --compose-dir points at a directory that carries no copy of its own
+# (where the missing-.env refusal below is the first thing an
+# operator hits), the remediation still has to name a file that
+# exists. Resolve it by probing with
 # plain -f tests, never by a path resolution that can fail the run:
 # the compose directory's own copy first (the staged layout, where
 # the scripts sit flat in their own directory), then the checkout
@@ -179,8 +180,8 @@ run() {
 # --- Stale-network sweep (same-host migration from an older form) ---------
 # Older deployments of this pair created a bridge network named
 # *_pihole-backup on the same fixed 172.20.0.0/16 subnet this stack
-# uses: the legacy form (docker-files-pihole_pihole-backup, frozen in
-# containers/pihole/legacy) and pre-rename installs of this form
+# uses: the legacy form (docker-files-pihole_pihole-backup) and
+# pre-rename installs of this form
 # (pihole_pihole-backup, the name neo1's test deployment runs today).
 # The controller's down verb is stop-only, so a torn-down pair leaves
 # its network behind and this stack's network creation dies with
