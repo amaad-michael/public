@@ -10,6 +10,10 @@ ufw default allow outgoing
 # SSH — LAN
 ufw allow from "$LAN" to any port 22 proto tcp comment 'ssh lan'
 
+# DNS — LAN (neo1 carries the warm-spare Pi-hole/Unbound role; without
+# this, enabling this policy cuts the spare resolver off from the LAN)
+ufw allow from "$LAN" to any port 53 comment 'dns warm-spare'
+
 # Prometheus UI/API — LAN
 ufw allow from "$LAN" to any port 9091 proto tcp comment 'prometheus ui'
 

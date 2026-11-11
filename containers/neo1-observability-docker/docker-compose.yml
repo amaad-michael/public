@@ -1,5 +1,5 @@
 ---
-# neo1 observability — v3.0 fully Dockerized (ARMv7 / 512MB / Armbian)
+# neo1 observability — v3.0.1 fully Dockerized (ARMv7 / 512MB / Armbian)
 #
 # DESIGN DECISIONS:
 # - network_mode: host on ALL services. Docker's published-port iptables
