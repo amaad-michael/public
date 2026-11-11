@@ -8,6 +8,7 @@ the three forms so you can pick the right one.
 
 - [gpu-box-llm-setup-v1.9.sh](#gpu-box-llm-setup-v19sh)
 - [optiplex-llm-setup-v2.1.sh](#optiplex-llm-setup-v21sh)
+- [llama-hot-swap-v1.0.sh](#llama-hot-swap-v10sh)
 - [deploy-llama-ui-raw.sh](#deploy-llama-ui-rawsh)
 - [setup_open_terminal-v1_2.sh](#setup_open_terminal-v1_2sh)
 - [nanopi-llm-setup.sh](#nanopi-llm-setupsh)
@@ -93,6 +94,20 @@ script to turn on real verification on later runs. Log file:
 `/var/log/optiplex-llm-setup.log`. The full deployment and tuning
 guide for this script and the matching playbook is
 `ansible/playbooks/llm/optiplex-llm-v2.4.md`.
+
+## llama-hot-swap-v1.0.sh
+
+The model-generic hot-swap for a `llama-server` systemd unit,
+written for the OptiPlex. It resolves the requested model (a
+registry name such as `phi-4-mini`, the default; an
+`hf:owner/repo:file.gguf` spec; a direct URL; or a local .gguf
+path), downloads it atomically if absent, pins its SHA-256
+trust-on-first-use and verifies it on later runs, then rewrites
+the unit (backed up first), restarts the service, and polls
+`/health`, `/v1/models`, and a test completion. Any failure
+after the unit write rolls back to the backed-up unit.
+`--check` renders the swap without changing anything. Run as
+root.
 
 ## deploy-llama-ui-raw.sh
 

@@ -272,9 +272,11 @@ Use this updater only on a host set up the home-directory way.
 
 A desktop environment replacement tool for Fedora-family systems
 (Fedora, Nobara). It detects every desktop environment and
-standalone window manager in its 15-entry registry, and replaces
-the installed set with the operator's chosen set in a single run
-from a TTY; a graphical-session gate stops it from running inside
+standalone window manager in its 15-entry registry, and, in a
+single run from a TTY, installs a protected desktop and LightDM,
+removing nothing by default (removal of unprotected desktops is
+opt-in, via `--remove-unprotected` or `--purge`); a
+graphical-session gate stops it from running inside
 the session it would remove. Five desktops are protected and never
 removed: MATE, Xfce, Cinnamon, LXDE, and Openbox. It takes no
 scripted snapshots; read the script's header before a real run.
