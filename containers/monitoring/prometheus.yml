@@ -57,3 +57,9 @@ scrape_configs:
       - targets: ['192.168.0.105:9100']
         labels:
           instance: 'neo1'
+      - targets: ['192.168.0.226:9100']
+        labels:
+          instance: 'cpu-llm'
+      - targets: ['192.168.0.227:9100']
+        labels:
+          instance: 'gpu-llm'
