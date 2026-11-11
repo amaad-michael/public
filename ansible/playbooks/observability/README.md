@@ -25,7 +25,7 @@ ansible-playbook -i hosts playbooks/observability/neo1-observability.yml -l neo1
 - Pins live at the top of the playbook and are copied verbatim from
   the native kit's `scripts/install.sh` (Prometheus 3.15.0,
   Alertmanager 0.34.1, blackbox_exporter 0.29.0, node_exporter
-  1.12.1, ntfy 2.32.0, Grafana 13.2.4, linux-armv7 sha256 values).
+  1.12.1, ntfy 2.32.0, Grafana 13.2.5, linux-armv7 sha256 values).
   The play refuses to run with a blanked pin, and every download is
   checksum-verified, mirroring the kit's zero-guesswork gate. To
   bump a component, update its version and sha256 together from the
@@ -53,5 +53,5 @@ Options, all passed as extra vars:
 | `-e neo1_obs_lan=192.168.0.0/24` | LAN range the UFW allowances are scoped to (the kit default) |
 
 After a real run, verify on the target with the same gate the
-native kit uses: `sudo /usr/local/sbin/neo1-verify.sh` (14 checks),
+native kit uses: `sudo /usr/local/sbin/neo1-verify.sh` (15 checks),
 after provisioning the ntfy token it checks for.

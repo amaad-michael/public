@@ -59,7 +59,7 @@ stack for the cluster is `containers/monitoring/`.
 
    (promtool/amtool ship inside the prometheus/alertmanager release
    tarballs — install.sh installs them alongside the daemons.)
-1. `sudo scripts/verify.sh` — 14 automated checks + manual alert
+1. `sudo scripts/verify.sh` — 15 automated checks + manual alert
    round-trip.
 
 ## 🔁 Day-2 operation
