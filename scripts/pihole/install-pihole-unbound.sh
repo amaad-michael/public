@@ -10,7 +10,7 @@
 #
 # The compose pair is deployed exactly as shipped: Pi-hole is the only
 # LAN-facing service (ports 53/tcp, 53/udp, 80, 443); Unbound has NO
-# ports block and is reachable only on the pihole-backup bridge network
+# ports block and is reachable only on the pihole bridge network
 # (172.20.0.0/16) at 172.20.0.3:5335. This script refuses to deploy a
 # compose project in which Unbound publishes a host port.
 #
@@ -73,7 +73,11 @@ COMPOSE_DIR=$(cd -- "$COMPOSE_DIR" && pwd)
 COMPOSE_FILE="${COMPOSE_DIR}/docker-compose.yml"
 [[ -f $COMPOSE_FILE ]] || die "compose file not found: $COMPOSE_FILE"
 ENV_FILE="${COMPOSE_DIR}/.env"
-ENV_EXAMPLE="${COMPOSE_DIR}/pi-dns-env.example"
+# The example .env ships only with the current stack. Even when
+# --compose-dir points at the legacy directory (where the missing-.env
+# refusal below is the first thing an operator hits), the remediation
+# must name a file that actually exists.
+ENV_EXAMPLE="$(cd -- "${SCRIPT_DIR}/../../containers/pihole" && pwd)/pi-dns-env.example"
 
 # --- Prerequisites ---------------------------------------------------------
 command -v docker >/dev/null 2>&1 || die "docker CLI not found in PATH"
@@ -162,6 +166,35 @@ run() {
     fi
 }
 
+# --- Stale-network sweep (same-host migration from an older form) ---------
+# Older deployments of this pair created a bridge network named
+# *_pihole-backup on the same fixed 172.20.0.0/16 subnet this stack
+# uses: the legacy form (docker-files-pihole_pihole-backup, frozen in
+# containers/pihole/legacy) and pre-rename installs of this form
+# (pihole_pihole-backup, the name neo1's test deployment runs today).
+# The controller's down verb is stop-only, so a torn-down pair leaves
+# its network behind and this stack's network creation dies with
+# "Pool overlaps with other one on this address space" (seen live on
+# neo1's first install attempt, 2026-11-11). This project's own
+# network ends in _pihole and can never match the pattern below.
+# Remove any foreign *_pihole-backup network with nothing attached;
+# refuse if one still has containers, because downing a running pair
+# is the operator's call, not this script's.
+OWN_NETWORK=$(grep -oE 'name: [A-Za-z0-9_.-]+_pihole$' "$RENDERED" | head -n 1 | awk '{print $2}' || true)
+[[ -n $OWN_NETWORK ]] || die "rendered compose config has no *_pihole network — unexpected project layout, refusing to deploy"
+while IFS= read -r NET; do
+    if [[ -z $NET || $NET == "$OWN_NETWORK" ]]; then
+        continue
+    fi
+    ENDPOINTS=$(docker network inspect -f '{{range $id, $c := .Containers}}{{$c.Name}} {{end}}' "$NET" 2>/dev/null || true)
+    if [[ -n ${ENDPOINTS//[[:space:]]/} ]]; then
+        die "network $NET (owned by another compose project) still has containers attached: $ENDPOINTS — down that project first (docker compose down in its directory), then re-run this installer"
+    fi
+    info "removing stale network $NET left behind by an older deployment (it holds the same fixed subnet as $OWN_NETWORK)"
+    run docker network rm "$NET"
+done < <(docker network ls --format '{{.Name}}' | grep -E '_pihole-backup$' || true)
+info "no stale *_pihole-backup network in the way"
+
 run "${COMPOSE[@]}" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" pull
 run "${COMPOSE[@]}" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
 
@@ -174,33 +207,39 @@ fi
 info "waiting for both containers to report healthy"
 HEALTHY=0
 for _ in $(seq 1 24); do
-    P=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' pihole-backup 2>/dev/null || echo missing)
-    U=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' unbound-backup 2>/dev/null || echo missing)
+    P=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' pihole 2>/dev/null || echo missing)
+    U=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' unbound 2>/dev/null || echo missing)
     if [[ $P == healthy && $U == healthy ]]; then HEALTHY=1; break; fi
     sleep 5
 done
 [[ $HEALTHY -eq 1 ]] || die "containers did not become healthy (pihole: ${P:-?}, unbound: ${U:-?}); check '${COMPOSE[*]} -f $COMPOSE_FILE logs'"
 
 info "verifying Unbound is not reachable from the LAN"
-PUBLISHED=$(docker port unbound-backup 2>/dev/null || true)
-[[ -z $PUBLISHED ]] || die "unbound-backup publishes host ports: $PUBLISHED — this breaks the v2 posture; remove the ports block and redeploy"
-PORTS_JSON=$(docker inspect -f '{{json .NetworkSettings.Ports}}' unbound-backup)
-[[ $PORTS_JSON == '{}' || $PORTS_JSON == 'null' ]] || die "unbound-backup has non-empty NetworkSettings.Ports: $PORTS_JSON"
-info "unbound-backup publishes no host ports"
+PUBLISHED=$(docker port unbound 2>/dev/null || true)
+[[ -z $PUBLISHED ]] || die "unbound publishes host ports: $PUBLISHED — this breaks the v2 posture; remove the ports block and redeploy"
+PORTS_JSON=$(docker inspect -f '{{json .NetworkSettings.Ports}}' unbound)
+[[ $PORTS_JSON == '{}' || $PORTS_JSON == 'null' ]] || die "unbound has non-empty NetworkSettings.Ports: $PORTS_JSON"
+info "unbound publishes no host ports"
 
-info "verifying DNS resolution through Pi-hole"
-PIHOLE_ANSWER=$(docker exec pihole-backup dig +short @127.0.0.1 pi.hole 2>/dev/null || true)
-[[ $PIHOLE_ANSWER == *172.20.0.2* ]] || die "pi.hole did not resolve to 172.20.0.2 through Pi-hole (got: '${PIHOLE_ANSWER:-nothing}')"
-EXT_ANSWER=$(docker exec pihole-backup dig +short @127.0.0.1 example.com 2>/dev/null || true)
-[[ -n $EXT_ANSWER ]] || die "example.com did not resolve through Pi-hole (Pi-hole to Unbound forwarding broken)"
-info "pi.hole -> 172.20.0.2 and example.com resolved through Pi-hole (Unbound upstream answering)"
+info "verifying DNS resolution at both layers"
+# Pi-hole v6's FTL answers pi.hole itself (127.0.0.1) before the query
+# ever reaches Unbound, so pi.hole cannot be verified through Pi-hole;
+# the old expectation (172.20.0.2 through Pi-hole) could never pass
+# (neo1, 2026-11-11). Ask Unbound directly at its bridge address.
+UNBOUND_ANSWER=$(docker exec pihole dig +short @172.20.0.3 -p 5335 pi.hole 2>/dev/null || true)
+[[ $UNBOUND_ANSWER == 172.20.0.2 ]] || die "pi.hole did not resolve to exactly 172.20.0.2 from Unbound directly (got: '${UNBOUND_ANSWER:-nothing}')"
+# An external name through Pi-hole proves the Pi-hole -> Unbound
+# forwarding path end to end; require the resolver's own NOERROR.
+EXT_STATUS=$(docker exec pihole dig @127.0.0.1 example.com 2>/dev/null | grep -oE 'status: [A-Z]+' | head -n 1 || true)
+[[ $EXT_STATUS == 'status: NOERROR' ]] || die "example.com did not return NOERROR through Pi-hole (got: '${EXT_STATUS:-no answer}'; Pi-hole to Unbound forwarding broken)"
+info "pi.hole -> 172.20.0.2 from Unbound directly; example.com NOERROR through Pi-hole (forwarding verified)"
 
 # --- Optional blocklist seeding ------------------------------------------------
 if [[ $WITH_BLOCKLISTS -eq 1 ]]; then
     SEED_SCRIPT="${SCRIPT_DIR}/pihole-init-blocklists.sh"
     [[ -f $SEED_SCRIPT ]] || die "--with-blocklists given but seed script not found: $SEED_SCRIPT"
-    info "seeding blocklists inside pihole-backup (idempotent)"
-    docker exec -i pihole-backup bash -s < "$SEED_SCRIPT"
+    info "seeding blocklists inside pihole (idempotent)"
+    docker exec -i pihole bash -s < "$SEED_SCRIPT"
 else
     info "blocklists not seeded; run pihole-init-blocklists.sh inside the container once, as containers/pihole/README.md describes"
 fi

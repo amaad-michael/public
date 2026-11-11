@@ -1,8 +1,8 @@
 # scripts/pihole
 
 Scripts for the containerized Pi-hole + Unbound pair in
-`containers/pihole` (containers `pihole-backup` and `unbound-backup`
-on the `pihole-backup` network, Unbound at 172.20.0.3 port 5335),
+`containers/pihole` (containers `pihole` and `unbound`
+on the `pihole` network, Unbound at 172.20.0.3 port 5335),
 plus one bash installer and one log cleanup script for a bare-metal
 Pi-hole host and one controller that owns the pair's whole lifecycle
 in both forms.
@@ -30,12 +30,17 @@ What it does, in order:
   `latest` tag is rejected for both images.
 - Renders the compose config and refuses to deploy if the rendered
   `unbound` service publishes any host port. That is the v2 posture:
-  Unbound stays reachable only on the `pihole-backup` bridge network.
+  Unbound stays reachable only on the `pihole` bridge network.
+- Clears any stale `*_pihole-backup` network left behind by an older
+  deployment of the pair (the legacy form, or a pre-rename install):
+  idle networks are removed, and the install refuses while one still
+  has containers attached.
 - Runs `compose pull` and `compose up -d`.
 - Verifies the deployment: both containers report healthy, Unbound
-  publishes no host ports, `pi.hole` resolves to 172.20.0.2 through
-  Pi-hole, and an external name resolves through the Pi-hole to
-  Unbound path.
+  publishes no host ports, `pi.hole` resolves to exactly 172.20.0.2
+  from Unbound directly (Pi-hole's FTL answers that name itself, so
+  it cannot be checked through Pi-hole), and an external name
+  returns NOERROR through Pi-hole.
 
 `--dry-run` stops after the render and guard checks and prints the
 deploy commands instead of running them. `--compose-dir DIR` points

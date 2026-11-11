@@ -5,7 +5,7 @@
 # Deploy order: pi0 (secondary) first, verify, then pi4 (primary).
 
 networks:
-  pihole-backup:
+  pihole:
     driver: bridge
     ipam:
       config:
@@ -20,9 +20,9 @@ services:
   pihole:
     # Pin in .env — compose refuses to start until set (no :latest on the DNS plane).
     image: pihole/pihole:${PIHOLE_TAG:?pin PIHOLE_TAG in .env}
-    container_name: pihole-backup
+    container_name: pihole
     networks:
-      pihole-backup:
+      pihole:
         ipv4_address: 172.20.0.2
     ports:
       - "53:53/tcp"
@@ -58,6 +58,9 @@ services:
       - SETUID
       - SETGID
       - SETFCAP
+      # DAC_OVERRIDE/FOWNER: the v6 entrypoint supervises FTL's uid-1000 mode-640 files as root and restart-loops the container without them (proven on neo1).
+      - DAC_OVERRIDE
+      - FOWNER
       # FTL commonly needs raw sockets; add NET_RAW if healthcheck flaps
       # or logs show capability errors (first suspect with cap_drop:ALL):
       # - NET_RAW
@@ -77,18 +80,19 @@ services:
 
   unbound:
     image: madnuttah/unbound:${UNBOUND_TAG:?pin UNBOUND_TAG in .env}
-    container_name: unbound-backup
+    container_name: unbound
     networks:
-      pihole-backup:
+      pihole:
         ipv4_address: 172.20.0.3
     # NO ports block — this is the exposure fix. Unbound is reachable ONLY
-    # from the pihole-backup docker network (172.20.0.0/16). neo1 tripwire
+    # from the pihole docker network (172.20.0.0/16). neo1 tripwire
     # (UnboundExposedToLAN) alerts if a host publish ever reappears.
     volumes:
       # Compiled-in conf path per `unbound -V`:
       #   --with-conf-file=/usr/local/unbound/unbound.conf
       # The old /etc/unbound/* mounts were NEVER READ by this image.
       - ./unbound.conf:/usr/local/unbound/unbound.conf:ro
+      - ./healthcheck.conf:/usr/local/unbound/healthcheck.conf:ro
       # Custom include dir — ONLY read if unbound.conf contains:
       #   include: "/usr/local/unbound/custom.conf.d/*.conf"
       - unbound_custom:/usr/local/unbound/custom.conf.d
@@ -107,11 +111,18 @@ services:
           cpus: '0.25'
           memory: 128M
     healthcheck:
+      # The check runs unbound-host against healthcheck.conf, NOT the
+      # daemon's unbound.conf: that config's auto-trust-anchor-file
+      # makes unbound-host write an autotrust temp file, which fails
+      # under cap_drop: ALL (root has no DAC override in the
+      # _unbound-owned anchor dir) and kept this container unhealthy
+      # forever on neo1. healthcheck.conf uses the read-only
+      # trust-anchor-file form; see that file's header.
       # VERIFY binary presence first:
-      #   sudo docker exec unbound-backup sh -c 'command -v unbound-host'
+      #   sudo docker exec unbound sh -c 'command -v unbound-host'
       # Fallback if absent: ["CMD", "unbound-checkconf", "/usr/local/unbound/unbound.conf"]
       # (checkconf validates config only, not resolution)
-      test: ["CMD", "unbound-host", "-C", "/usr/local/unbound/unbound.conf", "example.com"]
+      test: ["CMD", "unbound-host", "-C", "/usr/local/unbound/healthcheck.conf", "example.com"]
       interval: 30s
       timeout: 8s
       retries: 3

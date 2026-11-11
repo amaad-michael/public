@@ -7,8 +7,8 @@ trap 'echo -e "\033[1;31m[ERR] Line $LINENO: Command failed.\033[0m" >&2' ERR
 #  Deduplicated & Linted
 # ============================================================
 
-PIHOLE_CTR="pihole-backup"
-UNBOUND_CTR="unbound-backup"
+PIHOLE_CTR="pihole"
+UNBOUND_CTR="unbound"
 UNBOUND_IP="172.20.0.3"
 UNBOUND_PORT="5335"
 

@@ -19,13 +19,17 @@ and pi0 the secondary.
 
 ## 📦 Files
 
-- `docker-compose.yml`: both services, the `pihole-backup` bridge
+- `docker-compose.yml`: both services, the `pihole` bridge
   network (172.20.0.0/16), and three named volumes.
 - `pi-dns-env.example`: template for the host-side `.env` (image pins
   and the Pi-hole API password).
 - `unbound.conf`: the Unbound configuration, bind-mounted read-only
   into the Unbound container at its compiled-in config path,
   `/usr/local/unbound/unbound.conf`.
+- `healthcheck.conf`: a minimal Unbound config used only by the
+  Unbound container's healthcheck. It loads the trust anchor
+  read-only (`trust-anchor-file`) so the check never has to write
+  beside the anchor under `cap_drop: ALL`; see the file's header.
 - `legacy/docker-compose.yml` and `legacy/unbound.conf`: the pre-v2
   stack as deployed on pi0 and pi4 (`:latest` tags, Unbound published
   on host port 5053, the `/etc/unbound` config layout), kept as the
@@ -73,7 +77,7 @@ The `.env` is covered by the repo `.gitignore`. Never commit it.
 | Service | Container address | Host ports | Notes |
 | --- | --- | --- | --- |
 | pihole | 172.20.0.2 | 53/tcp, 53/udp, 80, 443 | The only LAN-facing service |
-| unbound | 172.20.0.3 | none | Reachable only on the `pihole-backup` network |
+| unbound | 172.20.0.3 | none | Reachable only on the `pihole` network |
 
 Pi-hole's only upstream is Unbound:
 `FTLCONF_dns_upstreams=172.20.0.3#5335`.
@@ -105,7 +109,7 @@ Validation happens once, in Unbound, the recursive layer. The compose
 sets `FTLCONF_dns_dnssec=false` on Pi-hole because double validation at
 the dnsmasq layer causes spurious SERVFAILs. `unbound.conf` carries the
 hardening side: trust anchor at
-`/usr/local/unbound/var/root.key`, root key sentinel, and the
+`/usr/local/unbound/iana.d/root.key`, root key sentinel, and the
 harden-dnssec options. End-to-end enforcement is verified independently
 by neo1's dnssec-failed.org probe.
 
@@ -114,11 +118,18 @@ by neo1's dnssec-failed.org probe.
 Deploy order, from the compose header: pi0 (secondary) first, verify,
 then pi4 (primary).
 
+Installing over a host that ran an older deployment of this pair:
+the legacy form, and this stack before its 2026-11 rename, created
+a `*_pihole-backup` bridge network on the same fixed subnet this
+stack uses, and that network survives a stop-only teardown. The
+installer removes an idle foreign `*_pihole-backup` network
+automatically; if one still has containers attached it refuses and
+names the network, so stop the old pair first and re-run.
+
 Blocklist seeding uses the companion script
-`scripts/pihole/pihole-init-blocklists.sh`. Note that the shipped
-compose file does not invoke it: the script's header claim that it
-runs automatically at container startup does not match the compose as
-shipped, so run it manually once after the first start, against the
+`scripts/pihole/pihole-init-blocklists.sh`. The compose file does
+not invoke it, so run it manually once after the first start,
+against the
 running container's `/etc/pihole/gravity.db`. It waits for the
 database to exist, inserts five lists with `INSERT OR IGNORE` (so it
 is safe to re-run), then triggers a gravity update with `pihole -g`:
@@ -133,7 +144,10 @@ is safe to re-run), then triggers a gravity update with `pihole -g`:
 
 Both services carry healthchecks. Pi-hole runs
 `dig @127.0.0.1 pi.hole`; Unbound runs `unbound-host` against
-example.com. If `unbound-host` is ever absent from the image, the
+example.com with `healthcheck.conf`, the read-only-anchor variant of
+the config (the daemon's own `auto-trust-anchor-file` config would
+make the check write beside the anchor, which `cap_drop: ALL`
+forbids). If `unbound-host` is ever absent from the image, the
 compose comments give the fallback check, `unbound-checkconf` against
 the shipped config, noting that it validates the config only, not
 resolution.
