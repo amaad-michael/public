@@ -11,8 +11,11 @@
 #   container  The Docker pair in containers/pihole (containers
 #              pihole-backup and unbound-backup on the pihole-backup
 #              bridge network). This is the form install-pihole-unbound.sh
-#              deploys and the form running on pi4 (primary) and pi0
-#              (secondary). The legacy stack under containers/pihole/legacy
+#              deploys. As of 2026-11-11 the fleet (pi4 primary, pi0
+#              secondary, neo1 warm spare) still runs the legacy form
+#              below; this form is the migration target, not the
+#              as-built state. The legacy stack under
+#              containers/pihole/legacy
 #              is an as-built record, NOT a deployable form: this script
 #              refuses to install it, but down and uninstall work against
 #              it (point --compose-dir at the legacy dir) so an old
