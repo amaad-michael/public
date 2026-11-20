@@ -1,3 +1,4 @@
+---
 - name: Automated Pi-hole + Unbound Setup
   hosts: all
   become: yes

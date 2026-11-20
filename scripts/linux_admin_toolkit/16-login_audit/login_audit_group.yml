@@ -1,6 +1,6 @@
+---
 # ansible-playbook -i inv login_audit_group.yml -e target_group=webservers [-l somehost]
 # Optional: -e days=14 -e threshold=5
----
 - name: Summarize failed logins (read-only)
   hosts: "{{ target_group | default('all') }}"
   become: true

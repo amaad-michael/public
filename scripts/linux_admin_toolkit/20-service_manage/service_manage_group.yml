@@ -1,3 +1,4 @@
+---
 # service_manage_group.yml
 # Manage a systemd service consistently across a fleet, verifying the
 # desired end state.

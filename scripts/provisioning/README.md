@@ -192,7 +192,8 @@ kit's own README carries the deploy order and the memory budget.
 
 The Docker form of the same design lives in
 `containers/neo1-observability_docker/`; the cluster's multi-service
-standby stack is `containers/monitoring/`.
+Extended Observability Stack (formerly the standby stack) is
+`containers/monitoring/`.
 
 ## 🔒 LUKS Vault Guardian
 

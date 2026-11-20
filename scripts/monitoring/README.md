@@ -12,7 +12,8 @@ integrity lives in `scripts/backups`: see the last section.
 
 ## deploy_monitoring_stack.sh
 
-Bash deploy wrapper for the cluster standby monitoring stack in
+Bash deploy wrapper for the cluster's Extended Observability Stack
+(formerly called the standby monitoring stack) in
 `containers/monitoring/` (Prometheus, Grafana, Alertmanager, Traefik,
 ntfy, step-ca, Headscale, Vaultwarden, Uptime Kuma). The stack is
 Docker-native by design; this is the local-run form of its

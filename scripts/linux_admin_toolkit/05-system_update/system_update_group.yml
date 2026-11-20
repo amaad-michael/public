@@ -1,3 +1,4 @@
+---
 # system_update_group.yml
 # Apply OS package updates across a fleet: full (default) or security-only.
 #

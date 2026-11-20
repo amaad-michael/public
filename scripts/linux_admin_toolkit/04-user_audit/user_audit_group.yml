@@ -1,3 +1,4 @@
+---
 # user_audit_group.yml
 # READ-ONLY user audit across a fleet: dormant users, empty-password
 # accounts, duplicate UID 0. Changes nothing; use --check is unnecessary

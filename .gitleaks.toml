@@ -1,0 +1,51 @@
+# Gitleaks configuration for this repo.
+#
+# The default rules stay in force (see [extend] below). The allowlist
+# names five specific values that this repo pins ON PURPOSE: public
+# key fingerprints and a public key checksum, hardcoded in the
+# installers so a downloaded repository key is trusted only when it
+# matches the pin. A fingerprint or checksum of a public key is a
+# verification value, not a credential — it is published by the key's
+# owner precisely so anyone can check the key against it. Gitleaks'
+# generic-api-key rule flags them because they are long hex strings
+# assigned to key-ish variable names.
+#
+# Each allowlist entry is the exact literal value, so nothing else is
+# suppressed: any other secret-shaped string, including any other
+# value matched by generic-api-key, still flags.
+
+title = "gitleaks configuration (default rules + public-key pin allowlist)"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public key fingerprints and a public key checksum pinned for verification; see the header comment."
+regexes = [
+  # SHA-256 checksum of the Jenkins repo signing key file
+  # (jenkins.io-2023.key, published at pkg.jenkins.io). Pinned as
+  # jenkins_key_sha256 in ansible/playbooks/jenkins/install_jenkins.yml
+  # and JENKINS_KEY_SHA256 in scripts/provisioning/install_jenkins_rocky.sh
+  # so the key is verified before it is trusted. A checksum of a
+  # public key, published by Jenkins — not a credential.
+  '''f1c175f9e68915d8d861e2884b40b77a9b763a32735bc996cd6a29639b2563e5''',
+  # GPG fingerprint of the Ubuntu cloud image (UEC) signing key.
+  # Pinned as ubuntu_cloud_key_fpr in
+  # ansible/playbooks/proxmox/templates_cloudinit.yml and
+  # UBUNTU_CLOUD_KEY_FPR in scripts/provisioning/proxmox_setup.sh so
+  # the key fetched from the Ubuntu keyserver is trusted only when
+  # its fingerprint matches. Fingerprints are public by design.
+  '''D2EB44626FDDC30B513D5BB71A5D6C4C7DB87C81''',
+  # GPG fingerprint of the Proxmox VE repository key for Debian
+  # bullseye, from Proxmox's published "Package Repositories" wiki
+  # page. Pinned in scripts/provisioning/proxmox_setup.sh.
+  '''28139A2F830BD68478A1A01FDD4BA3917E23BF59''',
+  # GPG fingerprint of the Proxmox VE repository key for Debian
+  # bookworm, from the same published wiki page. Pinned in
+  # scripts/provisioning/proxmox_setup.sh.
+  '''F4E136C67CDCE41AE6DE6FC81140AF8F639E0C39''',
+  # GPG fingerprint of the Proxmox VE repository key for Debian
+  # trixie, from the same published wiki page. Pinned in
+  # scripts/provisioning/proxmox_setup.sh.
+  '''24B30F06ECC1836A4E5EFECBA7BCD1420BFE778E''',
+]

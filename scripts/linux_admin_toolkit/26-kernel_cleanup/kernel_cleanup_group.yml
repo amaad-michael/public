@@ -1,3 +1,4 @@
+---
 # kernel_cleanup_group.yml
 # Remove old kernels across a fleet, keeping the N most recent (default 2).
 #

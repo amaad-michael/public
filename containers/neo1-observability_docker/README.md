@@ -6,8 +6,9 @@ single compose project. Same configs, same probes, same alerts as the
 bare-metal form in `scripts/provisioning/neo1-observability_native/` —
 the runtime is swapped to Docker, nothing else.
 
-This is the single-node variant. The multi-service standby stack for
-the cluster lives in `containers/monitoring/`. As of 2026-10-18, neo1
+This is the single-node variant. The multi-service Extended
+Observability Stack (formerly the standby stack) for the cluster
+lives in `containers/monitoring/`. As of 2026-10-18, neo1
 itself runs the native systemd form
 (`scripts/provisioning/neo1-observability_native/`); this Docker form
 is the alternative on the same ports, is not deployed, and would

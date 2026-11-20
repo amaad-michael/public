@@ -1,5 +1,5 @@
-# ansible-playbook -i inv firewall_audit_group.yml -e target_group=webservers [-l somehost]
 ---
+# ansible-playbook -i inv firewall_audit_group.yml -e target_group=webservers [-l somehost]
 - name: Detect active firewall stack and dump ruleset (read-only)
   hosts: "{{ target_group | default('all') }}"
   become: true

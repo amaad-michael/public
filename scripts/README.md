@@ -24,7 +24,7 @@ Utility scripts for the homelab, grouped by job. Each folder's README is the usa
   the fleet.
 - [network](network/README.md): firewall audit and host firewall
   setup, plus the nmap scan set (ad hoc, hourly, monthly, vuln).
-- [ops-toolkit](ops_toolkit/README.md): six Bash jobs with systemd
+- [ops_toolkit](ops_toolkit/README.md): six Bash jobs with systemd
   timers: system health, backup verification, log cleanup, certificate
   expiry, service uptime, temp cleanup.
 - [pihole](pihole/README.md): Pi-hole + Unbound DNS test suite, log

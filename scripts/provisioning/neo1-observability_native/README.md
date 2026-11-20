@@ -4,8 +4,9 @@ The bare-metal form of the neo1 observability node: the monitoring
 design for one 512 MB ARMv7 box (neo1, 192.168.0.105, Armbian) as
 static binaries under hardened systemd units — no Docker. The Docker
 form of the same design (identical configs, probes, and alerts) is
-`containers/neo1-observability_docker/`; the multi-service standby
-stack for the cluster is `containers/monitoring/`.
+`containers/neo1-observability_docker/`; the multi-service Extended
+Observability Stack (formerly the standby stack) for the cluster is
+`containers/monitoring/`.
 
 **Design:** No Docker. Static Go binaries + hardened systemd units.
 **Always-on set (5):** prometheus, alertmanager, blackbox_exporter, node_exporter, ntfy

@@ -1,7 +1,7 @@
+---
 # Usage:
 #   ansible-playbook -i inv 10-uptime_report_group.yml -e target_group=webservers
 #   ansible-playbook -i inv 10-uptime_report_group.yml -l webservers
----
 - name: Uptime and reboot history report (read-only)
   hosts: "{{ target_group | default('all') }}"
   gather_facts: true

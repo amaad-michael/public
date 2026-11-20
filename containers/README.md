@@ -31,16 +31,16 @@ chmod 600. The pattern per project:
   LLM_MODELS_DIR and the two model filenames (LLM_HEAVY_MODEL,
   LLM_LIGHT_MODEL), plus sizing and port options. Compose refuses to
   render while a model filename is unset.
-- **gpu-llm**: a `.env` copied from `.env.example`. Four values are
+- **gpu_llm**: a `.env` copied from `.env.example`. Four values are
   required (RENDER_GID, VIDEO_GID, WEBUI_SECRET_KEY, SEARXNG_SECRET)
   and compose refuses to render without them; the model list, ports,
   and keep-alive are optional overrides in the same file.
-- **optiplex-llm**: no `.env` required. Every setting has a shipped
+- **optiplex_llm**: no `.env` required. Every setting has a shipped
   default; `.env.example` documents the optional overrides.
 - **cockpit**: no `.env` and no secrets by design. The stack holds no
   credentials; authentication happens at login, with each user's own
   account on the target host.
-- **neo1-observability-docker**: a `.env` copied from `.env.example`
+- **neo1-observability_docker**: a `.env` copied from `.env.example`
   (image pins pre-filled with the verified tags; set
   GRAFANA_ADMIN_PASSWORD), plus a `secrets/` directory created on the
   host holding `ntfy.token` and the backup SSH keys under `secrets/ssh/`.
@@ -48,23 +48,23 @@ chmod 600. The pattern per project:
   set.
 - **scanner**: no `.env`. The image is built locally from the
   Dockerfile and run on demand.
-- **health-smart**: no `.env` and no secrets. The collector mounts
+- **health_smart**: no `.env` and no secrets. The collector mounts
   the repo's health scripts read-only from the checkout and writes
   reports to `./reports/` on the host; it needs host-device access
   (privileged, `/dev`, `pid: host`) — see its README.
-- **backup-integrity**: no `.env` and no secrets. The image is built
+- **backup_integrity**: no `.env` and no secrets. The image is built
   locally and run on demand against a data directory
   (`BACKUP_INTEGRITY_DIR`, default `./data`).
-- **cron-audit**: no `.env` and no secrets. The image is built locally;
+- **cron_audit**: no `.env` and no secrets. The image is built locally;
   the host's cron configuration is mounted read-only at `/host`.
-- **firewall-audit**: no `.env` and no secrets. The image is built
+- **firewall_audit**: no `.env` and no secrets. The image is built
   locally and runs with host networking (`network_mode: host`,
   CAP_NET_ADMIN) against the host's firewall, with its configuration
   directories mounted read-only.
-- **ops-toolkit**: no `.env` and no secrets. The image is built locally;
+- **ops_toolkit**: no `.env` and no secrets. The image is built locally;
   configuration ships in the image and output persists in named
   volumes (`ops_log`, `ops_state`).
-- **open-terminal**: a `.env` copied from
+- **open_terminal**: a `.env` copied from
   `open_terminal_env.example`, holding OPEN_TERMINAL_API_KEY (the
   key the bash form generates at
   `/var/lib/open-terminal/api_key.txt`; reuse that value when
@@ -122,16 +122,16 @@ relabeled.
 
 Stacks whose compose files bind-mount host paths, from a
 survey of every `containers/*/docker-compose.yml` on
-2026-10-31: backup-integrity, cockpit, cron-audit,
-firewall-audit, gitea, gpu-llm, health-smart, lamp, llm,
-monitoring, neo1-observability-docker, open-terminal,
-optiplex-llm, pihole. Stacks that use only named volumes and
-have no bind mounts to relabel: jenkins, ops-toolkit, scanner.
+2026-10-31: backup_integrity, cockpit, cron_audit,
+firewall_audit, gitea, gpu_llm, health_smart, lamp, llm,
+monitoring, neo1-observability_docker, open_terminal,
+optiplex_llm, pihole. Stacks that use only named volumes and
+have no bind mounts to relabel: jenkins, ops_toolkit, scanner.
 
 Some bind mounts are special cases worth a second look before
-relabeling: cron-audit mounts the host's `/etc` and
-`/var/spool/cron`, firewall-audit mounts `/etc/firewalld`,
-and neo1-observability-docker mounts the host root filesystem
+relabeling: cron_audit mounts the host's `/etc` and
+`/var/spool/cron`, firewall_audit mounts `/etc/firewalld`,
+and neo1-observability_docker mounts the host root filesystem
 read-only. Relabeling shared system directories affects the
 host, not just the container; these three need an explicit
 decision during the shakedown rather than a mechanical `:Z`.
@@ -144,17 +144,17 @@ first, because they are historically the least uniformly
 implemented. Each is an expectation to verify during the
 shakedown, not a known failure:
 
-- `depends_on` with `condition: service_healthy` (gpu-llm,
+- `depends_on` with `condition: service_healthy` (gpu_llm,
   lamp, llm, pihole)
-- healthchecks (cockpit, gitea, gpu-llm, jenkins, lamp, llm,
-  monitoring, neo1-observability-docker, open-terminal,
-  optiplex-llm, pihole)
+- healthchecks (cockpit, gitea, gpu_llm, jenkins, lamp, llm,
+  monitoring, neo1-observability_docker, open_terminal,
+  optiplex_llm, pihole)
 - required-variable interpolation, `${VAR:?}` (gitea,
-  gpu-llm, lamp, llm, monitoring, neo1-observability-docker,
-  open-terminal, pihole)
-- `build:` sections (backup-integrity, cron-audit,
-  firewall-audit, health-smart, lamp,
-  neo1-observability-docker, ops-toolkit, scanner)
+  gpu_llm, lamp, llm, monitoring, neo1-observability_docker,
+  open_terminal, pihole)
+- `build:` sections (backup_integrity, cron_audit,
+  firewall_audit, health_smart, lamp,
+  neo1-observability_docker, ops_toolkit, scanner)
 - the Docker API socket: monitoring's Traefik service mounts
   `/var/run/docker.sock` and reads container state from it.
   Under Podman the equivalent is the Podman API socket, at a

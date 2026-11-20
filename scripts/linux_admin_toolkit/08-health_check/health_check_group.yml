@@ -1,7 +1,7 @@
+---
 # Usage:
 #   ansible-playbook -i inv 08-health_check_group.yml -e target_group=webservers
 #   ansible-playbook -i inv 08-health_check_group.yml -l webservers
----
 - name: System health check (read-only)
   hosts: "{{ target_group | default('all') }}"
   gather_facts: true

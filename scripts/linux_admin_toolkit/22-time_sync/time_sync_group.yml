@@ -1,3 +1,4 @@
+---
 # Usage (read-only check):
 #   ansible-playbook -i inv time_sync_group.yml -e target_group=webservers
 # Usage (remediate; idempotent; --check shows what would change):

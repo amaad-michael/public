@@ -1,6 +1,6 @@
+---
 # ansible-playbook -i inv perm_audit_group.yml -e target_group=webservers [-l somehost]
 # Optional: -e top_n=100
----
 - name: Audit risky file permissions (read-only)
   hosts: "{{ target_group | default('all') }}"
   become: true
