@@ -29,7 +29,7 @@ public/
 │                 # git, LLM, monitoring, network, Pi-hole, provisioning,
 │                 # security, and workstation scripts
 ├── templates/    # bash script templates, the blank-note template, the
-│                 # secure-ci CI template, and Apache and nginx templates
+│                 # secure_ci CI template, and Apache and nginx templates
 └── deprecated/   # retired files, kept for git history
 ```
 

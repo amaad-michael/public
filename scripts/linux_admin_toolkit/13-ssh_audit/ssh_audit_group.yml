@@ -1,5 +1,5 @@
-# ansible-playbook -i inv ssh_audit_group.yml -e target_group=webservers [-l somehost]
 ---
+# ansible-playbook -i inv ssh_audit_group.yml -e target_group=webservers [-l somehost]
 - name: Audit sshd config against hardening baseline (read-only)
   hosts: "{{ target_group | default('all') }}"
   become: true

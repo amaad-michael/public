@@ -1,7 +1,7 @@
+---
 # Usage:
 #   ansible-playbook -i inv 09-failed_services_group.yml -e target_group=webservers
 #   ansible-playbook -i inv 09-failed_services_group.yml -l webservers
----
 - name: Failed services report (read-only)
   hosts: "{{ target_group | default('all') }}"
   gather_facts: true

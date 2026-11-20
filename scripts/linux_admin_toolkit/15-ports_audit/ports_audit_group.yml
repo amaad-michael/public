@@ -1,6 +1,6 @@
+---
 # ansible-playbook -i inv ports_audit_group.yml -e target_group=webservers [-l somehost]
 # Optional: -e expect_ports="80/tcp 443/tcp 127.0.0.1:3306" to diff against allowed listeners.
----
 - name: Audit listening ports (read-only)
   hosts: "{{ target_group | default('all') }}"
   become: true

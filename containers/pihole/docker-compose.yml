@@ -1,3 +1,4 @@
+---
 # pi4 / pi0 — Pi-hole + Unbound resolver pair
 # v2 (2026-07): closes LAN exposure of unbound; fixes conf mount path;
 # removes root override; single-validator DNSSEC; pins enforced via .env.

@@ -1,3 +1,4 @@
+---
 # cron_inventory_group.yml
 # Read-only inventory of cron jobs across a fleet: every user's crontab,
 # /etc/crontab, /etc/cron.d/*, and the cron period directories.

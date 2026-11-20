@@ -47,13 +47,14 @@ Playbooks are grouped by job under `playbooks/`. Most groups have a README that 
   not belong to a single service (today: the node_exporter fleet
   rollout).
 - [monitoring](playbooks/monitoring/README.md): the deploy playbook
-  for the standby monitoring stack in `containers/monitoring/`
+  for the Extended Observability Stack (formerly the standby
+  monitoring stack) in `containers/monitoring/`
   (a wrapper around its compose project, not a re-implementation).
 - [observability](playbooks/observability/README.md): the neo1
   observability stack (Prometheus, Alertmanager, blackbox_exporter,
   node_exporter, ntfy, on-demand Grafana) — the Ansible form of the
   native kit in `scripts/provisioning/neo1-observability_native/`.
-- [ops-toolkit](playbooks/ops_toolkit/README.md): installs the Ops
+- [ops_toolkit](playbooks/ops_toolkit/README.md): installs the Ops
   Toolkit's six job scripts, its configuration, and its systemd
   timer/service pairs onto a target host.
 - [maintenance](playbooks/maintenance/README.md): maintenance patching for the
