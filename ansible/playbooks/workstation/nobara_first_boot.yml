@@ -3,7 +3,7 @@
 # Ansible form of the Nobara first-boot workstation setup
 # (scripts/workstation/new_nobara_setup-v1.2.sh). This is the
 # first-boot job, not recurring patching: for patching see
-# ansible/playbooks/monthly/monthly_maint_nobara.yml.
+# ansible/playbooks/maintenance/maintenance_nobara.yml.
 #
 # The playbook reproduces the bash script step for step:
 #   Part 1: find the discrete AMD GPU (amdgpu driver, AMD vendor
