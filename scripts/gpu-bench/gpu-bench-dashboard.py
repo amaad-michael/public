@@ -14,6 +14,7 @@ import json
 import os
 import sys
 
+
 def load_runs(results_dir):
     runs = []
     if not os.path.isdir(results_dir):
@@ -34,6 +35,7 @@ def load_runs(results_dir):
     runs.sort(key=lambda m: m.get("run_id", ""), reverse=True)
     return runs
 
+
 def read_telemetry(path):
     rows = []
     try:
@@ -42,16 +44,19 @@ def read_telemetry(path):
                 try:
                     temp = float(row["temp_c"]) if row["temp_c"] else None
                     power = float(row["power_w"]) if row["power_w"] else None
-                    rows.append({
-                        "t": int(row["epoch"]),
-                        "temp": temp if temp and temp > 0 else None,
-                        "power": power if power and power > 0 else None,
-                    })
+                    rows.append(
+                        {
+                            "t": int(row["epoch"]),
+                            "temp": temp if temp and temp > 0 else None,
+                            "power": power if power and power > 0 else None,
+                        }
+                    )
                 except (KeyError, TypeError, ValueError):
                     continue
     except OSError:
         pass
     return rows
+
 
 def svg_chart(rows, key, color, width=520, height=110, max_points=240):
     pts = [(r["t"], r[key]) for r in rows if r.get(key) is not None]
@@ -79,10 +84,12 @@ def svg_chart(rows, key, color, width=520, height=110, max_points=240):
         f'<text x="6" y="12" class="chart-label">{label}</text></svg>'
     )
 
+
 def fmt(v, suffix=""):
     if v is None or v == "":
         return "—"
     return f"{v}{suffix}"
+
 
 def main():
     results_dir, out_path = sys.argv[1], sys.argv[2]
@@ -93,22 +100,30 @@ def main():
     for r in runs:
         if "score" not in r and "fps" not in r:
             continue
-        key = (r.get("host", ""), r.get("backend", ""), r.get("api", ""), r.get("preset", ""))
+        key = (
+            r.get("host", ""),
+            r.get("backend", ""),
+            r.get("api", ""),
+            r.get("preset", ""),
+        )
         if key not in lanes:
             lanes[key] = r
 
-    lane_rows = "".join(
-        "<tr>"
-        f"<td>{html.escape(str(k[0]))}</td><td>{html.escape(str(k[1]))}</td>"
-        f"<td>{html.escape(str(k[2]))}</td><td>{html.escape(str(k[3]))}</td>"
-        f"<td class='num'><strong>{html.escape(str(r['score'])) if 'score' in r else '—'}</strong></td>"
-        f"<td class='num'>{fmt(r.get('fps'))}</td>"
-        f"<td class='num'>{fmt(r.get('temp_max_c'), ' °C')}</td>"
-        f"<td class='num'>{fmt(r.get('power_max_w'), ' W')}</td>"
-        f"<td>{html.escape(str(r.get('run_id', ''))[:15])}</td>"
-        "</tr>"
-        for k, r in sorted(lanes.items())
-    ) or '<tr><td colspan="9" class="muted">No scored runs yet.</td></tr>'
+    lane_rows = (
+        "".join(
+            "<tr>"
+            f"<td>{html.escape(str(k[0]))}</td><td>{html.escape(str(k[1]))}</td>"
+            f"<td>{html.escape(str(k[2]))}</td><td>{html.escape(str(k[3]))}</td>"
+            f"<td class='num'><strong>{html.escape(str(r['score'])) if 'score' in r else '—'}</strong></td>"
+            f"<td class='num'>{fmt(r.get('fps'))}</td>"
+            f"<td class='num'>{fmt(r.get('temp_max_c'), ' °C')}</td>"
+            f"<td class='num'>{fmt(r.get('power_max_w'), ' W')}</td>"
+            f"<td>{html.escape(str(r.get('run_id', ''))[:15])}</td>"
+            "</tr>"
+            for k, r in sorted(lanes.items())
+        )
+        or '<tr><td colspan="9" class="muted">No scored runs yet.</td></tr>'
+    )
 
     run_blocks = []
     for r in runs[:12]:
@@ -171,6 +186,7 @@ Generated from {len(runs)} run(s) under {html.escape(results_dir)}.</p>
     with open(out_path, "w") as f:
         f.write(doc)
     print(f"dashboard written: {out_path} ({len(runs)} runs)")
+
 
 if __name__ == "__main__":
     main()
