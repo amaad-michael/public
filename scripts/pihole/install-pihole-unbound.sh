@@ -82,12 +82,12 @@ ENV_FILE="${COMPOSE_DIR}/.env"
 # the compose directory's own copy first (the staged layout, where
 # the scripts sit flat in their own directory), then the checkout
 # layout's copy, and as a last resort the path in the repo as text.
-if [[ -f ${COMPOSE_DIR}/pi-dns-env.example ]]; then
-    ENV_EXAMPLE="${COMPOSE_DIR}/pi-dns-env.example"
-elif [[ -f ${SCRIPT_DIR}/../../containers/pihole/pi-dns-env.example ]]; then
-    ENV_EXAMPLE="${SCRIPT_DIR}/../../containers/pihole/pi-dns-env.example"
+if [[ -f ${COMPOSE_DIR}/pi_dns_env.example ]]; then
+    ENV_EXAMPLE="${COMPOSE_DIR}/pi_dns_env.example"
+elif [[ -f ${SCRIPT_DIR}/../../containers/pihole/pi_dns_env.example ]]; then
+    ENV_EXAMPLE="${SCRIPT_DIR}/../../containers/pihole/pi_dns_env.example"
 else
-    ENV_EXAMPLE="containers/pihole/pi-dns-env.example (in the public repo)"
+    ENV_EXAMPLE="containers/pihole/pi_dns_env.example (in the public repo)"
 fi
 
 # --- Prerequisites ---------------------------------------------------------

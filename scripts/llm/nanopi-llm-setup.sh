@@ -4,8 +4,8 @@
 # Ansible form (the source this script is derived from, step for step):
 #   ansible/playbooks/llm/llm-server-setup.yml  (inference nodes)
 #   ansible/playbooks/llm/llm-lb-setup.yml      (nginx load balancer)
-#   ansible/playbooks/llm/llama-server.service.j2
-#   ansible/playbooks/llm/llm-lb.conf.j2
+#   ansible/playbooks/llm/llama_server.service.j2
+#   ansible/playbooks/llm/llm_lb.conf.j2
 # Docker form: containers/llm/
 #
 # Inventory-group mapping (Ansible -> this script):
@@ -474,7 +474,7 @@ do_server() {
     download_model
   fi
 
-  # systemd unit — the llama-server.service.j2 template, rendered
+  # systemd unit — the llama_server.service.j2 template, rendered
   tmpunit="$(mktemp)"
   render_server_unit "$home" > "$tmpunit"
   install_if_changed "$tmpunit" /etc/systemd/system/llama-server.service 0644

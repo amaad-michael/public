@@ -148,7 +148,7 @@ It changes nothing on any node it inspects.
 
 This folder no longer carries its own backup checker: the repo's
 single SHA-256 manifest tool is
-[`scripts/backups/backup_integrity_tool_v1.sh`](../backups/backup_integrity_tool_v1.sh)
+[`scripts/backups/backup_integrity_tool-v1.sh`](../backups/backup_integrity_tool-v1.sh)
 (guide: [`backup_integrity_tool_guide-v1.md`](../backups/backup_integrity_tool_guide-v1.md)).
 The former `local_backups_checker.sh` was removed on 2026-10-22
 because the two tools wrote incompatible manifests that could not

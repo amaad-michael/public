@@ -1,6 +1,6 @@
 # Ops Toolkit (container)
 
-The same six Ops Toolkit jobs as `scripts/ops-toolkit/`, packaged in
+The same six Ops Toolkit jobs as `scripts/ops_toolkit/`, packaged in
 an image with their scheduler. The job scripts in `scripts/` here are
 byte-for-byte copies of the bash toolkit (same files that the Ansible
 form installs on a host), and they run on the same wall-clock

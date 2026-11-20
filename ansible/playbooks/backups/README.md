@@ -10,7 +10,7 @@ and verifies the same SHA-256 manifests as the bash tool.
 ## 📦 backup_integrity.yml
 
 The bash form it mirrors is the primary tool,
-`scripts/backups/backup_integrity_tool_v1.sh` (guide:
+`scripts/backups/backup_integrity_tool-v1.sh` (guide:
 `scripts/backups/backup_integrity_tool_guide-v1.md`):
 
 - **generate** — recursively hash every regular file under the target
@@ -39,8 +39,8 @@ primary tool only.
 
 The backup **run** itself (rsync into timestamped directories) is a
 different function; its forms live in
-`scripts/linux-admin-toolkit/18-backup-run/` and
-`19-backup-verify/`.
+`scripts/linux_admin_toolkit/18-backup_run/` and
+`19-backup_verify/`.
 
 ## 🛠️ Usage
 

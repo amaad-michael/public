@@ -10,7 +10,7 @@ The Jinja templates the playbooks render live in `templates/`
 ## 🔒 secure_server_init.yml
 
 The Ansible form of the secure-server-init family
-(`scripts/security/secure-server-init-v1.1.sh` and its conservative
+(`scripts/security/secure_server_init-v1.1.sh` and its conservative
 and legacy v1.1 variants), applying the whole baseline as a unit, in
 the bash scripts' own order:
 

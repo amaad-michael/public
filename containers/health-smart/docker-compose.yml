@@ -33,5 +33,5 @@ services:
       - /dev:/dev
       - ./reports:/reports
       - ../../scripts/monitoring/smart-harvest.sh:/opt/repo-scripts/smart-harvest.sh:ro
-      - ../../scripts/linux-admin-toolkit/08-health-check/health-check-local.sh:/opt/repo-scripts/health-check-local.sh:ro
+      - ../../scripts/linux_admin_toolkit/08-health_check/health_check_local.sh:/opt/repo-scripts/health_check_local.sh:ro
     restart: "no"

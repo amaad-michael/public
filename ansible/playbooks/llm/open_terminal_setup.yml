@@ -1,6 +1,6 @@
 ---
 # open_terminal_setup.yml
-# Ansible form of scripts/llm/setup_open_terminal-v1_2.sh: deploy
+# Ansible form of scripts/llm/setup_open_terminal-v1.2.sh: deploy
 # the hardened Open Terminal file I/O service the way the bash
 # script does, in the script's own order - workspace and log
 # directories at mode 0700 (workspace owned 1000:1000), the API key

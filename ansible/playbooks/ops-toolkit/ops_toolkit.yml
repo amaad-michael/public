@@ -1,5 +1,5 @@
 ---
-# ops_toolkit.yml — Ansible form of the Ops Toolkit (bash: scripts/ops-toolkit/).
+# ops_toolkit.yml — Ansible form of the Ops Toolkit (bash: scripts/ops_toolkit/).
 #
 # Installs the toolkit's six job scripts, its config and lists, and its six
 # systemd timer/service pairs onto a target host. Schedules, unit files,
@@ -11,7 +11,7 @@
 #   cd ansible
 #   ansible-playbook -i hosts playbooks/ops-toolkit/ops_toolkit.yml -l pi1
 #
-# Jobs installed (same set and same schedules as scripts/ops-toolkit/systemd/):
+# Jobs installed (same set and same schedules as scripts/ops_toolkit/systemd/):
 #   sys-health         Sun 04:00 weekly     (*-*-*: Sun *-*-* 04:00:00)
 #   backup-verify      daily 03:30         (*-*-* 03:30:00)
 #   log-clean          1st of month 03:00  (*-*-01 03:00:00)
@@ -33,7 +33,7 @@
   become: true
 
   vars:
-    ops_toolkit_src_dir: "{{ playbook_dir }}/../../../scripts/ops-toolkit"
+    ops_toolkit_src_dir: "{{ playbook_dir }}/../../../scripts/ops_toolkit"
     ops_toolkit_manage_systemd_state: true
     ops_toolkit_jobs:
       - sys-health
@@ -99,7 +99,7 @@
         - services.txt
         - ssl_endpoints.txt
 
-    - name: Install the systemd units (identical files to scripts/ops-toolkit/systemd/)
+    - name: Install the systemd units (identical files to scripts/ops_toolkit/systemd/)
       ansible.builtin.copy:
         src: "{{ ops_toolkit_src_dir }}/systemd/{{ item.0 }}.{{ item.1 }}"
         dest: "/etc/systemd/system/{{ item.0 }}.{{ item.1 }}"

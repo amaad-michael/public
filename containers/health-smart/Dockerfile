@@ -4,7 +4,7 @@
 # (scripts/monitoring/smart-harvest.sh, the bash twin of
 # ansible/playbooks/healthchecks/smart-harvest-v1.0.yml) and the
 # toolkit health check
-# (scripts/linux-admin-toolkit/08-health-check/health-check-local.sh).
+# (scripts/linux_admin_toolkit/08-health_check/health_check_local.sh).
 #
 # The image carries the tooling those scripts need: smartmontools
 # (smartctl), util-linux (lsblk), python3 (the harvest's JSON

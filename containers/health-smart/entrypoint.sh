@@ -5,7 +5,7 @@
 # file) and leaves their reports in /reports:
 #
 #   /reports/smart-data/<host>.json   (smart-harvest.sh)
-#   /reports/health-check.txt         (health-check-local.sh)
+#   /reports/health-check.txt         (health_check_local.sh)
 #
 # Fails loudly if the script mounts are absent: a collector that
 # silently skips its scripts would look exactly like a healthy run.
@@ -16,7 +16,7 @@ die()  { printf 'error: %s\n' "$*" >&2; exit 1; }
 info() { printf '==> %s\n' "$*"; }
 
 SMART_SCRIPT=/opt/repo-scripts/smart-harvest.sh
-HEALTH_SCRIPT=/opt/repo-scripts/health-check-local.sh
+HEALTH_SCRIPT=/opt/repo-scripts/health_check_local.sh
 
 [[ -f "$SMART_SCRIPT" ]] \
     || die "$SMART_SCRIPT not mounted — run from a repo checkout via the shipped docker-compose.yml (it bind-mounts the repo scripts read-only)"

@@ -91,7 +91,7 @@ sntrup761x25519-sha512).
 
 | | Standard | Conservative | Legacy |
 | --- | --- | --- | --- |
-| Files | `secure-server-init-v1.sh`, `secure-server-init-v1.1.sh`, `secure-server-init-v1.2.sh` | `secure-server-init-conservative-v1.sh`, `secure-server-init-conservative-v1.1.sh`, `secure-server-init-conservative-v1.2.sh` | `secure-server-init-legacy-v1.sh`, `secure-server-init-legacy-v1.1.sh` |
+| Files | `secure-server-init-v1.sh`, `secure_server_init-v1.1.sh`, `secure-server-init-v1.2.sh` | `secure-server-init-conservative-v1.sh`, `secure_server_init_conservative-v1.1.sh`, `secure-server-init-conservative-v1.2.sh` | `secure-server-init-legacy-v1.sh`, `secure_server_init_legacy-v1.1.sh` |
 | Use when | Modern OpenSSH on both ends | Clients cannot do the post-quantum key exchange | Old OpenSSH that needs password auth and RSA |
 | Password auth | No | No | Yes |
 | Root login | No | Key only (`prohibit-password`) | No |

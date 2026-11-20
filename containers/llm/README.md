@@ -8,8 +8,8 @@ and no systemd.
 | Ansible original | This stack |
 | --- | --- |
 | `llm-server-setup.yml` (per-board llama-server, port 8080) | `llm-heavy` and `llm-light` services |
-| `llama-server.service.j2` (model, host, port, threads, ctx, n-predict) | compose `command:` + `.env` values |
-| `llm-lb-setup.yml` + `llm-lb.conf.j2` (nginx LB, `least_conn`) | `llm-lb` service + `llm-lb.conf` |
+| `llama_server.service.j2` (model, host, port, threads, ctx, n-predict) | compose `command:` + `.env` values |
+| `llm-lb-setup.yml` + `llm_lb.conf.j2` (nginx LB, `least_conn`) | `llm-lb` service + `llm-lb.conf` |
 | Models downloaded to `~/models` on each board | Host models directory mounted read-only at `/models` |
 
 The two backends mirror his two NanoPi boards: the heavy node serves

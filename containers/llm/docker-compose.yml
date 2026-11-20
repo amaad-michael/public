@@ -3,7 +3,7 @@
 # Container mirror of the Ansible LLM stack:
 #   ansible/playbooks/llm/llm-server-setup.yml  (llama-server nodes)
 #   ansible/playbooks/llm/llm-lb-setup.yml      (nginx LB)
-#   ansible/playbooks/llm/llm-lb.conf.j2        (LB config design)
+#   ansible/playbooks/llm/llm_lb.conf.j2        (LB config design)
 #
 # Two inference backends mirror his two NanoPi boards: llm-heavy is the
 # 4GB board's role (7B model), llm-light the 2GB board's role (1.5B

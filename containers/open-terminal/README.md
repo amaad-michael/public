@@ -5,7 +5,7 @@ service LLM models in Open WebUI call to create, read, modify and
 delete files in one sandboxed workspace, with no command execution
 and no shell access. This project is the Docker Compose form of
 the hardened `docker run` embedded in
-`scripts/llm/setup_open_terminal-v1_2.sh` (v1.2); the Ansible form
+`scripts/llm/setup_open_terminal-v1.2.sh` (v1.2); the Ansible form
 is `ansible/playbooks/llm/open_terminal_setup.yml`. All three forms
 deploy the same image with the same hardening.
 

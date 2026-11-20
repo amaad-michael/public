@@ -2,7 +2,7 @@
 services:
   # Open Terminal - hardened file I/O service for the LLM stack.
   # Compose form of the hardened `docker run` embedded in
-  # scripts/llm/setup_open_terminal-v1_2.sh: same image, same
+  # scripts/llm/setup_open_terminal-v1.2.sh: same image, same
   # loopback-only publish, same hardening. The flag-by-flag
   # translation is in README.md. The bash script also creates the
   # host directories and generates the API key file before it runs

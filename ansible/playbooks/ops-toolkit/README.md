@@ -1,6 +1,6 @@
 # Ops Toolkit playbooks
 
-The Ansible form of the Ops Toolkit (`scripts/ops-toolkit/`). One
+The Ansible form of the Ops Toolkit (`scripts/ops_toolkit/`). One
 playbook installs the toolkit's six job scripts, its configuration, and
 its six systemd timer/service pairs onto a target host.
 
@@ -21,7 +21,7 @@ Exactly the bash README's "Install (as root)" procedure, step for step:
   bash install's `[ -f ... ] || install` guard.
 - `/var/log/ops` and `/var/lib/ops-toolkit`, mode 0755.
 - The six `.service` and six `.timer` unit files, copied **unchanged**
-  from `scripts/ops-toolkit/systemd/` (mode 0644 into
+  from `scripts/ops_toolkit/systemd/` (mode 0644 into
   `/etc/systemd/system`). Job set, descriptions, `ExecStart` paths,
   `Nice`/`IOScheduling` settings, and every `OnCalendar` schedule are
   therefore identical by construction, not by transcription.

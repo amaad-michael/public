@@ -5,7 +5,7 @@ runs the repo's own scripts in a one-shot collector container: the
 bash SMART harvest (`scripts/monitoring/smart-harvest.sh`, twin of
 `ansible/playbooks/healthchecks/smart-harvest-v1.0.yml`) and the
 toolkit health check
-(`scripts/linux-admin-toolkit/08-health-check/health-check-local.sh`).
+(`scripts/linux_admin_toolkit/08-health_check/health_check_local.sh`).
 
 ## 📦 Files
 

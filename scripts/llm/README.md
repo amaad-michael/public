@@ -1,6 +1,6 @@
 # scripts/llm
 
-Shell installers for the local LLM stacks. Each targets one host. Three run as root on that host; `deploy-llama-ui-raw.sh` runs as your own user and uses sudo for its Docker commands. The same stacks also exist as
+Shell installers for the local LLM stacks. Each targets one host. Three run as root on that host; `deploy_llama_ui_raw.sh` runs as your own user and uses sudo for its Docker commands. The same stacks also exist as
 Ansible playbooks and as container stacks; the table at the end maps
 the three forms so you can pick the right one.
 
@@ -9,8 +9,8 @@ the three forms so you can pick the right one.
 - [gpu-box-llm-setup-v1.9.sh](#gpu-box-llm-setup-v19sh)
 - [optiplex-llm-setup-v2.1.sh](#optiplex-llm-setup-v21sh)
 - [llama-hot-swap-v1.0.sh](#llama-hot-swap-v10sh)
-- [deploy-llama-ui-raw.sh](#deploy-llama-ui-rawsh)
-- [setup_open_terminal-v1_2.sh](#setup_open_terminal-v1_2sh)
+- [deploy_llama_ui_raw.sh](#deploy-llama-ui-rawsh)
+- [setup_open_terminal-v1.2.sh](#setup_open_terminal-v1_2sh)
 - [nanopi-llm-setup.sh](#nanopi-llm-setupsh)
 - [nanopi-llm-control-v1.0.sh](#nanopi-llm-control-v10sh)
 - [gpu-box-llm-control-v1.0.sh](#gpu-box-llm-control-v10sh)
@@ -109,7 +109,7 @@ after the unit write rolls back to the backed-up unit.
 `--check` renders the swap without changing anything. Run as
 root.
 
-## deploy-llama-ui-raw.sh
+## deploy_llama_ui_raw.sh
 
 A single raw `docker run` for the GPU box: starts a container named
 `llama-ui` from the official llama.cpp server image
@@ -126,7 +126,7 @@ container is removed. Manage it with the usual commands:
 `sudo docker logs -f llama-ui`, `sudo docker restart llama-ui`,
 `sudo docker rm -f llama-ui`.
 
-## setup_open_terminal-v1_2.sh
+## setup_open_terminal-v1.2.sh
 
 Target: the GPU box (Nobara or another Fedora-based host with Docker).
 Run as root. Deploys the Open Terminal container
@@ -151,7 +151,7 @@ Uninstall with `--uninstall`, which stops and removes the container
 and deletes the workspace, the logs, and the API key. Note: the
 script's header usage examples name the file
 `setup_open_terminal-v1_2_hardened.sh`; the shipped filename is
-`setup_open_terminal-v1_2.sh`.
+`setup_open_terminal-v1.2.sh`.
 
 ## nanopi-llm-setup.sh
 
@@ -304,7 +304,7 @@ loaded.*
 | GPU box (Ollama + Open WebUI + SearXNG) | `gpu-box-llm-setup-v1.9.sh` | `ansible/playbooks/llm/gpu-box-llm-setup-v1.9.yml` | `containers/gpu-llm` |
 | OptiPlex (llama.cpp) | `optiplex-llm-setup-v2.1.sh` | `ansible/playbooks/llm/optiplex-llm-setup-v2.1.yml` | `containers/optiplex-llm` |
 | NanoPi inference pool (llama.cpp servers + nginx LB) | `nanopi-llm-setup.sh` | `ansible/playbooks/llm/llm-server-setup.yml` + `llm-lb-setup.yml` | `containers/llm` |
-| Open Terminal file service | `setup_open_terminal-v1_2.sh` | `ansible/playbooks/llm/open_terminal_setup.yml` | `containers/open-terminal` |
+| Open Terminal file service | `setup_open_terminal-v1.2.sh` | `ansible/playbooks/llm/open_terminal_setup.yml` | `containers/open-terminal` |
 
 Differences that decide the choice:
 
