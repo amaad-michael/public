@@ -28,8 +28,8 @@ public/
 ├── scripts/      # Linux Admin Toolkit, ops toolkit, and backup, gaming,
 │                 # git, LLM, monitoring, network, Pi-hole, provisioning,
 │                 # security, and workstation scripts
-├── templates/    # bash script templates, the blank-note template, and
-│                 # the secure-ci CI template
+├── templates/    # bash script templates, the blank-note template, the
+│                 # secure-ci CI template, and Apache and nginx templates
 └── deprecated/   # retired files, kept for git history
 ```
 
