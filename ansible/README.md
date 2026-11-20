@@ -56,9 +56,9 @@ Playbooks are grouped by job under `playbooks/`. Most groups have a README that 
 - [ops-toolkit](playbooks/ops-toolkit/README.md): installs the Ops
   Toolkit's six job scripts, its configuration, and its systemd
   timer/service pairs onto a target host.
-- [monthly](playbooks/monthly/README.md): monthly patching for the
+- [maintenance](playbooks/maintenance/README.md): maintenance patching for the
   fleet, Nobara, and the Pi-hole hosts, driven by
-  `scripts/run_monthly_maintenance.sh`.
+  `scripts/run_maintenanceenance.sh`.
 - [motd](playbooks/motd/): login banners (fastfetch on login), plus
   the hosts file and MOTD updater. Small enough to read directly;
   no group guide.
@@ -76,8 +76,8 @@ Playbooks are grouped by job under `playbooks/`. Most groups have a README that 
 - [workstation](playbooks/workstation/): the Nobara first-boot
   setup (`nobara_first_boot.yml`, the Ansible form of the bash
   first-boot script); its usage header is the guide. Recurring
-  Nobara patching lives in the monthly group
-  (`monthly_maint_nobara.yml`).
+  Nobara patching lives in the maintenance group
+  (`maintenance_nobara.yml`).
 
 ---
 Copyright (c) Michael Tatum.

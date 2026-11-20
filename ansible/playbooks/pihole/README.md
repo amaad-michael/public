@@ -39,4 +39,4 @@ The attended playbook downloads the installer, prints instructions, and pauses. 
 - `private-address` entries block DNS-rebinding answers for private and documentation ranges.
 - Query and reply logging are off; verbosity is 1 through syslog. One thread, tuned for a small Pi-class host.
 
-Related material lives elsewhere in the repo: the containerised form of this pair is `containers/pihole/`, and the host-side maintenance and removal playbooks are `ansible/playbooks/monthly/monthly_maint_pihole.yml` and the Pi-hole entries in `ansible/playbooks/cleanup/`.
+Related material lives elsewhere in the repo: the containerised form of this pair is `containers/pihole/`, and the host-side maintenance and removal playbooks are `ansible/playbooks/maintenance/maintenance_pihole.yml` and the Pi-hole entries in `ansible/playbooks/cleanup/`.

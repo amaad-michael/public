@@ -1,5 +1,5 @@
 ---
-- name: Monthly patching for all servers RHEL + Debian
+- name: Maintenance patching for all servers RHEL + Debian
   hosts: all
   become: true
   gather_facts: true

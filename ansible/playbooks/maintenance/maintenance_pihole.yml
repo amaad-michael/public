@@ -1,5 +1,5 @@
 ---
-- name: Monthly patching for Debian-based servers and Pi-hole
+- name: Maintenance patching for Debian-based servers and Pi-hole
   hosts: all
   become: true
   gather_facts: true
@@ -28,7 +28,7 @@
         msg: "Apt cache updated: {{ apt_update.changed }}"
       when: ansible_facts['os_family'] == "Debian"
 
-    - name: Dist-upgrade packages (safe monthly patch)
+    - name: Dist-upgrade packages (safe maintenance patch)
       ansible.builtin.apt:
         upgrade: dist
         dpkg_options: 'force-confdef,force-confold'
@@ -97,7 +97,7 @@
 
     - name: Reboot system when required (graceful)
       ansible.builtin.reboot:
-        msg: "Reboot initiated by Ansible after monthly patching"
+        msg: "Reboot initiated by Ansible after maintenance patching"
         pre_reboot_delay: 10
         post_reboot_delay: 60
         reboot_timeout: 900

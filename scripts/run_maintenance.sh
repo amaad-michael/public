@@ -1,5 +1,5 @@
 #!/bin/bash
-# Monthly maintenance wrapper
+# Maintenance wrapper
 # Logs append to scripts/logs/maintenance.log
 
 set -euo pipefail
@@ -59,12 +59,12 @@ run_playbook() {
 }
 
 # ── Execution sequence ────────────────────────────────────────────────────────
-run_playbook "Monthly Maintenance" \
-    "$ANSIBLE_DIR/playbooks/monthly/monthly_maint.yml" \
+run_playbook "Maintenance" \
+    "$ANSIBLE_DIR/playbooks/maintenance/maintenance.yml" \
     "pi_all"
 
 run_playbook "Pi-hole Maintenance" \
-    "$ANSIBLE_DIR/playbooks/monthly/monthly_maint_pihole.yml" \
+    "$ANSIBLE_DIR/playbooks/maintenance/maintenance_pihole.yml" \
     "pi4"
 
 run_playbook "Simple Reboot" \
