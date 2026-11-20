@@ -42,8 +42,8 @@ Utility scripts for the homelab, grouped by job. Each folder's README is the usa
 - [workstation](workstation/README.md): Nobara setup, the GPU box
   and OptiPlex update scripts, and the laptop role-prep pair.
 
-Also at this level: `run_monthly_maintenance.sh`, the wrapper that
-runs the monthly maintenance playbooks (see
+Also at this level: `run_maintenanceenance.sh`, the wrapper that
+runs the maintenance playbooks (see
 [ansible/README.md](../ansible/README.md)) and logs to
 `scripts/logs/maintenance.log`; and `fleet-reboot.sh`, the bash
 form of the reboot playbooks (see

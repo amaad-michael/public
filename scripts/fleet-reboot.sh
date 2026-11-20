@@ -27,7 +27,7 @@
 #     condition): the host's OS family is read from /etc/os-release over
 #     SSH and any other family is skipped with an error.
 #
-# The monthly maintenance wrapper (scripts/run_monthly_maintenance.sh)
+# The maintenance wrapper (scripts/run_maintenanceenance.sh)
 # reboots pi0, pi2, pi3, and pi4 with the simple playbook; the bash
 # equivalent is:
 #   ./scripts/fleet-reboot.sh --simple --limit pi0,pi2,pi3,pi4 --confirm

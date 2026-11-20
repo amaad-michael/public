@@ -1,12 +1,12 @@
 ---
-# monthly_maint_nobara.yml
+# maintenance_nobara.yml
 # Full patching playbook for Nobara Linux desktops.
 # Uses native Nobara tooling (nobara-sync) as primary update mechanism.
 #
 # Usage:
-#   ansible-playbook -i inventory.ini monthly_maint_nobara.yml
-#   ansible-playbook -i inventory.ini monthly_maint_nobara.yml --tags flatpak   # flatpak only
-#   ansible-playbook -i inventory.ini monthly_maint_nobara.yml --tags llm       # LLM-stack refresh only
+#   ansible-playbook -i inventory.ini maintenance_nobara.yml
+#   ansible-playbook -i inventory.ini maintenance_nobara.yml --tags flatpak   # flatpak only
+#   ansible-playbook -i inventory.ini maintenance_nobara.yml --tags llm       # LLM-stack refresh only
 #
 # Reboot:  NOT automatic. A notification is printed if a reboot is required.
 # Firmware: NOT updated automatically. A notification is printed if updates are available.

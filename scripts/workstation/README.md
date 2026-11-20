@@ -4,7 +4,7 @@ First-boot setup and recurring update scripts for the two workstation
 hosts: the Nobara GPU box and the Linux Mint OptiPlex, plus a
 role-prep checklist and setup script for a personal Linux laptop.
 The Ansible patching counterpart for Nobara lives in
-`ansible/playbooks/monthly/monthly_maint_nobara.yml`.
+`ansible/playbooks/maintenance/maintenance_nobara.yml`.
 
 ## The single new-box workflow
 
@@ -304,13 +304,13 @@ and high-performance lock, the nobara-sync update with the dnf
 fallback, the Cinnamon desktop group install, and the placeholder
 wallpaper. Its usage header is the guide.
 
-`ansible/playbooks/monthly/monthly_maint_nobara.yml` patches Nobara
+`ansible/playbooks/maintenance/maintenance_nobara.yml` patches Nobara
 desktops through Ansible instead of by hand (target group `nobara`,
 `become: true`):
 
 ```bash
-ansible-playbook -i inventory.ini monthly_maint_nobara.yml
-ansible-playbook -i inventory.ini monthly_maint_nobara.yml --tags flatpak
+ansible-playbook -i inventory.ini maintenance_nobara.yml
+ansible-playbook -i inventory.ini maintenance_nobara.yml --tags flatpak
 ```
 
 It runs `nobara-sync --no-reboot`, a full dnf upgrade and
