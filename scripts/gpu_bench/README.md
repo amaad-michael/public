@@ -18,12 +18,12 @@ backend emits one, and an HTML dashboard regenerated from all artifacts.
 
 ## Install
 
-Copy `gpu-bench-v1.0.4.sh` and `gpu-bench-dashboard.py` into the same
+Copy `gpu_bench-v1.0.4.sh` and `gpu_bench_dashboard.py` into the same
 directory on the target machine, `chmod +x` both, and run:
 
 ```bash
-./gpu-bench-v1.0.4.sh check
-./gpu-bench-v1.0.4.sh check --probe
+./gpu_bench-v1.0.4.sh check
+./gpu_bench-v1.0.4.sh check --probe
 ```
 
 `check` prints the GPU inventory, telemetry availability, and which

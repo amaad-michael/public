@@ -7,7 +7,7 @@ Utility scripts for the homelab, grouped by job. Each folder's README is the usa
   (`backup_integrity_tool-v1.sh`).
 - [gaming](gaming/README.md): lsfg-vk installer, Lossless Scaling frame
   generation on Nobara Linux.
-- [gpu-bench](gpu-bench/README.md): multi-backend GPU benchmark and
+- [gpu_bench](gpu_bench/README.md): multi-backend GPU benchmark and
   stress harness (FurMark, OCCT, Superposition, GravityMark, glmark2,
   vkmark) with live amdgpu telemetry and an HTML dashboard generator.
 - [git](git/README.md): new-box git configuration and a commit-and-push

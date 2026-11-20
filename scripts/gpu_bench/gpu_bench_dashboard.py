@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """gpu-bench dashboard generator.
 
-Reads run artifacts produced by gpu-bench-v1.0.sh (results/<run>/meta.json,
+Reads run artifacts produced by gpu_bench-v1.0.4.sh (results/<run>/meta.json,
 telemetry.csv, score.env) and renders one self-contained HTML dashboard:
 latest score per lane, full run history, and per-run temperature/power
 charts as inline SVG. No external assets.
 
-Usage: gpu-bench-dashboard.py <results_dir> <output_html>
+Usage: gpu_bench_dashboard.py <results_dir> <output_html>
 """
 import csv
 import html

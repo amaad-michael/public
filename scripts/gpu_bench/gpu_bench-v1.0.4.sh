@@ -29,7 +29,7 @@ BENCH_HOME="${GPU_BENCH_HOME:-$SCRIPT_DIR}"
 RESULTS_DIR="$BENCH_HOME/results"
 DASHBOARD="$BENCH_HOME/dashboard.html"
 SYSFS="${GPU_BENCH_SYSFS:-/sys}"
-DASHBOARD_PY="$SCRIPT_DIR/gpu-bench-dashboard.py"
+DASHBOARD_PY="$SCRIPT_DIR/gpu_bench_dashboard.py"
 SAMPLE_SECONDS=2
 
 die() { echo "gpu-bench: $*" >&2; exit 2; }
