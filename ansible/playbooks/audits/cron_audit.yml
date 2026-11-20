@@ -9,7 +9,7 @@
 # collects the same material from every target host and assembles one
 # fleet report on the controller with the same sections and headers.
 # The admin toolkit's cron-inventory playbook
-# (scripts/linux-admin-toolkit/21-cron-inventory/) is a different
+# (scripts/linux_admin_toolkit/21-cron_inventory/) is a different
 # workflow — a per-host stdout inventory with no report file and no
 # findings — and is not what this mirrors.
 #

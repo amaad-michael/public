@@ -16,7 +16,7 @@ LLM_HEAVY_MODEL=qwen2.5-coder-7b-instruct-q4_k_m.gguf
 LLM_LIGHT_MODEL=qwen2.5-coder-1.5b-instruct-q4_k_m.gguf
 
 # llama-server settings. The defaults mirror the Ansible systemd unit
-# (llama-server.service.j2): ctx-size 2048, n-predict 512. The unit set
+# (llama_server.service.j2): ctx-size 2048, n-predict 512. The unit set
 # threads from the board's core count; set these to the host's cores
 # per backend.
 LLM_CTX_SIZE=2048

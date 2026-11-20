@@ -21,7 +21,7 @@ and pi0 the secondary.
 
 - `docker-compose.yml`: both services, the `pihole` bridge
   network (172.20.0.0/16), and three named volumes.
-- `pi-dns-env.example`: template for the host-side `.env` (image pins
+- `pi_dns_env.example`: template for the host-side `.env` (image pins
   and the Pi-hole API password).
 - `unbound.conf`: the Unbound configuration, bind-mounted read-only
   into the Unbound container at its compiled-in config path,
@@ -39,7 +39,7 @@ guards (`${PIHOLE_TAG:?...}`), so there is no `:latest` fallback on the
 DNS plane.
 
 ```bash
-cp pi-dns-env.example .env
+cp pi_dns_env.example .env
 chmod 600 .env
 ```
 

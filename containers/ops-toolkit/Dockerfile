@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1
-# Ops Toolkit — container form of scripts/ops-toolkit/.
+# Ops Toolkit — container form of scripts/ops_toolkit/.
 #
 # The image packages the toolkit's six job scripts byte-identically
-# (scripts/ in this project is a verbatim copy of scripts/ops-toolkit/,
+# (scripts/ in this project is a verbatim copy of scripts/ops_toolkit/,
 # verified with cmp in the build notes) and runs them on the same
 # schedule as the systemd timers, translated to cron format in the
 # shipped crontab. The container scheduler is cron, not systemd:
@@ -18,7 +18,7 @@
 FROM debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587
 
 LABEL org.opencontainers.image.title="ops-toolkit" \
-      org.opencontainers.image.description="Container packaging of scripts/ops-toolkit (six scheduled ops jobs under cron)" \
+      org.opencontainers.image.description="Container packaging of scripts/ops_toolkit (six scheduled ops jobs under cron)" \
       org.opencontainers.image.base.name="debian:bookworm-slim"
 
 # Runtime dependencies named by the toolkit README: procps gives

@@ -25,4 +25,4 @@ Installs and enables Cockpit on Debian and RHEL family hosts. The play:
 
 - `containers/cockpit/` runs the console itself as a single bastion container instead of installing it per host. The playbook stays the way hosts get their side of Cockpit: a host with no Cockpit packages can be reached from that console only in a limited form.
 - Historical metrics are deliberately not a Cockpit job here (decision 2026-10-22): the fleet's Prometheus/Grafana stack owns metric history, so neither the playbook nor the script installs PCP (Performance Co-Pilot), and the console runs live-only. Hosts carry no `pmcd`/`pmlogger` archiving daemons writing to their SD cards.
-- `scripts/linux-admin-toolkit/27-cockpit-install/cockpit-install-local.sh` is the bash form of the same setup for a single host run by hand: same package, same unit, same firewall step.
+- `scripts/linux_admin_toolkit/27-cockpit-install/cockpit-install-local.sh` is the bash form of the same setup for a single host run by hand: same package, same unit, same firewall step.

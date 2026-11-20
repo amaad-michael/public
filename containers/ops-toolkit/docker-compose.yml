@@ -1,5 +1,5 @@
 ---
-# Ops Toolkit — container form of scripts/ops-toolkit/.
+# Ops Toolkit — container form of scripts/ops_toolkit/.
 #
 # PARTIAL EQUIVALENCE, by design and stated up front (details in
 # README.md): the six host jobs run under cron inside the container on

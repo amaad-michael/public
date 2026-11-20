@@ -1,7 +1,7 @@
 ---
 # backup_integrity.yml — Ansible form of backup integrity checking.
 #
-# Primary bash form: scripts/backups/backup_integrity_tool_v1.sh
+# Primary bash form: scripts/backups/backup_integrity_tool-v1.sh
 #   generate: find . -type f ! -name "manifest-*.sha256" -print0 |
 #             xargs -0 sha256sum > manifest-YYYYMM.sha256
 #   verify:   sha256sum --quiet -c <most recent manifest-*.sha256>

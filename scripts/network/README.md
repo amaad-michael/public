@@ -37,15 +37,15 @@ idempotent: re-running leaves the same rules in place.
 
 | Script | Host | Firewall | LAN-only ports opened |
 | --- | --- | --- | --- |
-| `gpu-box-firewall-setup-v1.1.sh` | GPU box (Nobara) | firewalld, zone `home` | 22 (SSH), 11434 (Ollama), 3000 (Open WebUI), 9090 (Cockpit) |
-| `optiplex-firewall-setup-v1.1.sh` | OptiPlex (apt-based) | UFW | 22 (SSH), 8080 (llama-server), 9090 (Cockpit) |
+| `gpu_box_firewall_setup-v1.1.sh` | GPU box (Nobara) | firewalld, zone `home` | 22 (SSH), 11434 (Ollama), 3000 (Open WebUI), 9090 (Cockpit) |
+| `optiplex_firewall_setup-v1.1.sh` | OptiPlex (apt-based) | UFW | 22 (SSH), 8080 (llama-server), 9090 (Cockpit) |
 
-- `gpu-box-firewall-setup-v1.1.sh` installs firewalld if missing,
+- `gpu_box_firewall_setup-v1.1.sh` installs firewalld if missing,
   enables it, binds the source subnet 192.168.0.0/24 to the `home`
   zone, adds the four ports as permanent rules, reloads, and prints
   the resulting zone state. Log:
   `/var/log/gpu-box-firewall-setup.log`.
-- `optiplex-firewall-setup-v1.1.sh` installs UFW if missing, enables
+- `optiplex_firewall_setup-v1.1.sh` installs UFW if missing, enables
   it, and adds one allow rule per port scoped to 192.168.0.0/24. Log:
   `/var/log/optiplex-firewall-setup.log`.
 

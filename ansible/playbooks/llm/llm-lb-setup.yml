@@ -63,7 +63,7 @@
 
     - name: Deploy llm upstream config
       template:
-        src: llm-lb.conf.j2
+        src: llm_lb.conf.j2
         dest: /etc/nginx/sites-available/llm-lb.conf
         owner: root
         group: root
@@ -118,5 +118,5 @@
         state: reloaded
 
 # ── Jinja2 template (inline note) ────────────────────────────────────────────
-# Create templates/llm-lb.conf.j2 alongside this playbook.
-# See llm-lb.conf.j2 in the templates/ directory.
+# Create templates/llm_lb.conf.j2 alongside this playbook.
+# See llm_lb.conf.j2 in the templates/ directory.

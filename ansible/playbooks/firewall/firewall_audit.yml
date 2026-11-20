@@ -10,7 +10,7 @@
 # order, with the same commands and the same fallback messages, from
 # every target host, and assembles one fleet report on the controller
 # with the same file naming. The admin toolkit's firewall-audit
-# playbook (scripts/linux-admin-toolkit/14-firewall-audit/) is a
+# playbook (scripts/linux_admin_toolkit/14-firewall_audit/) is a
 # different workflow — it detects the active stack (firewalld / ufw /
 # nftables / iptables) and dumps a ruleset summary per host to stdout;
 # it has no fleet report and none of the port/process sections below.

@@ -1,7 +1,7 @@
 ---
 # secure_server_init.yml
 # Ansible form of the secure-server-init family
-# (scripts/security/secure-server-init-v1.1.sh and its conservative
+# (scripts/security/secure_server_init-v1.1.sh and its conservative
 # and legacy v1.1 variants): one playbook that applies the whole
 # hardening baseline as a unit, in the bash scripts' own order:
 # system update with automatic patching disabled, the admin user and
@@ -18,11 +18,11 @@
 # choices the scripts bake in are variables here, with the scripts'
 # own values as defaults:
 #   secure_init_variant: standard (default) | conservative | legacy
-#     standard     secure-server-init-v1.1.sh: post-quantum hybrid
+#     standard     secure_server_init-v1.1.sh: post-quantum hybrid
 #                  key exchange, password auth off, root login off.
-#     conservative secure-server-init-conservative-v1.1.sh:
+#     conservative secure_server_init_conservative-v1.1.sh:
 #                  Curve25519 only, root login key-only.
-#     legacy       secure-server-init-legacy-v1.1.sh: password auth
+#     legacy       secure_server_init_legacy-v1.1.sh: password auth
 #                  kept, RSA-4096 host key, pwquality + pam_faillock.
 #   secure_init_user: michael (the scripts' baked-in user)
 #
