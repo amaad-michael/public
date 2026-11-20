@@ -8,12 +8,12 @@ The Ansible patching counterpart for Nobara lives in
 
 ## The single new-box workflow
 
-`new-box-prep-v1.5.sh` is the entry point for prepping any new
+`new_box_prep-v1.5.sh` is the entry point for prepping any new
 box or server. It sequences the repo's existing prep scripts
 (newest version of each wins); its own steps are the Proton
 VPN install and the desktop-environment install:
 
-- `new-box-prep-v1.5.sh laptop [--guided] [--work|--personal] [--desktop=<list>] [--with-gpu] [--dry-run]`:
+- `new_box_prep-v1.5.sh laptop [--guided] [--work|--personal] [--desktop=<list>] [--with-gpu] [--dry-run]`:
   git setup, ssh setup, the Proton VPN step, then the laptop
   role prep, then the desktop step. The Proton step installs the Proton VPN app from
   Proton's own repo on the Fedora and Debian families (the
@@ -50,7 +50,7 @@ VPN install and the desktop-environment install:
   `--with-gpu`
   appends the GPU tuning step, which skips cleanly on boxes
   without a discrete AMD GPU.
-- `new-box-prep-v1.5.sh server [--guided] [--dry-run]` (as root on the
+- `new_box_prep-v1.5.sh server [--guided] [--dry-run]` (as root on the
   target): the conservative secure-server-init, then git setup
   for the michael user, then it prints the controller-side
   follow-ons (the fleet password cycle, the node_exporter
@@ -61,7 +61,7 @@ order.
 
 ## 🛠️ New Nobara setup
 
-One script for the first-boot job: `new-nobara-setup-v1.2.sh`, run
+One script for the first-boot job: `new_nobara_setup-v1.2.sh`, run
 as root on a fresh Nobara install. It:
 
 - Finds the discrete AMD GPU (amdgpu driver, device class 0x030000,
@@ -85,14 +85,14 @@ the gear menu on the login screen, then set themes and wallpaper.
 For GPU tuning alone, without the setup:
 
 ```bash
-sudo ./new-nobara-setup-v1.2.sh gpu-high
+sudo ./new_nobara_setup-v1.2.sh gpu-high
 ```
 
 (v1.2: in gpu-high mode a missing discrete GPU is a skip with
 exit 0, not an error, so the new-box workflow can offer this
 step on every box. A full run still stops without one.)
 
-(The retired `new-nobara-setup-alt-v1.1.sh` variant, whose
+(The retired `new_nobara_setup_alt-v1.1.sh` variant, whose
 `gpu-high` subcommand was folded into the script above, is in
 `deprecated/`.)
 
@@ -104,7 +104,7 @@ environment ready. The checklist is the specification; the script
 produces every CLI-able part of it and prints the rest as a manual
 list.
 
-### linux-laptop-role-prep-checklist-v2.4.md
+### linux_laptop_role_prep_checklist-v2.4.md
 
 The checklist itself: base system, separation of personal and work
 lives, the security core, the Linux administrator kit, the coding
@@ -118,9 +118,9 @@ section 1 for the new-box workflow's desktop step (runner
 v1.4); version 2.4 adds the guided-launch line in section 1
 for the runner's `--guided` option (runner v1.5).
 
-### laptop-role-prep-setup-v2.0.sh
+### laptop_role_prep_setup-v2.0.sh
 
-Run as root (`sudo ./laptop-role-prep-setup-v2.0.sh`). It creates
+Run as root (`sudo ./laptop_role_prep_setup-v2.0.sh`). It creates
 the per-role user accounts, installs the admin and instructor
 tooling, wires the per-role SSH and git separation, sets the screen
 lock, the host firewall, and persistent journaling, adds the fleet /etc/hosts entries, the cluster MOTD, and the fastfetch login setup, and prints whatever still needs hands,
@@ -198,7 +198,7 @@ family because neither is in the distro repos and this script
 adds no vendor repos), and it enables the Cockpit socket where
 Cockpit is installed. The matching checklist is version 2.2.
 
-### role-prep-preflight.snippet.sh
+### role_prep_preflight.snippet.sh
 
 An optional pre-flight settings review for the setup script
 above: a sourceable snippet (not a standalone script) defining
@@ -218,7 +218,7 @@ restored; 130 is an interrupt, also restored, and the calling
 shell is never killed). With no terminal the function returns
 at once and the run proceeds with the settings as configured.
 
-## update-gpu-box.sh
+## update_gpu_box.sh
 
 Recurring update pass for the Nobara GPU box. Run as root: it writes
 `/var/log/gpu-box-update.log` and drives dnf, systemctl, and Docker.
@@ -243,11 +243,11 @@ script requires the GPU box setup to have run first; it aborts if
 `/etc/searxng` does not exist. One divergence to know about: the
 recreated containers use this script's older conventions (host
 networking for SearXNG, the `RAG_WEB_SEARCH_*` environment names for
-Open WebUI), while `scripts/llm/gpu-box-llm-setup-v1.9.sh` now uses
+Open WebUI), while `scripts/llm/gpu_box_llm_setup-v1.9.sh` now uses
 bridge networking with a loopback publish for SearXNG and the
 `ENABLE_WEB_SEARCH` / `WEB_SEARCH_*` names.
 
-## update-optiplex.sh
+## update_optiplex.sh
 
 Recurring update pass for the OptiPlex, in the older home-directory
 layout. Run as root (log: `/var/log/optiplex-update.log`).
@@ -264,11 +264,11 @@ layout. Run as root (log: `/var/log/optiplex-update.log`).
 
 `DRY_RUN=true` logs the actions without executing them. Note the
 scope limit: this script's paths and build flags match the older
-home-directory setup, not `scripts/llm/optiplex-llm-setup-v2.1.sh`,
+home-directory setup, not `scripts/llm/optiplex_llm_setup-v2.1.sh`,
 which installs to `/opt/llama.cpp` and builds with `GGML_NATIVE`.
 Use this updater only on a host set up the home-directory way.
 
-## fedora-desktop-swap-v1.3.sh
+## fedora_desktop_swap-v1.3.sh
 
 A desktop environment replacement tool for Fedora-family systems
 (Fedora, Nobara). It detects every desktop environment and
@@ -281,7 +281,7 @@ the session it would remove. Five desktops are protected and never
 removed: MATE, Xfce, Cinnamon, LXDE, and Openbox. It takes no
 scripted snapshots; read the script's header before a real run.
 
-## find-ebooks-by-topic-v1.0.sh
+## find_ebooks_by_topic-v1.0.sh
 
 A Humble Bundle library harvester. It searches the ebook files in
 `~/Downloads/HumbleBundle` (PDF, EPUB, MOBI, and AZW3) by filename
@@ -299,7 +299,7 @@ copying.
 
 `ansible/playbooks/workstation/nobara_first_boot.yml` is the
 Ansible form of the first-boot setup above
-(`new-nobara-setup-v1.2.sh`): the same discrete-AMD-GPU detection
+(`new_nobara_setup-v1.2.sh`): the same discrete-AMD-GPU detection
 and high-performance lock, the nobara-sync update with the dnf
 fallback, the Cinnamon desktop group install, and the placeholder
 wallpaper. Its usage header is the guide.
@@ -325,7 +325,7 @@ target.
 
 On hosts where the GPU box setup has run (`/etc/searxng` exists),
 the playbook also performs the LLM-stack refresh from
-`update-gpu-box.sh` steps 3-7, in the same order and with the same
+`update_gpu_box.sh` steps 3-7, in the same order and with the same
 safeguards (tag `llm`): the Ollama reinstall from the
 version-pinned release tarballs (verified against the release's
 `sha256sum.txt`; here the `ollama_version` variable), the

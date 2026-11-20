@@ -17,17 +17,17 @@ chmod 600. The pattern per project:
 - **pihole**: a `.env` copied from `pi_dns_env.example`, holding the
   image pins (PIHOLE_TAG, UNBOUND_TAG) and PIHOLE_API_PASSWORD.
   Compose refuses to render until both tags are pinned.
-- **gitea**: a `.env` copied from `gitea-env.example`, holding
+- **gitea**: a `.env` copied from `gitea_env.example`, holding
   GITEA_SECRET_KEY and GITEA_INTERNAL_TOKEN, plus GITEA_DOMAIN and
   GITEA_ROOT_URL. Compose refuses to start until both secrets are set.
 - **jenkins**: no `.env` and no host-side secrets. The stack holds no
   credentials of its own; the first-run setup wizard generates the
   initial admin password inside the container.
-- **lamp**: a `.env` copied from `lamp-env.example`, holding
+- **lamp**: a `.env` copied from `lamp_env.example`, holding
   MYSQL_ROOT_PASSWORD, MYSQL_DATABASE, MYSQL_USER, and
   MYSQL_PASSWORD. Compose refuses to start until the credentials are
   set.
-- **llm**: a `.env` copied from `llm-env.example`, holding
+- **llm**: a `.env` copied from `llm_env.example`, holding
   LLM_MODELS_DIR and the two model filenames (LLM_HEAVY_MODEL,
   LLM_LIGHT_MODEL), plus sizing and port options. Compose refuses to
   render while a model filename is unset.
@@ -65,7 +65,7 @@ chmod 600. The pattern per project:
   configuration ships in the image and output persists in named
   volumes (`ops_log`, `ops_state`).
 - **open-terminal**: a `.env` copied from
-  `open-terminal-env.example`, holding OPEN_TERMINAL_API_KEY (the
+  `open_terminal_env.example`, holding OPEN_TERMINAL_API_KEY (the
   key the bash form generates at
   `/var/lib/open-terminal/api_key.txt`; reuse that value when
   switching forms) and optionally OPEN_TERMINAL_WORKSPACE. Compose

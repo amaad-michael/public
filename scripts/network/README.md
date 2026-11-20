@@ -52,7 +52,7 @@ idempotent: re-running leaves the same rules in place.
 The port sets are fixed in each script; edit the `PORTS` or `RULES`
 array before running if a host's services differ.
 
-## fleet-firewall.sh
+## fleet_firewall.sh
 
 The bash form of the fleet firewall playbooks in
 `ansible/playbooks/firewall/`. It runs on the host itself, as root,
@@ -64,7 +64,7 @@ family (pi1, pi3). Three profiles mirror the three playbooks:
 | --- | --- | --- |
 | `pi` (default) | `firewall_local_pi.yml` | TCP 53, 80, 443, 9090; UDP 53 |
 | `new` | `firewall_local_new.yml` | The pi list plus TCP 853 |
-| `baseline` | `default-firewalld.yml` | firewalld only: ssh, http, https services; 8080/tcp; 5000-5010/udp; cockpit removed; default zone public |
+| `baseline` | `default_firewalld.yml` | firewalld only: ssh, http, https services; 8080/tcp; 5000-5010/udp; cockpit removed; default zone public |
 
 On the UFW path, SSH (22/tcp) is allowed first, before the default
 policies (deny incoming, allow outgoing) are set, and UFW is
@@ -77,10 +77,10 @@ checks that port 22 is covered by the resulting ruleset; it warns
 by default and aborts with `--fail-on-probe-failure`.
 
 ```bash
-sudo ./fleet-firewall.sh                  # apply the pi profile
-sudo ./fleet-firewall.sh --profile new    # apply the new profile
-sudo ./fleet-firewall.sh --verify         # diff live rules vs profile
-sudo ./fleet-firewall.sh --dry-run        # print changes, change nothing
+sudo ./fleet_firewall.sh                  # apply the pi profile
+sudo ./fleet_firewall.sh --profile new    # apply the new profile
+sudo ./fleet_firewall.sh --verify         # diff live rules vs profile
+sudo ./fleet_firewall.sh --dry-run        # print changes, change nothing
 ```
 
 Run in a terminal without `--profile` and a profile picker panel
@@ -119,13 +119,13 @@ no diff. The monthly report is named
 `deep_scan_YYYY-MM-DD_HH-MM.log`. Both netwatch scripts write under
 `/var/log`, so schedule them as root.
 
-## nmap-vuln-scan.sh
+## nmap_vuln_scan.sh
 
 On-demand vulnerability scan of one host or a list of hosts:
 
 ```bash
-./nmap-vuln-scan.sh 192.168.0.101
-./nmap-vuln-scan.sh targets.txt
+./nmap_vuln_scan.sh 192.168.0.101
+./nmap_vuln_scan.sh targets.txt
 ```
 
 The argument is either a single IP or a file with one target per

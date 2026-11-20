@@ -1,8 +1,8 @@
 # Gitea playbooks
 
 The Ansible install form for a primary-host Gitea, mirroring the
-bash pair `scripts/provisioning/install-gitea.sh` and
-`scripts/provisioning/post-setup-tighten-gitea.sh`.
+bash pair `scripts/provisioning/install_gitea.sh` and
+`scripts/provisioning/post_setup_tighten_gitea.sh`.
 
 This is not the `containers/gitea/` project. That container is a
 pull-mirror instance with the web installer locked
@@ -12,7 +12,7 @@ installs the primary host — the place where repositories are created
 and pushed to — with the same version pin (Gitea 1.26.4), the same
 `git` system user, paths, seeded `app.ini`, and hardened systemd
 unit as the bash installer. The SD-card bash variant
-(`install-gitea-sd.sh` and its tighten script) has no Ansible form;
+(`install_gitea_sd.sh` and its tighten script) has no Ansible form;
 its flash-wear measures stay bash-only.
 
 ## install_gitea.yml

@@ -1,5 +1,5 @@
 ---
-# install_jenkins.yml — Ansible form of scripts/provisioning/install-jenkins-rocky.sh
+# install_jenkins.yml — Ansible form of scripts/provisioning/install_jenkins_rocky.sh
 #
 # Installs Jenkins LTS 2.580.2 on Rocky Linux 8/9/10 (RHEL-like systems
 # can override the OS check with -e allow_other_os=true), mirroring the

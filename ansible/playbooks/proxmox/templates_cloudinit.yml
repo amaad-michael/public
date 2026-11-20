@@ -60,7 +60,7 @@
     # fetched from the Ubuntu keyserver, and that key is trusted only
     # when its fingerprint matches this pin. Taken from the signature
     # on the live SHA256SUMS; same pin as
-    # scripts/provisioning/proxmox-setup.sh.
+    # scripts/provisioning/proxmox_setup.sh.
     ubuntu_cloud_key_fpr: "D2EB44626FDDC30B513D5BB71A5D6C4C7DB87C81"
 
     pve_template_storage: local-lvm   # where the disk images are imported
@@ -120,7 +120,7 @@
 
     # -------------------------------------------------------------------------
     # Download + verify images for templates that don't exist yet.
-    # Fail-closed, the same design as proxmox-setup.sh: each image is
+    # Fail-closed, the same design as proxmox_setup.sh: each image is
     # verified against the checksum file its upstream publishes beside
     # it (Debian: SHA512SUMS; Ubuntu: SHA256SUMS, GPG-verified first),
     # and get_url applies the expected checksum itself, so a mismatch

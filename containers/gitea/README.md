@@ -2,14 +2,14 @@
 
 A single-container Gitea whose job is to pull-mirror the GitHub repos,
 so the code survives a GitHub outage, lockout, or deletion. It is the
-container form of `scripts/provisioning/install-gitea.sh` — same
+container form of `scripts/provisioning/install_gitea.sh` — same
 version pin (1.26.4), same in-container ports (3000 web, 2222 built-in
 SSH), same SQLite posture, hardened the same way (cap_drop ALL,
 read_only, no-new-privileges, resource limits).
 
 ## 🛠️ Setup
 
-1. Copy `gitea-env.example` to `.env`, generate the two secrets with
+1. Copy `gitea_env.example` to `.env`, generate the two secrets with
    the commands in that file, set `GITEA_DOMAIN` / `GITEA_ROOT_URL` to
    the host's LAN name, and `chmod 600 .env`. Compose refuses to start
    until both secrets are set.

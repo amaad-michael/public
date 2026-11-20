@@ -64,10 +64,10 @@ If Nobara is up to date, both requirements are met out of the box.
 
 ```bash
 # 1 — Make the script executable
-chmod +x install-lsfg-vk.sh
+chmod +x install_lsfg_vk.sh
 
 # 2 — Run it (do NOT use sudo)
-./install-lsfg-vk.sh
+./install_lsfg_vk.sh
 
 # 3 — Follow the prompts
 ```

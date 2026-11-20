@@ -36,7 +36,7 @@ services:
       # Branding identity. Mounting a file here stops the entrypoint
       # from rewriting /etc/os-release on the read-only rootfs
       # (upstream documents this file as the branding override).
-      - ./os-release:/etc/os-release:ro
+      - ./os_release:/etc/os-release:ro
       # UI machine list and operator TLS certificates survive
       # container recreation; everything else is stateless.
       - cockpit_machines:/etc/cockpit/machines.d

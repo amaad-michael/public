@@ -27,7 +27,7 @@ the port stays Cockpit's native 9090.
 
 Two config files ship in this folder and are bind-mounted read-only:
 `cockpit.conf` (the bastion configuration, mounted at
-`/etc/cockpit/cockpit.conf`) and `os-release` (the container's
+`/etc/cockpit/cockpit.conf`) and `os_release` (the container's
 branding identity, mounted at `/etc/os-release`).
 
 ## What this does not replace

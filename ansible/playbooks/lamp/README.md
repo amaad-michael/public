@@ -6,8 +6,8 @@ bash installers in `scripts/provisioning/`:
 
 | Family | Bash installer | Target |
 | --- | --- | --- |
-| Debian | `lamp-install-debian13.sh` | pi2, Debian 13 (trixie), ARM64 |
-| Rocky | `lamp-install-rocky10.sh` | pi3, Rocky 10.x, ARM64, SELinux enforcing |
+| Debian | `lamp_install_debian13.sh` | pi2, Debian 13 (trixie), ARM64 |
+| Rocky | `lamp_install_rocky10.sh` | pi3, Rocky 10.x, ARM64, SELinux enforcing |
 
 The container form of the same stack is `containers/lamp/`.
 

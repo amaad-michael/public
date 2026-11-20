@@ -1,7 +1,7 @@
 ---
 # lamp.yml — Ansible form of the two LAMP bash installers:
-#   scripts/provisioning/lamp-install-debian13.sh (pi2, Debian 13)
-#   scripts/provisioning/lamp-install-rocky10.sh  (pi3, Rocky 10)
+#   scripts/provisioning/lamp_install_debian13.sh (pi2, Debian 13)
+#   scripts/provisioning/lamp_install_rocky10.sh  (pi3, Rocky 10)
 # Same stack, same packages, same wiring, same verification as the
 # installers; the differences between the installers are reconciled
 # below as distro-conditional tasks and called out per task.
@@ -44,7 +44,7 @@
 
   tasks:
     # ------------------------------------------------------------------
-    # Debian family — mirrors lamp-install-debian13.sh step for step
+    # Debian family — mirrors lamp_install_debian13.sh step for step
     # ------------------------------------------------------------------
     - name: Debian family LAMP install
       when: ansible_os_family == "Debian"
@@ -116,7 +116,7 @@
           changed_when: true
 
     # ------------------------------------------------------------------
-    # RedHat family — mirrors lamp-install-rocky10.sh step for step
+    # RedHat family — mirrors lamp_install_rocky10.sh step for step
     # ------------------------------------------------------------------
     - name: RedHat family LAMP install
       when: ansible_os_family == "RedHat"

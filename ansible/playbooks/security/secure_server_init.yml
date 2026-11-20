@@ -556,7 +556,7 @@
       when: secure_init_install_packages | bool
 
     # neofetch is only the MOTD fallback for when fastfetch is absent
-    # (see templates/05-system-info.j2), so its failure must not abort
+    # (see templates/05-system_info.j2), so its failure must not abort
     # the run — but it must be visible: ignore_errors keeps the FAILED
     # result in the output and counts it as ignored in the recap,
     # instead of failed_when: false re-labelling it ok.
@@ -592,7 +592,7 @@
 
     - name: Install the cluster fastfetch MOTD
       ansible.builtin.template:
-        src: 05-system-info.j2
+        src: 05-system_info.j2
         dest: "{{ '/etc/update-motd.d/05-system-info' if secure_init_is_debian else '/etc/motd.d/05-system-info' }}"
         mode: "0755"
 

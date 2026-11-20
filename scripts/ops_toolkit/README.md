@@ -4,12 +4,12 @@ This toolkit provides ready-to-use Bash scripts and systemd timers for routine L
 
 ## 📦 Included jobs
 
-- Weekly System Resource Health Check (`sys-health.sh`)
-- Daily Backup Verification (weekly restore test) (`backup-verify.sh`)
-- Monthly Log Rotation & Cleanup (`log-clean.sh`)
-- Monthly SSL Certificate Expiry Review (`cert-expiry-audit.sh`)
-- Weekly Service Uptime Review (`service-uptime.sh`)
-- Weekly Temp & Junk File Cleanup (`tmp-clean.sh`)
+- Weekly System Resource Health Check (`sys_health.sh`)
+- Daily Backup Verification (weekly restore test) (`backup_verify.sh`)
+- Monthly Log Rotation & Cleanup (`log_clean.sh`)
+- Monthly SSL Certificate Expiry Review (`cert_expiry_audit.sh`)
+- Weekly Service Uptime Review (`service_uptime.sh`)
+- Weekly Temp & Junk File Cleanup (`tmp_clean.sh`)
 
 ## 🖥️ Launcher (optional)
 
@@ -68,7 +68,7 @@ systemctl disable --now sys_health.timer backup_verify.timer log_clean.timer \
   cert_expiry_audit.timer service_uptime.timer tmp_clean.timer
 systemctl daemon-reload
 rm -f /etc/systemd/system/{sys-health,backup-verify,log-clean,cert-expiry-audit,service-uptime,tmp-clean}.{service,timer}
-rm -f /usr/local/sbin/{sys-health.sh,backup-verify.sh,log-clean.sh,cert-expiry-audit.sh,service-uptime.sh,tmp-clean.sh,common.sh}
+rm -f /usr/local/sbin/{sys_health.sh,backup_verify.sh,log_clean.sh,cert_expiry_audit.sh,service_uptime.sh,tmp_clean.sh,common.sh}
 
 # Optional: keep /etc/ops for your customizations
 

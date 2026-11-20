@@ -13,7 +13,7 @@
 #
 # LLM stack: on hosts where the GPU box setup has run (/etc/searxng
 # exists), the run ends with the LLM-stack refresh from
-# scripts/workstation/update-gpu-box.sh steps 3-7 (Ollama reinstall,
+# scripts/workstation/update_gpu_box.sh steps 3-7 (Ollama reinstall,
 # image pulls, container recreation, model pulls, verification), in the
 # same order and with the same safeguards. Hosts without /etc/searxng
 # skip it: the bash updater is a single-host script and aborts there,
@@ -29,8 +29,8 @@
     patch_log_dir: /var/log/ansible-patch
     patch_log_file: "{{ patch_log_dir }}/nobara_patch_{{ ansible_date_time.date }}.log"
 
-    # ── LLM stack refresh (update-gpu-box.sh steps 3-7) ──
-    # Values are copied from scripts/workstation/update-gpu-box.sh.
+    # ── LLM stack refresh (update_gpu_box.sh steps 3-7) ──
+    # Values are copied from scripts/workstation/update_gpu_box.sh.
     llm_refresh_enabled: true
     ollama_port: 11434
     webui_port: 8080
@@ -255,7 +255,7 @@
       tags: [reboot_check]
 
     # ────────────────────────────────────────────────
-    # 7. LLM STACK REFRESH (update-gpu-box.sh steps 3-7)
+    # 7. LLM STACK REFRESH (update_gpu_box.sh steps 3-7)
     # ────────────────────────────────────────────────
     - name: Check the GPU box LLM stack was set up on this host
       ansible.builtin.stat:
@@ -280,7 +280,7 @@
       when: not (llm_stack_present | bool)
       tags: [llm]
 
-    - name: Detect the LAN IPv4 address (update-gpu-box.sh method)
+    - name: Detect the LAN IPv4 address (update_gpu_box.sh method)
       ansible.builtin.shell: |
         ip -4 addr show | awk '/inet / && !/127\.0\.0\.1/ && !/172\./ {print $2}' | cut -d/ -f1 | head -1
       register: llm_lan_ip_result
@@ -300,7 +300,7 @@
       when: (llm_stack_present | bool) and llm_lan_ip | length == 0
       tags: [llm]
 
-    # 7a. Ollama binary (update-gpu-box.sh step 3) — the version-pinned
+    # 7a. Ollama binary (update_gpu_box.sh step 3) — the version-pinned
     # release tarballs, verified against the release's published
     # sha256sum.txt before anything is extracted. ollama.com/install.sh
     # is a moving, unpinned script and is no longer downloaded or run;
@@ -529,7 +529,7 @@
       when: llm_stack_present | bool
       tags: [llm]
 
-    # 7b. Docker images (update-gpu-box.sh step 4)
+    # 7b. Docker images (update_gpu_box.sh step 4)
     - name: Pull the SearXNG image
       ansible.builtin.command: docker pull {{ searxng_image }}
       register: searxng_pull_result
@@ -544,7 +544,7 @@
       when: llm_stack_present | bool
       tags: [llm]
 
-    # 7c. Container recreation (update-gpu-box.sh step 5)
+    # 7c. Container recreation (update_gpu_box.sh step 5)
     - name: Inspect the LLM stack volumes
       ansible.builtin.command: docker volume inspect {{ item }}
       loop: "{{ llm_volumes }}"
@@ -646,7 +646,7 @@
       when: llm_stack_present | bool
       tags: [llm]
 
-    # 7d. Models (update-gpu-box.sh step 6). A failed model warns and
+    # 7d. Models (update_gpu_box.sh step 6). A failed model warns and
     # never aborts the refresh, exactly like the bash updater.
     - name: Pull the LLM models
       ansible.builtin.command: ollama pull {{ item }}
@@ -666,7 +666,7 @@
       when: (llm_stack_present | bool) and item.rc != 0
       tags: [llm]
 
-    # 7e. Verification (update-gpu-box.sh step 7). Warnings only.
+    # 7e. Verification (update_gpu_box.sh step 7). Warnings only.
     - name: Wait briefly for the LLM stack to settle
       ansible.builtin.pause:
         seconds: 5

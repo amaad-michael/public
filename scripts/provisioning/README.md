@@ -25,8 +25,8 @@ form two matched pairs:
 
 | Variant | Installer | Post-setup |
 | --- | --- | --- |
-| Standard | `install-gitea.sh` | `post-setup-tighten-gitea.sh` |
-| SD endurance | `install-gitea-sd.sh` | `post-setup-tighten-gitea-sd.sh` |
+| Standard | `install_gitea.sh` | `post_setup_tighten_gitea.sh` |
+| SD endurance | `install_gitea_sd.sh` | `post_setup_tighten_gitea_sd.sh` |
 
 Both installers support Debian-family and RHEL-family systems on
 amd64, arm64, and arm-6. Both download the pinned binary and its
@@ -72,7 +72,7 @@ measures are:
    ```bash
    export TEST_REPO="michael/canary"
    export GITEA_HOST="127.0.0.1"
-   ./post-setup-tighten-gitea.sh
+   ./post_setup_tighten_gitea.sh
    ```
 
    `TEST_REPO` is `<owner>/<repo>` with no `.git` suffix. `GITEA_HOST`
@@ -118,7 +118,7 @@ The SD tighten script adds two steps:
   on the same SD card; they are staging only. Pull them off-node
   before calling the node backed up.
 
-### The controller: gitea-control-v1.0.sh
+### The controller: gitea_control-v1.0.sh
 
 One script owns the whole lifecycle, in the neo1 observability
 controller's shape. Verbs: `install`, `tighten`, `up`, `down`,
@@ -150,7 +150,7 @@ through Apache and removed afterward, and a MariaDB socket-auth
 
 | | Debian | Rocky |
 | --- | --- | --- |
-| Script | `lamp-install-debian13.sh` | `lamp-install-rocky10.sh` |
+| Script | `lamp_install_debian13.sh` | `lamp_install_rocky10.sh` |
 | Target | pi2, Debian 13 (trixie), ARM64 | pi3, Rocky 10.x, ARM64, SELinux enforcing |
 | Web server | apache2 2.4 | httpd 2.4 |
 | PHP | 8.4 (distro default) | 8.3 (AppStream default) |
@@ -166,7 +166,7 @@ installer wants. The verification block enforces it: the run fails if
 also runs `restorecon` on its probe page and prints `getenforce` as
 part of verification.
 
-`lamp-control-v1.0.sh` is the lifecycle controller for the LAMP
+`lamp_control-v1.0.sh` is the lifecycle controller for the LAMP
 forms: its `install` verb runs the distro's installer above as-is,
 `up`, `down`, `restart`, and `status` drive the services, and
 `uninstall` removes the stack footprint (with `--form container`
@@ -179,7 +179,7 @@ reconciling both installers). For the container form, see
 
 ## 🔭 neo1 observability (native systemd)
 
-`neo1-observability-native/` is a kit, not a single installer: the
+`neo1-observability_native/` is a kit, not a single installer: the
 bare-metal form of the neo1 observability node (512 MB ARMv7, Armbian)
 with its configs, hardened systemd units, and helper scripts in one
 folder. Prometheus, Alertmanager, blackbox_exporter, node_exporter,
@@ -191,7 +191,7 @@ beside their daemons, and ends by enabling the always-on set plus the two backup
 kit's own README carries the deploy order and the memory budget.
 
 The Docker form of the same design lives in
-`containers/neo1-observability-docker/`; the cluster's multi-service
+`containers/neo1-observability_docker/`; the cluster's multi-service
 standby stack is `containers/monitoring/`.
 
 ## 🔒 LUKS Vault Guardian
@@ -257,12 +257,12 @@ passphrase is enough to unlock the disk.
 
 ## 🔗 Jenkins
 
-`install-jenkins-rocky.sh` installs Jenkins LTS on Rocky Linux 8, 9,
-or 10. Its guide is `jenkins-consolidated-v1.0.md` in this folder. Run
+`install_jenkins_rocky.sh` installs Jenkins LTS on Rocky Linux 8, 9,
+or 10. Its guide is `jenkins_consolidated-v1.0.md` in this folder. Run
 the installer with `--help` for its options (Java version selection,
 the optional JNLP agent port, and a no-firewall mode).
 
-`jenkins-control-v1.0.sh` is the lifecycle controller for the Jenkins
+`jenkins_control-v1.0.sh` is the lifecycle controller for the Jenkins
 forms. Its `install` verb runs the bash installer as-is (installer
 options pass through after a `--` separator), `up`, `down`, `restart`,
 and `status` drive the service, and `uninstall` removes the package
@@ -274,7 +274,7 @@ matches the uninstall playbook's footprint.
 
 ## 🛠️ Proxmox VE
 
-`proxmox-setup.sh` is the bash form of the Proxmox VE deployment in
+`proxmox_setup.sh` is the bash form of the Proxmox VE deployment in
 `ansible/playbooks/proxmox/`: one subcommand per playbook (`install`,
 `configure`, `prep`, `templates-cloudinit`, `templates-turnkey`, or
 `all` for the full sequence), run as root on the target host, with

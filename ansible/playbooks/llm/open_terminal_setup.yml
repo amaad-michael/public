@@ -26,7 +26,7 @@
 # while this playbook and `docker compose down` only manage the
 # container and its host preparation.
 #
-# Docker form: containers/open-terminal/ (compose project extracted
+# Docker form: containers/open_terminal/ (compose project extracted
 # from this same docker run).
 #
 # Usage:

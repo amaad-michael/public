@@ -50,7 +50,7 @@ packages and reach this repo the old fashioned way, applied by hand.
 Every change is reviewed, committed, and merged by me.
 
 The full routine, the record keeping, and the standing rules are
-documented in [git-repo-workflow.md](git-repo-workflow.md), with
+documented in [git_repo_workflow.md](git_repo_workflow.md), with
 worked examples of the commands themselves.
 
 ## ✅ Proof it runs
@@ -59,13 +59,13 @@ Claims are cheap, so here is the evidence: both of my local LLM
 stacks, running in my home lab in their bare-metal form, built and
 deployed by me.
 
-![llama-ui serving Meta-Llama-3.1 8B Instruct](scripts/llm/llama-ui-screenshot-2026-05-29.png)
+![llama-ui serving Meta-Llama-3.1 8B Instruct](scripts/llm/llama_ui_screenshot_2026-05-29.png)
 
 *The OptiPlex llama.cpp deployment, installed bare-metal by the
 [scripts in scripts/llm](scripts/llm/): llama-ui serving
 Meta-Llama-3.1 8B Instruct. May 2026.*
 
-![Open WebUI fronting Ollama with deepseek-r1:14b](scripts/llm/open-webui-screenshot-2026-05-28.webp)
+![Open WebUI fronting Ollama with deepseek-r1:14b](scripts/llm/open_webui_screenshot_2026-05-28.webp)
 
 *The GPU box Ollama deployment, also installed bare-metal from
 [scripts/llm](scripts/llm/): Open WebUI with deepseek-r1:14b

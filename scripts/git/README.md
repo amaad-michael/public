@@ -4,7 +4,7 @@ Two git helpers. Both change state, one on the machine and one in
 the working tree, so this guide states exactly what each one does
 before you run it.
 
-## git-setup-new-box-v1.1.sh
+## git_setup_new_box-v1.1.sh
 
 Run once on a new Linux box, as your own user (not root). It writes
 the standard global git configuration:

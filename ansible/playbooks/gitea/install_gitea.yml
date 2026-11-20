@@ -1,6 +1,6 @@
 ---
-# install_gitea.yml — Ansible form of scripts/provisioning/install-gitea.sh
-# plus its post-setup tighten script, post-setup-tighten-gitea.sh.
+# install_gitea.yml — Ansible form of scripts/provisioning/install_gitea.sh
+# plus its post-setup tighten script, post_setup_tighten_gitea.sh.
 #
 # This is the PRIMARY-HOST form: it installs Gitea 1.26.4 as a hardened
 # systemd service on a bare-metal (or VM) host, with the git system
@@ -25,7 +25,7 @@
 #      and runs the same canary gates as the bash tighten script
 #      (HTTP, SSH clone, push through the hook chain, journal sweep).
 #
-# The SD-card variant (install-gitea-sd.sh) has no Ansible form; its
+# The SD-card variant (install_gitea_sd.sh) has no Ansible form; its
 # flash wear measures stay bash-only.
 #
 # Usage:
@@ -45,7 +45,7 @@
     gitea_home: /var/lib/gitea
     gitea_config: /etc/gitea/app.ini
     gitea_unit: /etc/systemd/system/gitea.service
-    # Tighten step (post-setup-tighten-gitea.sh equivalent). Off by
+    # Tighten step (post_setup_tighten_gitea.sh equivalent). Off by
     # default: it needs the web installer finished and a canary repo.
     gitea_tighten: false
     gitea_canary_repo: ""
@@ -57,7 +57,7 @@
 
   tasks:
     # ------------------------------------------------------------------
-    # Install (install-gitea.sh)
+    # Install (install_gitea.sh)
     # ------------------------------------------------------------------
     - name: Map the architecture the way the bash installer does
       ansible.builtin.set_fact:
@@ -317,7 +317,7 @@
       tags: install
 
     # ------------------------------------------------------------------
-    # Tighten (post-setup-tighten-gitea.sh), only with gitea_tighten
+    # Tighten (post_setup_tighten_gitea.sh), only with gitea_tighten
     # ------------------------------------------------------------------
     - name: Fail closed when the canary repo is not set
       ansible.builtin.fail:

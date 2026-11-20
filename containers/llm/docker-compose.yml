@@ -1,8 +1,8 @@
 ---
 # llm — llama.cpp inference pool behind an nginx load balancer.
 # Container mirror of the Ansible LLM stack:
-#   ansible/playbooks/llm/llm-server-setup.yml  (llama-server nodes)
-#   ansible/playbooks/llm/llm-lb-setup.yml      (nginx LB)
+#   ansible/playbooks/llm/llm_server_setup.yml  (llama-server nodes)
+#   ansible/playbooks/llm/llm_lb_setup.yml      (nginx LB)
 #   ansible/playbooks/llm/llm_lb.conf.j2        (LB config design)
 #
 # Two inference backends mirror his two NanoPi boards: llm-heavy is the
@@ -10,7 +10,7 @@
 # model). Models are host files, mounted read-only — the stack never
 # bakes a model into an image. Only the LB publishes a host port.
 #
-# Copy llm-env.example to .env and set the model filenames first;
+# Copy llm_env.example to .env and set the model filenames first;
 # compose refuses to render or start while they are unset.
 
 networks:
@@ -31,7 +31,7 @@ services:
       - LLAMA_ARG_PORT=8080
     command:
       - --model
-      - /models/${LLM_HEAVY_MODEL:?set LLM_HEAVY_MODEL in .env (see llm-env.example)}
+      - /models/${LLM_HEAVY_MODEL:?set LLM_HEAVY_MODEL in .env (see llm_env.example)}
       - --ctx-size
       - ${LLM_CTX_SIZE:-2048}
       - --n-predict
@@ -76,7 +76,7 @@ services:
       - LLAMA_ARG_PORT=8080
     command:
       - --model
-      - /models/${LLM_LIGHT_MODEL:?set LLM_LIGHT_MODEL in .env (see llm-env.example)}
+      - /models/${LLM_LIGHT_MODEL:?set LLM_LIGHT_MODEL in .env (see llm_env.example)}
       - --ctx-size
       - ${LLM_CTX_SIZE:-2048}
       - --n-predict
@@ -117,7 +117,7 @@ services:
     ports:
       - "${LLM_LB_PORT:-8090}:8080"
     volumes:
-      - ./llm-lb.conf:/etc/nginx/conf.d/llm-lb.conf:ro
+      - ./llm_lb.conf:/etc/nginx/conf.d/llm-lb.conf:ro
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true

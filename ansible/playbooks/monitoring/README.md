@@ -1,16 +1,16 @@
 # Monitoring playbooks
 
-## deploy-monitoring.yml
+## deploy_monitoring.yml
 
 The Ansible deploy playbook for the cluster standby monitoring
 stack in `containers/monitoring/` (Prometheus 3.15.1, Grafana 13.3.0,
 Alertmanager 0.34.1, Traefik, ntfy, step-ca, Headscale, Vaultwarden,
 Uptime Kuma on `standby-net`). The bash form of the same deployment
-is `scripts/monitoring/deploy-monitoring-stack.sh`.
+is `scripts/monitoring/deploy_monitoring_stack.sh`.
 
 ```bash
 cd ansible
-ansible-playbook -i hosts playbooks/monitoring/deploy-monitoring.yml -l <host> \
+ansible-playbook -i hosts playbooks/monitoring/deploy_monitoring.yml -l <host> \
   -e monitoring_project_dir=/path/to/repo/containers/monitoring
 ```
 

@@ -21,13 +21,13 @@ Pick `reboot_complex.yml` when a host might already be unhealthy and you want th
 
 ## Bash form
 
-`scripts/fleet-reboot.sh` mirrors both playbooks over SSH: hosts are
+`scripts/fleet_reboot.sh` mirrors both playbooks over SSH: hosts are
 rebooted one at a time in inventory order, each verified back before
 the next is touched. The default mode is the complex one (the
 `uptime` pre-check gates the reboot; `whoami` plus a changed boot ID
 confirm the return, within the same 600 second timeout);
 `--simple` drops the pre-check. The bash equivalent of the maintenance wrapper's reboot step is
-`./scripts/fleet-reboot.sh --simple --limit pi0,pi2,pi3,pi4`. There
+`./scripts/fleet_reboot.sh --simple --limit pi0,pi2,pi3,pi4`. There
 is no Docker form: rebooting a host is an operation on the host
 itself.
 
