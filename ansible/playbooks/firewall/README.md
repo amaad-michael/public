@@ -4,13 +4,13 @@ Three playbooks that configure host firewalls, plus one read-only audit playbook
 
 | Playbook | Firewall | Port list |
 |---|---|---|
-| `default-firewalld.yml` | firewalld only | ssh, http, https services; 8080/tcp; 5000-5010/udp; cockpit removed |
+| `default_firewalld.yml` | firewalld only | ssh, http, https services; 8080/tcp; 5000-5010/udp; cockpit removed |
 | `firewall_local_new.yml` | UFW on Debian family, firewalld on RedHat family | TCP 53, 80, 443, 853, 9090; UDP 53 |
 | `firewall_local_pi.yml` | UFW on Debian family, firewalld on RedHat family | TCP 53, 80, 443, 9090; UDP 53 |
 
 All three target `hosts: all` with privilege escalation. Scope every run with `--limit`.
 
-## default-firewalld.yml
+## default_firewalld.yml
 
 A static baseline for a firewalld host:
 

@@ -57,7 +57,7 @@
     # against the release-key SHA-512 sums Proxmox publishes in its
     # wiki "Package Repositories" page (the trixie fingerprint is
     # also carried by the wiki-hashed archive keyring). Same pins as
-    # scripts/provisioning/proxmox-setup.sh.
+    # scripts/provisioning/proxmox_setup.sh.
     pve_release_key_fingerprints:
       bullseye: "28139A2F830BD68478A1A01FDD4BA3917E23BF59"
       bookworm: "F4E136C67CDCE41AE6DE6FC81140AF8F639E0C39"

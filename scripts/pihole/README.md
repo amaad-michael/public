@@ -7,16 +7,16 @@ plus one bash installer and one log cleanup script for a bare-metal
 Pi-hole host and one controller that owns the pair's whole lifecycle
 in both forms.
 
-## install-pihole-unbound.sh
+## install_pihole_unbound.sh
 
 The bash deployment form for the container pair (the Ansible
 playbooks in `ansible/playbooks/pihole/` install the bare-metal form
 instead). Run it as root on the Docker host:
 
 ```bash
-sudo ./install-pihole-unbound.sh
-sudo ./install-pihole-unbound.sh --dry-run
-sudo ./install-pihole-unbound.sh --with-blocklists
+sudo ./install_pihole_unbound.sh
+sudo ./install_pihole_unbound.sh --dry-run
+sudo ./install_pihole_unbound.sh --with-blocklists
 ```
 
 What it does, in order:
@@ -45,7 +45,7 @@ What it does, in order:
 `--dry-run` stops after the render and guard checks and prints the
 deploy commands instead of running them. `--compose-dir DIR` points
 at a different checkout of the compose project. `--with-blocklists`
-additionally runs `pihole-init-blocklists.sh` inside the Pi-hole
+additionally runs `pihole_init_blocklists.sh` inside the Pi-hole
 container after a healthy start; without it the script prints the
 reminder to seed the blocklists manually. Deploy order is the compose
 header's: pi0 (secondary) first, verify, then pi4 (primary).
@@ -64,7 +64,7 @@ One DNS test suite. It runs `dig` inside the containers through `sudo docker exe
 
 Pass/fail is dig's exit code only: the suite does not parse the answer, so the DNSSEC and ad-blocking entries above are the labelled expectations for each dig (dnssec-failed.org SERVFAIL, google.com AD flag, doubleclick.net blocked), not assertions the script checks in the output.
 
-The suite is `dns-test-pihole-unbound-linted.sh`, the single variant
+The suite is `dns_test_pihole_unbound_linted.sh`, the single variant
 kept since the 2026-10-22 consolidation (the full and minimal
 variants were removed; the full variant's fragment-syntax port test
 was folded in). It runs 8 tests in sections; pre-flight aborts if
@@ -73,7 +73,7 @@ either container is stopped or missing; failures are appended to
 warns if sudo would prompt, which would hang a CI run; and it exits
 1 on any failure, so scripted callers can trust the exit code.
 
-## pihole-init-blocklists.sh
+## pihole_init_blocklists.sh
 
 Seeds the `adlist` table of `/etc/pihole/gravity.db` with five
 blocklists, then runs `pihole -g` and prints the adlist and domain
@@ -123,7 +123,7 @@ sudo ./cleanup_logs_pihole2.sh --yes      # skip the confirmation prompt
 Without `--yes` the script asks before doing anything. Unknown
 arguments, `-h`, and `--help` print the usage text and exit 2.
 
-## install-pihole-unbound-native-v1.0.sh
+## install_pihole_unbound_native-v1.0.sh
 
 The bash form of the bare-metal install: a step-for-step mirror of
 the two Ansible playbooks (`pihole_unbound_automated.yml` and
@@ -131,9 +131,9 @@ the two Ansible playbooks (`pihole_unbound_automated.yml` and
 same end state). Run it as root on the target host:
 
 ```bash
-sudo ./install-pihole-unbound-native-v1.0.sh              # unattended (default)
-sudo ./install-pihole-unbound-native-v1.0.sh --attended   # pause for a manual vendor install
-sudo ./install-pihole-unbound-native-v1.0.sh --dry-run    # print the plan and commands, change nothing
+sudo ./install_pihole_unbound_native-v1.0.sh              # unattended (default)
+sudo ./install_pihole_unbound_native-v1.0.sh --attended   # pause for a manual vendor install
+sudo ./install_pihole_unbound_native-v1.0.sh --dry-run    # print the plan and commands, change nothing
 ```
 
 What it does, in order: dist-upgrades and installs the playbooks'
@@ -145,7 +145,7 @@ stops the run before anything executes; re-pin deliberately with
 `--attended` mode pauses while you run it interactively choosing a
 public upstream, exactly as the attended playbook does; sets
 `PIHOLE_DNS_1=127.0.0.1#5335` in `setupVars.conf`; delegates
-blocklist initialization to `pihole-init-blocklists.sh` (the OISD
+blocklist initialization to `pihole_init_blocklists.sh` (the OISD
 list the playbooks add, plus the Hagezi lists, then gravity); deploys
 `ansible/playbooks/pihole/unbound.conf` to `/etc/unbound/unbound.conf`
 (override the source with `--unbound-conf`); fetches the DNSSEC root
@@ -155,7 +155,7 @@ vendor installer, the config deploy, and the anchor are all gated on
 existing state, as in the playbooks. Deploy order is pi0 (secondary)
 first, verify, then pi4 (primary).
 
-## pihole-control-v1.0.sh
+## pihole_control-v1.0.sh
 
 One controller for the Pi-hole + Unbound lifecycle, in the pattern of
 the neo1 observability stack's control script. It covers both forms:
@@ -164,19 +164,19 @@ bare-metal footprint is present) and the bare-metal install the
 Ansible playbooks perform (`--form native`).
 
 ```bash
-sudo ./pihole-control-v1.0.sh status
-sudo ./pihole-control-v1.0.sh install --with-blocklists
-sudo ./pihole-control-v1.0.sh restart --form native
-sudo ./pihole-control-v1.0.sh logs-clean --form native --dry-run
-sudo ./pihole-control-v1.0.sh uninstall --dry-run
-sudo ./pihole-control-v1.0.sh uninstall --purge
+sudo ./pihole_control-v1.0.sh status
+sudo ./pihole_control-v1.0.sh install --with-blocklists
+sudo ./pihole_control-v1.0.sh restart --form native
+sudo ./pihole_control-v1.0.sh logs-clean --form native --dry-run
+sudo ./pihole_control-v1.0.sh uninstall --dry-run
+sudo ./pihole_control-v1.0.sh uninstall --purge
 ```
 
 Verbs: `install`, `up`, `down`, `restart`, `status`, `logs-clean`,
 `uninstall`. Container `install` delegates to
-`install-pihole-unbound.sh` so its .env validation, Unbound exposure
+`install_pihole_unbound.sh` so its .env validation, Unbound exposure
 guard, and health checks stay single-sourced; native `install`
-delegates to `install-pihole-unbound-native-v1.0.sh`, the bash mirror
+delegates to `install_pihole_unbound_native-v1.0.sh`, the bash mirror
 of the playbooks (`--attended` passes through for its manual-install
 pause; the playbooks themselves stay available as the parallel
 route). The controller reads the

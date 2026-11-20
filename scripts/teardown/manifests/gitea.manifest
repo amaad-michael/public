@@ -1,13 +1,13 @@
 # Manifest: Gitea (native install)
-# Covers scripts/provisioning/install-gitea.sh and the Gitea half of
-# scripts/provisioning/install-gitea-sd.sh. Sourced by
-# native-stack-teardown-v1.0.sh. Plain bash assignments and arrays.
+# Covers scripts/provisioning/install_gitea.sh and the Gitea half of
+# scripts/provisioning/install_gitea_sd.sh. Sourced by
+# native_stack_teardown-v1.0.sh. Plain bash assignments and arrays.
 # shellcheck shell=bash
-# shellcheck disable=SC2034 # the variables are consumed by native-stack-teardown-v1.0.sh, which sources this file
+# shellcheck disable=SC2034 # the variables are consumed by native_stack_teardown-v1.0.sh, which sources this file
 STACK_NAME="gitea"
 CONFIRM_TOKEN="gitea"
 STACK_DESC="Gitea git server, native install (binary, systemd unit, git service account)."
-REDEPLOY_HINT="scripts/provisioning/install-gitea.sh (on SD-card hosts: install-gitea-sd.sh)"
+REDEPLOY_HINT="scripts/provisioning/install_gitea.sh (on SD-card hosts: install_gitea_sd.sh)"
 UNITS=(gitea gitea-dump gitea-dump.timer)
 REMOVE_PATHS=(
     /etc/gitea

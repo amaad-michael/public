@@ -10,18 +10,18 @@ change state, and only on the host they run on (the controller's
 Ansible deploy form acts on its target host). Backup manifest
 integrity lives in `scripts/backups`: see the last section.
 
-## deploy-monitoring-stack.sh
+## deploy_monitoring_stack.sh
 
 Bash deploy wrapper for the cluster standby monitoring stack in
 `containers/monitoring/` (Prometheus, Grafana, Alertmanager, Traefik,
 ntfy, step-ca, Headscale, Vaultwarden, Uptime Kuma). The stack is
 Docker-native by design; this is the local-run form of its
 deployment, and the Ansible form is
-`ansible/playbooks/monitoring/deploy-monitoring.yml`.
+`ansible/playbooks/monitoring/deploy_monitoring.yml`.
 
 ```bash
-./deploy-monitoring-stack.sh              # validate, pull, up, verify
-./deploy-monitoring-stack.sh --dry-run    # validate and render only
+./deploy_monitoring_stack.sh              # validate, pull, up, verify
+./deploy_monitoring_stack.sh --dry-run    # validate and render only
 ```
 
 - Gates, in order, each failing loudly before anything starts:
@@ -36,7 +36,7 @@ deployment, and the Ansible form is
 - `--project-dir DIR` deploys a checkout elsewhere; by default the
   project is `containers/monitoring/` relative to this script.
 
-## extended-observability-control-v1.0.sh
+## extended_observability_control-v1.0.sh
 
 Lifecycle controller for the Extended Observability Stack in
 `containers/monitoring/` (the 9-service Docker stack formerly
@@ -45,17 +45,17 @@ identifiers did not change). One entry point owns the stack end
 to end, in the shape of the neo1 observability control script:
 
 ```bash
-./extended-observability-control-v1.0.sh deploy [--form container|bash|ansible]
-./extended-observability-control-v1.0.sh verify | status | up | down | restart
-./extended-observability-control-v1.0.sh uninstall [--purge]
+./extended_observability_control-v1.0.sh deploy [--form container|bash|ansible]
+./extended_observability_control-v1.0.sh verify | status | up | down | restart
+./extended_observability_control-v1.0.sh uninstall [--purge]
 ```
 
 - The runtime state is the compose project; the three forms are
   deploy routes into it. `deploy` defaults to the controller's own
   container form (same gates as the wrapper below, then pull, up,
   verify); `--form bash` delegates to
-  `deploy-monitoring-stack.sh` and `--form ansible` to
-  `ansible/playbooks/monitoring/deploy-monitoring.yml` (`--host`
+  `deploy_monitoring_stack.sh` and `--form ansible` to
+  `ansible/playbooks/monitoring/deploy_monitoring.yml` (`--host`
   required). All other verbs act on the project whichever form
   deployed it.
 - The compose project name is pinned to `standby` on every call
@@ -73,11 +73,11 @@ to end, in the shape of the neo1 observability control script:
   volumes too, after a typed confirmation (the word is
   `observability`) and a closing verification pass.
 
-## smart-harvest.sh
+## smart_harvest.sh
 
 The bash form of the SMART harvest: the Ansible form is
-`ansible/playbooks/healthchecks/smart-harvest-v1.0.yml` and the
-Docker form is `containers/health-smart/`. It collects SMART data
+`ansible/playbooks/healthchecks/smart_harvest-v1.0.yml` and the
+Docker form is `containers/health_smart/`. It collects SMART data
 from every physical disk on the host it runs on and writes one
 JSON report per host (`./smart-data/<host>.json` by default), with
 the same fields as the Ansible form: per-drive device, rc, SMART
@@ -85,9 +85,9 @@ support, overall health, model, serial number, temperature, and
 power-on hours, plus the full smartctl JSON.
 
 ```bash
-sudo ./smart-harvest.sh                          # auto-discover via lsblk
-sudo ./smart-harvest.sh /dev/sda                 # pinned drive list
-sudo ./smart-harvest.sh --keep-history --extra-args "-d sat"
+sudo ./smart_harvest.sh                          # auto-discover via lsblk
+sudo ./smart_harvest.sh /dev/sda                 # pinned drive list
+sudo ./smart_harvest.sh --keep-history --extra-args "-d sat"
 ```
 
 - Needs smartmontools and python3 on the host; both are checked up
@@ -130,7 +130,7 @@ Both checkers suit an on-demand or scheduled audit. Every run writes
 a new timestamped file; nothing is overwritten, so the directory
 becomes the audit history.
 
-## audit-journal-persistence.sh
+## audit_journal_persistence.sh
 
 Read-only audit of systemd-journald persistence across the fleet
 (pi0, pi1, pi2, pi3, pi4, neo1). For each node it reports the

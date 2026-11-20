@@ -1,7 +1,7 @@
 # jenkins — CI server
 
 A single-container Jenkins at the same LTS version as the other two
-forms of this deployment: `scripts/provisioning/install-jenkins-rocky.sh`
+forms of this deployment: `scripts/provisioning/install_jenkins_rocky.sh`
 (bash, bare metal under systemd) and
 `ansible/playbooks/jenkins/install_jenkins.yml` (Ansible). The
 Ansible form and this container pin Jenkins LTS 2.580.2; the bash

@@ -8,7 +8,7 @@ volumes:
 
 services:
   # Jenkins - CI server, Docker form of
-  # scripts/provisioning/install-jenkins-rocky.sh and
+  # scripts/provisioning/install_jenkins_rocky.sh and
   # ansible/playbooks/jenkins/install_jenkins.yml: same Jenkins LTS
   # version (2.580.2), same web port (8080). The JNLP agent port 50000
   # is not published by default, matching the bash installer, where it

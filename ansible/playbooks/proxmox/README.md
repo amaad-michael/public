@@ -69,7 +69,7 @@ nmcli con up "Wired connection 1"
 ## 🛠️ Bash form
 
 The same deployment also ships as a local bash script,
-`scripts/provisioning/proxmox-setup.sh`, for a run made by hand on
+`scripts/provisioning/proxmox_setup.sh`, for a run made by hand on
 the target host instead of over SSH from a control node. There is
 no Docker form: Proxmox VE is a bare-metal hypervisor.
 
@@ -86,12 +86,12 @@ values, checks, and defaults:
 | `all` | All five, in order |
 
 ```bash
-sudo scripts/provisioning/proxmox-setup.sh install
+sudo scripts/provisioning/proxmox_setup.sh install
 # reboot into the PVE kernel, then:
-sudo scripts/provisioning/proxmox-setup.sh configure
-sudo scripts/provisioning/proxmox-setup.sh prep --admin-password "YourPassword" --mgmt-cidr "192.168.1.0/24"
-sudo scripts/provisioning/proxmox-setup.sh templates-cloudinit --ssh-public-key "ssh-ed25519 AAAA..."
-sudo scripts/provisioning/proxmox-setup.sh templates-turnkey
+sudo scripts/provisioning/proxmox_setup.sh configure
+sudo scripts/provisioning/proxmox_setup.sh prep --admin-password "YourPassword" --mgmt-cidr "192.168.1.0/24"
+sudo scripts/provisioning/proxmox_setup.sh templates-cloudinit --ssh-public-key "ssh-ed25519 AAAA..."
+sudo scripts/provisioning/proxmox_setup.sh templates-turnkey
 ```
 
 Every subcommand accepts `--dry-run`, which prints each step in
@@ -109,7 +109,7 @@ validates an API token directly against the REST API
 (`GET /api2/json/version` with a `PVEAPIToken` header); the
 deployment steps themselves use the host CLIs (`pveum`, `pvesm`,
 `pveam`, `qm`), which are clients of the same API, exactly as the
-playbooks do. Run `proxmox-setup.sh --help` for all flags.
+playbooks do. Run `proxmox_setup.sh --help` for all flags.
 
 ---
 

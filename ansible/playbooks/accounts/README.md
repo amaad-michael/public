@@ -1,10 +1,10 @@
 # Account playbooks
 
-Credential cycling for the fleet is done by the password cycle kit in `password-cycle/`. The three playbooks at this level are the kit's superseded templates and one fresh-install cleanup.
+Credential cycling for the fleet is done by the password cycle kit in `password_cycle/`. The three playbooks at this level are the kit's superseded templates and one fresh-install cleanup.
 
-## The canonical kit: password-cycle/
+## The canonical kit: password_cycle/
 
-Use [`password-cycle/`](password-cycle/README.md) for any real password cycle. It has its own README with the full runbook.
+Use [`password_cycle/`](password_cycle/README.md) for any real password cycle. It has its own README with the full runbook.
 
 The kit cycles the root, michael, and ansible account passwords across `pi_all` (pi0-pi4 and neo1). Password values are kept outside the repo and injected at run time from the filled vars file at `~/passwords.yml`. A pre-flight gate asserts every host has a real 32 character value for every account before anything changes, and the run creates any missing account first, so a rebuilt host is covered. `verify_cycle_creds.yml` then checks reachability, sudo, the set passwords, and the sshd hardening state.
 

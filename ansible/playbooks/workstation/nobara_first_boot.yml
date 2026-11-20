@@ -1,7 +1,7 @@
 ---
 # nobara_first_boot.yml
 # Ansible form of the Nobara first-boot workstation setup
-# (scripts/workstation/new-nobara-setup-v1.2.sh). This is the
+# (scripts/workstation/new_nobara_setup-v1.2.sh). This is the
 # first-boot job, not recurring patching: for patching see
 # ansible/playbooks/monthly/monthly_maint_nobara.yml.
 #
@@ -27,7 +27,7 @@
 #
 # The script's interactive press-Enter prompt has no Ansible
 # equivalent and none is faked: a playbook run is the operator's
-# confirmation. The alt script (new-nobara-setup-alt-v1.1.sh) is the
+# confirmation. The alt script (new_nobara_setup_alt-v1.1.sh) is the
 # same job in modular form; its gpu-high subcommand is this
 # playbook's gpu tag, and its setup subcommand is the full run:
 #   ansible-playbook -i inventory.ini nobara_first_boot.yml --tags gpu

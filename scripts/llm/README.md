@@ -6,21 +6,21 @@ the three forms so you can pick the right one.
 
 ## 📦 Contents
 
-- [gpu-box-llm-setup-v1.9.sh](#gpu-box-llm-setup-v19sh)
-- [optiplex-llm-setup-v2.1.sh](#optiplex-llm-setup-v21sh)
-- [llama-hot-swap-v1.0.sh](#llama-hot-swap-v10sh)
+- [gpu_box_llm_setup-v1.9.sh](#gpu_box_llm_setup-v19sh)
+- [optiplex_llm_setup-v2.1.sh](#optiplex_llm_setup-v21sh)
+- [llama_hot_swap-v1.0.sh](#llama_hot_swap-v10sh)
 - [deploy_llama_ui_raw.sh](#deploy-llama-ui-rawsh)
 - [setup_open_terminal-v1.2.sh](#setup_open_terminal-v1_2sh)
-- [nanopi-llm-setup.sh](#nanopi-llm-setupsh)
-- [nanopi-llm-control-v1.0.sh](#nanopi-llm-control-v10sh)
-- [gpu-box-llm-control-v1.0.sh](#gpu-box-llm-control-v10sh)
-- [gpu-box-llm-teardown-v1.0.sh](#gpu-box-llm-teardown-v10sh)
-- [optiplex-llm-control-v1.0.sh](#optiplex-llm-control-v10sh)
-- [optiplex-llm-teardown-v1.0.sh](#optiplex-llm-teardown-v10sh)
+- [nanopi_llm_setup.sh](#nanopi_llm_setupsh)
+- [nanopi_llm_control-v1.0.sh](#nanopi_llm_control-v10sh)
+- [gpu_box_llm_control-v1.0.sh](#gpu_box_llm_control-v10sh)
+- [gpu_box_llm_teardown-v1.0.sh](#gpu_box_llm_teardown-v10sh)
+- [optiplex_llm_control-v1.0.sh](#optiplex_llm_control-v10sh)
+- [optiplex_llm_teardown-v1.0.sh](#optiplex_llm_teardown-v10sh)
 - [See it running](#see-it-running)
 - [Which form of each stack](#which-form-of-each-stack)
 
-## gpu-box-llm-setup-v1.9.sh
+## gpu_box_llm_setup-v1.9.sh
 
 Target: the GPU box (Nobara) with an AMD GPU. The script checks for
 the ROCm compute device (`/dev/kfd`) and refuses to continue without
@@ -65,9 +65,9 @@ tags, a recorded and accepted risk (TODO RISK-1 in the script); the
 resolved image digests are written to the log on every run.
 
 The full deployment guide for this script and the matching playbook
-is `ansible/playbooks/llm/gpu-box-llm-setup-v2.3.md`.
+is `ansible/playbooks/llm/gpu_box_llm_setup-v2.3.md`.
 
-## optiplex-llm-setup-v2.1.sh
+## optiplex_llm_setup-v2.1.sh
 
 Target: the OptiPlex (CPU-only, apt-based x86_64; written for the
 i5-2400 under Linux Mint). Run as root.
@@ -93,9 +93,9 @@ model, caches the hash beside it, and warns. Paste the value into the
 script to turn on real verification on later runs. Log file:
 `/var/log/optiplex-llm-setup.log`. The full deployment and tuning
 guide for this script and the matching playbook is
-`ansible/playbooks/llm/optiplex-llm-v2.4.md`.
+`ansible/playbooks/llm/optiplex_llm-v2.4.md`.
 
-## llama-hot-swap-v1.0.sh
+## llama_hot_swap-v1.0.sh
 
 The model-generic hot-swap for a `llama-server` systemd unit,
 written for the OptiPlex. It resolves the requested model (a
@@ -153,19 +153,19 @@ script's header usage examples name the file
 `setup_open_terminal-v1_2_hardened.sh`; the shipped filename is
 `setup_open_terminal-v1.2.sh`.
 
-## nanopi-llm-setup.sh
+## nanopi_llm_setup.sh
 
 The bash form of the NanoPi inference pool — the same deployment as
-`ansible/playbooks/llm/llm-server-setup.yml` and
-`llm-lb-setup.yml`, derived from them step for step. One script, two
+`ansible/playbooks/llm/llm_server_setup.yml` and
+`llm_lb_setup.yml`, derived from them step for step. One script, two
 roles, run as root on the board itself:
 
 ```bash
 # Inference node (pick the tier for the board's RAM):
-./nanopi-llm-setup.sh --role server --tier 4gb
-./nanopi-llm-setup.sh --role server --tier 2gb
+./nanopi_llm_setup.sh --role server --tier 4gb
+./nanopi_llm_setup.sh --role server --tier 2gb
 # Load balancer board:
-./nanopi-llm-setup.sh --role lb --nodes "192.168.1.101 192.168.1.102"
+./nanopi_llm_setup.sh --role lb --nodes "192.168.1.101 192.168.1.102"
 ```
 
 The Ansible inventory groups map onto flags: `llm_4gb` is
@@ -204,21 +204,21 @@ rendered unit or nginx site and exits. The boards are ARM64; the
 script warns on other architectures instead of refusing, because
 the native build works the same way.
 
-## nanopi-llm-control-v1.0.sh
+## nanopi_llm_control-v1.0.sh
 
 The lifecycle controller for the NanoPi stack, in the same shape
 as the other LLM stack controllers: setup, start, stop, restart,
 status, and uninstall as verbs of one script, run on the board
-itself. The setup verb delegates to `nanopi-llm-setup.sh` with
+itself. The setup verb delegates to `nanopi_llm_setup.sh` with
 everything after `--` passed through, because the setup needs a
 role the controller will not guess:
 
 ```bash
-./nanopi-llm-control-v1.0.sh setup -- --role server --tier 4gb
-./nanopi-llm-control-v1.0.sh setup -- --role lb
-./nanopi-llm-control-v1.0.sh status
-./nanopi-llm-control-v1.0.sh uninstall            # keeps ~/llama.cpp and ~/models
-./nanopi-llm-control-v1.0.sh uninstall --purge    # removes them too
+./nanopi_llm_control-v1.0.sh setup -- --role server --tier 4gb
+./nanopi_llm_control-v1.0.sh setup -- --role lb
+./nanopi_llm_control-v1.0.sh status
+./nanopi_llm_control-v1.0.sh uninstall            # keeps ~/llama.cpp and ~/models
+./nanopi_llm_control-v1.0.sh uninstall --purge    # removes them too
 ```
 
 The stack's shape drives the design. A board holds one role
@@ -237,44 +237,44 @@ uninstall footprint agrees with the native teardown engine's
 `nanopi-llm` manifest, extended with the UFW rules the setup
 added and the container form's containers.
 
-## gpu-box-llm-control-v1.0.sh
+## gpu_box_llm_control-v1.0.sh
 
 The lifecycle controller for the GPU box stack, in the same shape
 as the other LLM stack controllers: setup, start, stop, restart,
 status, and uninstall as verbs of one script. The setup verb runs
-`gpu-box-llm-setup-v1.9.sh` as-is; the uninstall verb folds in the
+`gpu_box_llm_setup-v1.9.sh` as-is; the uninstall verb folds in the
 teardown below, preserving the Ollama model state (the native
 models directory and the compose `ollama_data` volume) unless
 `--purge` is given.
 
-## gpu-box-llm-teardown-v1.0.sh
+## gpu_box_llm_teardown-v1.0.sh
 
 The standalone teardown for the GPU box stack: removes what
-`gpu-box-llm-setup-v1.9.sh` installed in both forms (bare-metal
+`gpu_box_llm_setup-v1.9.sh` installed in both forms (bare-metal
 Ollama plus the Docker-run Open WebUI and SearXNG, and the
-containers/gpu-llm compose stack). It prints a labeled plan,
+containers/gpu_llm compose stack). It prints a labeled plan,
 needs a typed confirmation, and preserves the model state by
 default; `--purge` removes it and the ollama system user. The
 controller above supersedes it as the entry point; it remains
 as built.
 
-## optiplex-llm-control-v1.0.sh
+## optiplex_llm_control-v1.0.sh
 
 The lifecycle controller for the OptiPlex stack, in the same
 shape: setup, start, stop, restart, status, and uninstall as
 verbs of one script. The setup verb runs
-`optiplex-llm-setup-v2.1.sh` as-is (its environment knobs pass
+`optiplex_llm_setup-v2.1.sh` as-is (its environment knobs pass
 through unchanged); the uninstall verb folds in the teardown
 below, preserving the model state (the native models directory
 and the compose `optiplex_llm_models` volume) unless `--purge`
 is given.
 
-## optiplex-llm-teardown-v1.0.sh
+## optiplex_llm_teardown-v1.0.sh
 
 The standalone teardown for the OptiPlex stack: removes what
-`optiplex-llm-setup-v2.1.sh` installed in both forms (the native
+`optiplex_llm_setup-v2.1.sh` installed in both forms (the native
 llama.cpp build, the llama-server unit, and /etc/llm, and the
-containers/optiplex-llm container form). It prints a labeled
+containers/optiplex_llm container form). It prints a labeled
 plan, needs a typed confirmation, and preserves the model state
 by default; `--purge` removes it and the llm system user. The
 controller above supersedes it as the entry point; it remains
@@ -285,15 +285,15 @@ as built.
 The bare-metal deployments these installers produce, running at
 home. Screenshots from my own systems, May 2026.
 
-![llama-ui serving Meta-Llama-3.1 8B Instruct](llama-ui-screenshot-2026-05-29.png)
+![llama-ui serving Meta-Llama-3.1 8B Instruct](llama_ui_screenshot_2026-05-29.png)
 
-*The OptiPlex deployment from optiplex-llm-setup-v2.1.sh:
+*The OptiPlex deployment from optiplex_llm_setup-v2.1.sh:
 llama.cpp compiled natively and running under systemd, serving
 Meta-Llama-3.1 8B Instruct (Q4_K_M) through llama-ui.*
 
-![Open WebUI fronting Ollama with deepseek-r1:14b](open-webui-screenshot-2026-05-28.webp)
+![Open WebUI fronting Ollama with deepseek-r1:14b](open_webui_screenshot_2026-05-28.webp)
 
-*The GPU box deployment from gpu-box-llm-setup-v1.9.sh: Open
+*The GPU box deployment from gpu_box_llm_setup-v1.9.sh: Open
 WebUI fronting the bare-metal Ollama install, deepseek-r1:14b
 loaded.*
 
@@ -301,10 +301,10 @@ loaded.*
 
 | Stack | This folder (shell) | Ansible | Containers |
 | --- | --- | --- | --- |
-| GPU box (Ollama + Open WebUI + SearXNG) | `gpu-box-llm-setup-v1.9.sh` | `ansible/playbooks/llm/gpu-box-llm-setup-v1.9.yml` | `containers/gpu-llm` |
-| OptiPlex (llama.cpp) | `optiplex-llm-setup-v2.1.sh` | `ansible/playbooks/llm/optiplex-llm-setup-v2.1.yml` | `containers/optiplex-llm` |
-| NanoPi inference pool (llama.cpp servers + nginx LB) | `nanopi-llm-setup.sh` | `ansible/playbooks/llm/llm-server-setup.yml` + `llm-lb-setup.yml` | `containers/llm` |
-| Open Terminal file service | `setup_open_terminal-v1.2.sh` | `ansible/playbooks/llm/open_terminal_setup.yml` | `containers/open-terminal` |
+| GPU box (Ollama + Open WebUI + SearXNG) | `gpu_box_llm_setup-v1.9.sh` | `ansible/playbooks/llm/gpu_box_llm_setup-v1.9.yml` | `containers/gpu_llm` |
+| OptiPlex (llama.cpp) | `optiplex_llm_setup-v2.1.sh` | `ansible/playbooks/llm/optiplex_llm_setup-v2.1.yml` | `containers/optiplex_llm` |
+| NanoPi inference pool (llama.cpp servers + nginx LB) | `nanopi_llm_setup.sh` | `ansible/playbooks/llm/llm_server_setup.yml` + `llm_lb_setup.yml` | `containers/llm` |
+| Open Terminal file service | `setup_open_terminal-v1.2.sh` | `ansible/playbooks/llm/open_terminal_setup.yml` | `containers/open_terminal` |
 
 Differences that decide the choice:
 

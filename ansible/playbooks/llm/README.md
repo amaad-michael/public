@@ -4,17 +4,17 @@ Five Ansible deployments live in this folder. Two of them, the GPU box and the O
 
 | Playbook | Target | Guide |
 |---|---|---|
-| `gpu-box-llm-setup-v1.9.yml` | Nobara GPU box, Ollama and Open WebUI | [gpu-box-llm-setup-v2.3.md](gpu-box-llm-setup-v2.3.md) |
-| `optiplex-llm-setup-v2.1.yml` | Dell OptiPlex, llama.cpp | [optiplex-llm-v2.4.md](optiplex-llm-v2.4.md) |
-| `llm-server-setup.yml` | NanoPi boards, llama.cpp inference | This README |
-| `llm-lb-setup.yml` | NanoPi board, nginx load balancer | This README |
+| `gpu_box_llm_setup-v1.9.yml` | Nobara GPU box, Ollama and Open WebUI | [gpu_box_llm_setup-v2.3.md](gpu_box_llm_setup-v2.3.md) |
+| `optiplex_llm_setup-v2.1.yml` | Dell OptiPlex, llama.cpp | [optiplex_llm-v2.4.md](optiplex_llm-v2.4.md) |
+| `llm_server_setup.yml` | NanoPi boards, llama.cpp inference | This README |
+| `llm_lb_setup.yml` | NanoPi board, nginx load balancer | This README |
 | `open_terminal_setup.yml` | GPU box, Open Terminal file service | This README |
 
 ## open_terminal_setup.yml
 
-The Ansible form of `scripts/llm/setup_open_terminal-v1.2.sh`: it prepares the host exactly as the script does (workspace and log directories at mode 0700, the workspace owned 1000:1000, the API key generated once at `/var/lib/open-terminal/api_key.txt`, mode 0600) and then deploys the same container with every hardening flag of the script's `docker run` — loopback-only publish on port 9000, read-only rootfs, `ipc: none`, sized tmpfs mounts, cap_drop ALL with SETUID/SETGID/CHOWN added back, no-new-privileges, 256 MB / 1 CPU / 50 PID limits, the curl healthcheck, and capped json-file logging. The compose form of the same deployment is `containers/open-terminal/`. The script's `--uninstall` (which also deletes the workspace, logs and API key) stays bash-only.
+The Ansible form of `scripts/llm/setup_open_terminal-v1.2.sh`: it prepares the host exactly as the script does (workspace and log directories at mode 0700, the workspace owned 1000:1000, the API key generated once at `/var/lib/open-terminal/api_key.txt`, mode 0600) and then deploys the same container with every hardening flag of the script's `docker run` — loopback-only publish on port 9000, read-only rootfs, `ipc: none`, sized tmpfs mounts, cap_drop ALL with SETUID/SETGID/CHOWN added back, no-new-privileges, 256 MB / 1 CPU / 50 PID limits, the curl healthcheck, and capped json-file logging. The compose form of the same deployment is `containers/open_terminal/`. The script's `--uninstall` (which also deletes the workspace, logs and API key) stays bash-only.
 
-## llm-server-setup.yml
+## llm_server_setup.yml
 
 Configures a bare Debian or Ubuntu ARM64 NanoPi board as a llama.cpp inference server.
 
@@ -25,7 +25,7 @@ Configures a bare Debian or Ubuntu ARM64 NanoPi board as a llama.cpp inference s
 - Deploys the `llama-server` systemd unit from `llama_server.service.j2` and enables it. Defaults: port 8080, context size 2048, n-predict 512, threads equal to the board's CPU count.
 - Firewall: UFW allows OpenSSH, allows port 8080 from the local /24 network only, and defaults to deny.
 
-## llm-lb-setup.yml
+## llm_lb_setup.yml
 
 Configures one small NanoPi board (0.5 GB class) as an nginx reverse proxy in front of the inference nodes.
 
@@ -42,8 +42,8 @@ Configures one small NanoPi board (0.5 GB class) as an nginx reverse proxy in fr
 Run the server playbook on the inference nodes first, then the load balancer playbook:
 
 ```bash
-ansible-playbook llm-server-setup.yml -i inventory.ini -K
-ansible-playbook llm-lb-setup.yml -i inventory.ini -K
+ansible-playbook llm_server_setup.yml -i inventory.ini -K
+ansible-playbook llm_lb_setup.yml -i inventory.ini -K
 ```
 
 The two templates ship in this folder and are referenced by name from the playbooks: `llama_server.service.j2` (the systemd unit) and `llm_lb.conf.j2` (the nginx site).

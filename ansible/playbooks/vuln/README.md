@@ -11,7 +11,7 @@ Configures a dedicated vulnerability scanner node on a Debian or RedHat family h
 - Creates the audit workspace `/opt/tatum_audit` (root-owned, mode 0750).
 - Installs the two Python libraries the scanning scripts use: `requests` and `dnspython`.
 
-## nmap-scan.yml
+## nmap_scan.yml
 
 Runs an Nmap scan with NSE scripts against every targeted host and collects the output on the controller.
 

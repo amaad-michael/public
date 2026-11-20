@@ -7,9 +7,9 @@ and no systemd.
 
 | Ansible original | This stack |
 | --- | --- |
-| `llm-server-setup.yml` (per-board llama-server, port 8080) | `llm-heavy` and `llm-light` services |
+| `llm_server_setup.yml` (per-board llama-server, port 8080) | `llm-heavy` and `llm-light` services |
 | `llama_server.service.j2` (model, host, port, threads, ctx, n-predict) | compose `command:` + `.env` values |
-| `llm-lb-setup.yml` + `llm_lb.conf.j2` (nginx LB, `least_conn`) | `llm-lb` service + `llm-lb.conf` |
+| `llm_lb_setup.yml` + `llm_lb.conf.j2` (nginx LB, `least_conn`) | `llm-lb` service + `llm_lb.conf` |
 | Models downloaded to `~/models` on each board | Host models directory mounted read-only at `/models` |
 
 The two backends mirror his two NanoPi boards: the heavy node serves
@@ -20,7 +20,7 @@ requests avoid the lighter board). Only the LB publishes a host port;
 the backends are reachable only on the stack network.
 
 Two deliberate adaptations from the bare-metal original, both in
-`llm-lb.conf`: nginx listens on 8080 inside the container instead of
+`llm_lb.conf`: nginx listens on 8080 inside the container instead of
 80 (so it needs no privileged port; the host port is mapped), and the
 proxy speaks HTTP/1.1 with an empty `Connection` header so
 llama-server's chunked token streams are not de-chunked and buffered
@@ -60,7 +60,7 @@ placed in the models directory.
 
 ## 🛠️ Setup
 
-1. Copy `llm-env.example` to `.env`, set `LLM_MODELS_DIR` to the
+1. Copy `llm_env.example` to `.env`, set `LLM_MODELS_DIR` to the
    models directory, confirm the two model filenames, and
    `chmod 600 .env`. Compose refuses to render or start while a model
    filename is unset, so a missing value fails closed instead of
@@ -104,7 +104,7 @@ model variables at it, run the same three checks, then switch back.
 ## 🔧 Operations
 
 - One backend only: delete or comment the other backend service and
-  its `llm-lb.conf` upstream line, and drop the matching `depends_on`
+  its `llm_lb.conf` upstream line, and drop the matching `depends_on`
   entry. The pool works with a single server line.
 - Logs: `docker compose logs -f llm-heavy llm-light llm-lb`.
 - Updates: bump the pinned tags in `docker-compose.yml`, then

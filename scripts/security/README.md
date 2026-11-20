@@ -14,8 +14,8 @@ pre-publication repo scanner.
    - [New workstation, in order](#new-workstation-in-order)
    - [export_ssh.sh: host identity backup](#export_sshsh-host-identity-backup)
 - [Fleet password cycle](#fleet-password-cycle)
-- [⚠️ ssh-reset-defaults.sh: destructive, last resort only](#-ssh-reset-defaultssh-destructive-last-resort-only)
-- [repo-public-check.sh](#repo-public-checksh)
+- [⚠️ ssh_reset_defaults.sh: destructive, last resort only](#-ssh_reset_defaultssh-destructive-last-resort-only)
+- [repo_public_check.sh](#repo_public_checksh)
 
 ## secure-server-init family
 
@@ -91,7 +91,7 @@ sntrup761x25519-sha512).
 
 | | Standard | Conservative | Legacy |
 | --- | --- | --- | --- |
-| Files | `secure-server-init-v1.sh`, `secure_server_init-v1.1.sh`, `secure-server-init-v1.2.sh` | `secure-server-init-conservative-v1.sh`, `secure_server_init_conservative-v1.1.sh`, `secure-server-init-conservative-v1.2.sh` | `secure-server-init-legacy-v1.sh`, `secure_server_init_legacy-v1.1.sh` |
+| Files | `secure_server_init-v1.sh`, `secure_server_init-v1.1.sh`, `secure_server_init-v1.2.sh` | `secure_server_init_conservative-v1.sh`, `secure_server_init_conservative-v1.1.sh`, `secure_server_init_conservative-v1.2.sh` | `secure_server_init_legacy-v1.sh`, `secure_server_init_legacy-v1.1.sh` |
 | Use when | Modern OpenSSH on both ends | Clients cannot do the post-quantum key exchange | Old OpenSSH that needs password auth and RSA |
 | Password auth | No | No | Yes |
 | Root login | No | Key only (`prohibit-password`) | No |
@@ -143,7 +143,7 @@ and the login user is `michael`.
 
 ### New workstation, in order
 
-1. Controller setup: `ssh-setup-new-box-v1.3.sh` (dnf and apt family
+1. Controller setup: `ssh_setup_new_box-v1.3.sh` (dnf and apt family
    boxes; v1.0 was Rocky-family only). It installs keychain (on dnf,
    enabling EPEL if the package is not in the enabled repos; on apt,
    refreshing the package lists and retrying), adds the keychain eval
@@ -159,7 +159,7 @@ and the login user is `michael`.
    hosts with ssh-copy-id, prompting for the `michael` password on
    each host unless the key is already installed, and skips hosts that
    already carry the key. Note that it reads `~/.ssh/id_rsa.pub`
-   specifically, while `ssh-setup-new-box-v1.3.sh` works with
+   specifically, while `ssh_setup_new_box-v1.3.sh` works with
    ed25519; point the file variable at the right public key before
    running.
 1. Pre-trust the fleet: `add_known_hosts.sh` appends an ssh-keyscan of
@@ -201,9 +201,9 @@ host keys back to `/etc/ssh`, authorized_keys back to each user's
 
 ## Fleet password cycle
 
-`cycle-fleet-passwords.sh` is the bash form of the fleet password
-cycle whose Ansible form is the password-cycle kit in
-`ansible/playbooks/accounts/password-cycle/`. It performs the same
+`cycle_fleet_passwords.sh` is the bash form of the fleet password
+cycle whose Ansible form is the password_cycle kit in
+`ansible/playbooks/accounts/password_cycle/`. It performs the same
 cycle from the controller over SSH and with the same safety
 semantics:
 
@@ -229,9 +229,9 @@ semantics:
   `PasswordAuthentication no`).
 
 ```bash
-./cycle-fleet-passwords.sh --passwords-file ~/passwords.yml --limit neo1
-./cycle-fleet-passwords.sh --passwords-file ~/passwords.yml
-./cycle-fleet-passwords.sh --passwords-file ~/passwords.yml --verify-only
+./cycle_fleet_passwords.sh --passwords-file ~/passwords.yml --limit neo1
+./cycle_fleet_passwords.sh --passwords-file ~/passwords.yml
+./cycle_fleet_passwords.sh --passwords-file ~/passwords.yml --verify-only
 ```
 
 Pilot on one host first (`neo1` is the canary), keep the vars file
@@ -240,9 +240,9 @@ validates the vars file and prints the plan without connecting.
 There is no Docker form: the cycle is a controller-side operation
 driven by vault-held secrets.
 
-## ⚠️ ssh-reset-defaults.sh: destructive, last resort only
+## ⚠️ ssh_reset_defaults.sh: destructive, last resort only
 
-This is not part of the bootstrap flow above. `ssh-reset-defaults.sh`
+This is not part of the bootstrap flow above. `ssh_reset_defaults.sh`
 is recovery for a host whose SSH configuration is mangled beyond
 repair, and it wipes the current hardening to get a known-good distro
 baseline back. Run it as root, from the local console or an
@@ -267,14 +267,14 @@ What it does, in order:
 After a reset, re-harden with the secure-server-init variant that
 fits the host, then rebuild key access with the toolkit above.
 
-## repo-public-check.sh
+## repo_public_check.sh
 
 A read-only heuristic scan to run before a repo goes public. It scans
 tracked files and, unless told otherwise, the full git history,
 because deleted content stays in history.
 
 ```bash
-./repo-public-check.sh [--no-history] [path-to-repo]
+./repo_public_check.sh [--no-history] [path-to-repo]
 ```
 
 With no path it scans the current directory. It must be a git repo,

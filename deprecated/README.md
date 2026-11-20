@@ -21,5 +21,5 @@ or a successor has replaced them. Git history is intact: use
 | cleanup_logs_pihole.sh | scripts/pihole/cleanup_logs_pihole.sh | 2026-09-21 | cleanup_logs_pihole2.sh |
 | docker-compose-new.yml | containers/docker-files-pihole-v1.1/docker-compose-new.yml | 2026-09-21 | containers/pihole/docker-compose.yml (renamed from pi-dns-docker-compose.yml, the hardened v2) |
 | uninstall_pihole.yml | ansible/playbooks/cleanup/uninstall_pihole.yml | 2026-10-23 | ansible/playbooks/cleanup/uninstall_pihole2.yml (which also gained this file's gated final DNS check in the same pass) |
-| new-nobara-setup-alt-v1.1.sh | scripts/workstation/new-nobara-setup-alt-v1.1.sh | 2026-10-23 | scripts/workstation/new-nobara-setup-v1.1.sh (its `gpu-high` subcommand was folded into the survivor) |
+| new_nobara_setup_alt-v1.1.sh | scripts/workstation/new_nobara_setup_alt-v1.1.sh | 2026-10-23 | scripts/workstation/new-nobara-setup-v1.1.sh (its `gpu-high` subcommand was folded into the survivor) |
 | neofetch_motd.yml | ansible/playbooks/motd/neofetch_motd.yml | 2026-10-23 | ansible/playbooks/motd/fastfetch_motd.yml |

@@ -33,14 +33,14 @@
 
     - name: Stage the verify script on the target
       ansible.builtin.copy:
-        src: backup-verify-local.sh
-        dest: /tmp/backup-verify-local.sh
+        src: backup_verify_local.sh
+        dest: /tmp/backup_verify_local.sh
         mode: "0755"
 
     - name: Verify latest backup (read-only)
       ansible.builtin.command:
         cmd: >-
-          /tmp/backup-verify-local.sh
+          /tmp/backup_verify_local.sh
           --dest {{ verify_dest | quote }}
           {{ ('--source ' ~ (verify_source | quote)) if (verify_source | default('') | length > 0) else '' }}
           --max-age-days {{ verify_max_age_days | quote }}

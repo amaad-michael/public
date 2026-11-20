@@ -6,7 +6,7 @@ Two report-generating health checks and one SMART data harvester. All three are 
 |---|---|---|
 | `health_check_pihole2.yml` | `pi_dns` group | Markdown report per host, on the host and fetched to `./reports/` |
 | `health_check_universal2.yml` | `hosts: all` | Markdown report per host, staged in `/tmp` and fetched to `./reports/` |
-| `smart-harvest-v1.0.yml` | `pi_all` group by default | One JSON file per host on the controller |
+| `smart_harvest-v1.0.yml` | `pi_all` group by default | One JSON file per host on the controller |
 
 ## health_check_pihole2.yml
 
@@ -28,13 +28,13 @@ General monthly health check for any host in the inventory, RHEL or Debian famil
 - Log coverage: journal errors over the last 7 days (log_scan_period), last 50 matching lines (log_lines); failed logins are grepped from the auth log with the same 50-line tail but no time filter.
 - The report is written on the host to `/tmp/monthly_health_check_<host>_<timestamp>.md` and then copied to `./reports/` on the controller, relative to where `ansible-playbook` was run.
 
-## smart-harvest-v1.0.yml
+## smart_harvest-v1.0.yml
 
 Harvests SMART data from every physical disk on the target hosts and stores one JSON report per host on the controller. Collection is read-only and idempotent: re-running overwrites the same report files and never duplicates data, and drives without SMART support (SD cards, some USB enclosures) are captured as unsupported rather than failing the run.
 
 ```bash
 cd ansible
-ansible-playbook -i hosts playbooks/healthchecks/smart-harvest-v1.0.yml
+ansible-playbook -i hosts playbooks/healthchecks/smart_harvest-v1.0.yml
 ```
 
 - Targets `pi_all` by default. Override the group with a limit, for example `-l pi_rhel`. Examples in this section assume the shipped `ansible/hosts` inventory.

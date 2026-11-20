@@ -10,7 +10,7 @@
 
 **v1.2** (2026-10-31) — added `launcher.sh`, a menu front end for the 27 tools: on a terminal it opens an arrow-key panel over the task index below (grouped audit / manage / report, scrollable; typing a tool number jumps to it), and off a terminal it prints the same list as a numbered text menu and reads the choice as a line. Choosing a tool runs it in the foreground with the launcher's own arguments forwarded, or with arguments typed at its prompt when none were given; the launcher exits with the tool's exit status. The tools themselves are unchanged.
 
-**v1.1** (2026-09-20) — fixed the 6 minor bugs found by independent testing, plus related follow-ups from the same pass (see `TEST-REPORT-2026-09-20.md`):
+**v1.1** (2026-09-20) — fixed the 6 minor bugs found by independent testing, plus related follow-ups from the same pass (see `TEST_REPORT_2026-09-20.md`):
 
 - `update-report` / `system-update`: `apt-get update` now runs under `timeout 120` where the `timeout` command is available (a bare run otherwise) and both scripts gained a `--no-refresh` flag; previously a stalled mirror hung the script indefinitely.
 - `password-policy` / `cockpit-install`: same `apt-get update` timeout fix
@@ -38,31 +38,31 @@ The current version is also recorded in this folder's `VERSION` file.
 |---|------|--------------|------|---------|
 | 01 | User add/remove | Create a user with SSH key and optional sudo, or remove cleanly | [01-user_add/user_add_local.sh](01-user_add/user_add_local.sh) | [01-user_add/user_add_group.yml](01-user_add/user_add_group.yml) |
 | 02 | Sudo management | Grant/revoke sudo via `/etc/sudoers.d` drop-in, validated with visudo | [02-sudo_manage/sudo_manage_local.sh](02-sudo_manage/sudo_manage_local.sh) | [02-sudo_manage/sudo_manage_group.yml](02-sudo_manage/sudo_manage_group.yml) |
-| 03 | Password policy | Enforce password aging (`chage`) and pam_pwquality baseline | [03-password_policy/password-policy-local.sh](03-password_policy/password-policy-local.sh) | [03-password_policy/password_policy_group.yml](03-password_policy/password_policy_group.yml) |
+| 03 | Password policy | Enforce password aging (`chage`) and pam_pwquality baseline | [03-password_policy/password_policy_local.sh](03-password_policy/password_policy_local.sh) | [03-password_policy/password_policy_group.yml](03-password_policy/password_policy_group.yml) |
 | 04 | User audit | Report dormant users, empty passwords, duplicate UID 0 (read-only) | [04-user_audit/user_audit_local.sh](04-user_audit/user_audit_local.sh) | [04-user_audit/user_audit_group.yml](04-user_audit/user_audit_group.yml) |
-| 05 | System update | Apply full or security-only updates | [05-system_update/system-update-local.sh](05-system_update/system-update-local.sh) | [05-system_update/system_update_group.yml](05-system_update/system_update_group.yml) |
-| 06 | Update report | List pending updates, flag reboot-required (read-only) | [06-update_report/update-report-local.sh](06-update_report/update-report-local.sh) | [06-update_report/update_report_group.yml](06-update_report/update_report_group.yml) |
+| 05 | System update | Apply full or security-only updates | [05-system_update/system_update_local.sh](05-system_update/system_update_local.sh) | [05-system_update/system_update_group.yml](05-system_update/system_update_group.yml) |
+| 06 | Update report | List pending updates, flag reboot-required (read-only) | [06-update_report/update_report_local.sh](06-update_report/update_report_local.sh) | [06-update_report/update_report_group.yml](06-update_report/update_report_group.yml) |
 | 07 | Disk audit | Top consumers, largest dirs/files, inode usage (read-only) | [07-disk_audit/disk_audit_local.sh](07-disk_audit/disk_audit_local.sh) | [07-disk_audit/disk_audit_group.yml](07-disk_audit/disk_audit_group.yml) |
 | 08 | Health check | CPU, memory, load vs cores with warn/crit thresholds (read-only) | [08-health_check/health_check_local.sh](08-health_check/health_check_local.sh) | [08-health_check/health_check_group.yml](08-health_check/health_check_group.yml) |
 | 09 | Failed services | List failed systemd units (read-only) | [09-failed_services/failed_services_local.sh](09-failed_services/failed_services_local.sh) | [09-failed_services/failed_services_group.yml](09-failed_services/failed_services_group.yml) |
 | 10 | Uptime report | Uptime, boot time, recent reboot history (read-only) | [10-uptime_report/uptime_report_local.sh](10-uptime_report/uptime_report_local.sh) | [10-uptime_report/uptime_report_group.yml](10-uptime_report/uptime_report_group.yml) |
 | 11 | Log errors | Errors/warnings since yesterday via journal or syslog (read-only) | [11-log_errors/log_errors_local.sh](11-log_errors/log_errors_local.sh) | [11-log_errors/log_errors_group.yml](11-log_errors/log_errors_group.yml) |
-| 12 | Logrotate check | Verify logrotate configs parse and key logs are covered (read-only) | [12-logrotate_check/logrotate-check-local.sh](12-logrotate_check/logrotate-check-local.sh) | [12-logrotate_check/logrotate_check_group.yml](12-logrotate_check/logrotate_check_group.yml) |
+| 12 | Logrotate check | Verify logrotate configs parse and key logs are covered (read-only) | [12-logrotate_check/logrotate_check_local.sh](12-logrotate_check/logrotate_check_local.sh) | [12-logrotate_check/logrotate_check_group.yml](12-logrotate_check/logrotate_check_group.yml) |
 | 13 | SSH audit | Audit sshd_config against a hardening baseline (read-only) | [13-ssh_audit/ssh_audit_local.sh](13-ssh_audit/ssh_audit_local.sh) | [13-ssh_audit/ssh_audit_group.yml](13-ssh_audit/ssh_audit_group.yml) |
-| 14 | Firewall audit | Dump active rules: firewalld, ufw, or nftables/iptables (read-only) | [14-firewall_audit/firewall-audit-local.sh](14-firewall_audit/firewall-audit-local.sh) | [14-firewall_audit/firewall_audit_group.yml](14-firewall_audit/firewall_audit_group.yml) |
-| 15 | Ports audit | Listening TCP/UDP ports with owning process (read-only) | [15-ports_audit/ports-audit-local.sh](15-ports_audit/ports-audit-local.sh) | [15-ports_audit/ports_audit_group.yml](15-ports_audit/ports_audit_group.yml) |
+| 14 | Firewall audit | Dump active rules: firewalld, ufw, or nftables/iptables (read-only) | [14-firewall_audit/firewall_audit_local.sh](14-firewall_audit/firewall_audit_local.sh) | [14-firewall_audit/firewall_audit_group.yml](14-firewall_audit/firewall_audit_group.yml) |
+| 15 | Ports audit | Listening TCP/UDP ports with owning process (read-only) | [15-ports_audit/ports_audit_local.sh](15-ports_audit/ports_audit_local.sh) | [15-ports_audit/ports_audit_group.yml](15-ports_audit/ports_audit_group.yml) |
 | 16 | Login audit | Failed logins, per-IP counts, brute-force flags (read-only) | [16-login_audit/login_audit_local.sh](16-login_audit/login_audit_local.sh) | [16-login_audit/login_audit_group.yml](16-login_audit/login_audit_group.yml) |
-| 17 | Permission audit | World-writable files, SUID/SGID outside standard paths (read-only) | [17-perm_audit/perm-audit-local.sh](17-perm_audit/perm-audit-local.sh) | [17-perm_audit/perm_audit_group.yml](17-perm_audit/perm_audit_group.yml) |
+| 17 | Permission audit | World-writable files, SUID/SGID outside standard paths (read-only) | [17-perm_audit/perm_audit_local.sh](17-perm_audit/perm_audit_local.sh) | [17-perm_audit/perm_audit_group.yml](17-perm_audit/perm_audit_group.yml) |
 | 18 | Backup run | rsync to timestamped dir with N-day retention pruning | [18-backup_run/backup_run_local.sh](18-backup_run/backup_run_local.sh) | [18-backup_run/backup_run_group.yml](18-backup_run/backup_run_group.yml) |
-| 19 | Backup verify | Latest backup exists, recent enough, spot-check integrity (read-only) | [19-backup_verify/backup-verify-local.sh](19-backup_verify/backup-verify-local.sh) | [19-backup_verify/backup_verify_group.yml](19-backup_verify/backup_verify_group.yml) |
+| 19 | Backup verify | Latest backup exists, recent enough, spot-check integrity (read-only) | [19-backup_verify/backup_verify_local.sh](19-backup_verify/backup_verify_local.sh) | [19-backup_verify/backup_verify_group.yml](19-backup_verify/backup_verify_group.yml) |
 | 20 | Service manage | Enable/start/restart/status a systemd service consistently | [20-service_manage/service_manage_local.sh](20-service_manage/service_manage_local.sh) | [20-service_manage/service_manage_group.yml](20-service_manage/service_manage_group.yml) |
 | 21 | Cron inventory | All users' crontabs plus /etc/cron.d and cron.* dirs (read-only) | [21-cron_inventory/cron_inventory_local.sh](21-cron_inventory/cron_inventory_local.sh) | [21-cron_inventory/cron_inventory_group.yml](21-cron_inventory/cron_inventory_group.yml) |
 | 22 | Time sync | Check sync health; optionally fix via chrony/systemd-timesyncd | [22-time_sync/time_sync_local.sh](22-time_sync/time_sync_local.sh) | [22-time_sync/time_sync_group.yml](22-time_sync/time_sync_group.yml) |
 | 23 | Cert expiry | Scan common cert locations, warn on expiry within N days (read-only) | [23-cert_expiry/cert_expiry_local.sh](23-cert_expiry/cert_expiry_local.sh) | [23-cert_expiry/cert_expiry_group.yml](23-cert_expiry/cert_expiry_group.yml) |
-| 24 | Network inventory | Interfaces, IPs, default routes, DNS resolvers (read-only) | [24-net_inventory/net-inventory-local.sh](24-net_inventory/net-inventory-local.sh) | [24-net_inventory/net_inventory_group.yml](24-net_inventory/net_inventory_group.yml) |
+| 24 | Network inventory | Interfaces, IPs, default routes, DNS resolvers (read-only) | [24-net_inventory/net_inventory_local.sh](24-net_inventory/net_inventory_local.sh) | [24-net_inventory/net_inventory_group.yml](24-net_inventory/net_inventory_group.yml) |
 | 25 | Container hygiene | Report container clutter; with `--yes`, prune stopped containers, dangling images, unused networks, build cache (docker/podman) | [25-container_hygiene/container_hygiene_local.sh](25-container_hygiene/container_hygiene_local.sh) | [25-container_hygiene/container_hygiene_group.yml](25-container_hygiene/container_hygiene_group.yml) |
-| 26 | Kernel cleanup | Remove old kernels, keep N newest, never the running one | [26-kernel_cleanup/kernel-cleanup-local.sh](26-kernel_cleanup/kernel-cleanup-local.sh) | [26-kernel_cleanup/kernel_cleanup_group.yml](26-kernel_cleanup/kernel_cleanup_group.yml) |
-| 27 | Cockpit install | Install cockpit, enable and start cockpit.socket, open 9090/tcp | [27-cockpit-install/cockpit-install-local.sh](27-cockpit-install/cockpit-install-local.sh) | Consolidated: [ansible/playbooks/cockpit/cockpit_setup.yml](../../ansible/playbooks/cockpit/cockpit_setup.yml) |
+| 26 | Kernel cleanup | Remove old kernels, keep N newest, never the running one | [26-kernel_cleanup/kernel_cleanup_local.sh](26-kernel_cleanup/kernel_cleanup_local.sh) | [26-kernel_cleanup/kernel_cleanup_group.yml](26-kernel_cleanup/kernel_cleanup_group.yml) |
+| 27 | Cockpit install | Install cockpit, enable and start cockpit.socket, open 9090/tcp | [27-cockpit_install/cockpit_install_local.sh](27-cockpit_install/cockpit_install_local.sh) | Consolidated: [ansible/playbooks/cockpit/cockpit_setup.yml](../../ansible/playbooks/cockpit/cockpit_setup.yml) |
 
 ## Distro support
 
@@ -81,8 +81,8 @@ Bash (single server):
 ./launcher.sh --check                                         # forwards --check to the chosen tool
 sudo ./01-user_add/user_add_local.sh --help
 sudo ./01-user_add/user_add_local.sh deploy --ssh-key ~/.ssh/id_ed25519.pub --sudo
-sudo ./05-system_update/system-update-local.sh --check        # dry run first
-sudo ./05-system_update/system-update-local.sh --security-only
+sudo ./05-system_update/system_update_local.sh --check        # dry run first
+sudo ./05-system_update/system_update_local.sh --security-only
 ./07-disk_audit/disk_audit_local.sh                           # read-only, no sudo needed for most
 ```
 

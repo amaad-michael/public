@@ -64,14 +64,14 @@ docker compose ps  # All 9 should be "Up" and "healthy"
 ## 🔁 Lifecycle: one controller, three deploy forms
 
 Day-2 control for this stack lives in one place:
-`scripts/monitoring/extended-observability-control-v1.0.sh`
+`scripts/monitoring/extended_observability_control-v1.0.sh`
 (verify, status, up, down, restart, uninstall, with data volumes
 preserved by default and a typed-confirmation purge).
 
 Deployment has three forms, all landing in the same compose
 project: this controller's own container form, the bash wrapper
-`scripts/monitoring/deploy-monitoring-stack.sh`, and the Ansible
-playbook `ansible/playbooks/monitoring/deploy-monitoring.yml`.
+`scripts/monitoring/deploy_monitoring_stack.sh`, and the Ansible
+playbook `ansible/playbooks/monitoring/deploy_monitoring.yml`.
 The controller's `deploy --form bash|ansible` delegates to the
 other two; every other verb acts on the project directly,
 whichever form deployed it.

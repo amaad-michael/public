@@ -33,7 +33,7 @@ Utility scripts for the homelab, grouped by job. Each folder's README is the usa
   Proxmox installers, the Gitea post-setup tightening scripts, the
   LUKS Vault Guardian, and the neo1 observability kit (native
   systemd form).
-- [teardown](teardown/stack-teardown-v1.0.sh): the two teardown
+- [teardown](teardown/stack_teardown-v1.0.sh): the two teardown
   engines: the generic compose engine, which reads a stack's removal
   plan from its own rendered compose config, and the manifest-driven
   native engine (manifests in `teardown/manifests/`).
@@ -45,7 +45,7 @@ Utility scripts for the homelab, grouped by job. Each folder's README is the usa
 Also at this level: `run_maintenanceenance.sh`, the wrapper that
 runs the maintenance playbooks (see
 [ansible/README.md](../ansible/README.md)) and logs to
-`scripts/logs/maintenance.log`; and `fleet-reboot.sh`, the bash
+`scripts/logs/maintenance.log`; and `fleet_reboot.sh`, the bash
 form of the reboot playbooks (see
 [ansible/playbooks/reboots](../ansible/playbooks/reboots/README.md)),
 which reboots the fleet one host at a time over SSH with the

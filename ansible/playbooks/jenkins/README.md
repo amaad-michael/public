@@ -1,8 +1,8 @@
 # Jenkins playbooks
 
 The Ansible install form for Jenkins, mirroring the bash installer
-`scripts/provisioning/install-jenkins-rocky.sh` (its guide is
-`scripts/provisioning/jenkins-consolidated-v1.0.md`). The Docker form
+`scripts/provisioning/install_jenkins_rocky.sh` (its guide is
+`scripts/provisioning/jenkins_consolidated-v1.0.md`). The Docker form
 is `containers/jenkins/`. Removal is the companion playbook
 `ansible/playbooks/cleanup/uninstall_jenkins.yml`, which removes
 exactly what the installer creates.

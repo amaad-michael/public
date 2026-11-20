@@ -3,11 +3,11 @@
 ## neo1-observability.yml
 
 The Ansible form of the neo1 observability node. It mirrors the
-native kit in `scripts/provisioning/neo1-observability-native/`
+native kit in `scripts/provisioning/neo1-observability_native/`
 exactly: same component versions and checksums, same ports, paths,
 service users, systemd units, configs, UFW posture, and the same
 always-on set. The Docker form of the same design is
-`containers/neo1-observability-docker/`.
+`containers/neo1-observability_docker/`.
 
 ```bash
 cd ansible
@@ -32,8 +32,8 @@ ansible-playbook -i hosts playbooks/observability/neo1-observability.yml -l neo1
   same release's checksum file.
 - The configs, systemd units, and helper scripts under `files/` are
   byte-identical copies of the native kit's files. The backup
-  scripts land at `/usr/local/sbin/pihole-backup.sh` and
-  `/usr/local/sbin/unbound-backup.sh`, as in the kit; the kit's
+  scripts land at `/usr/local/sbin/pihole_backup.sh` and
+  `/usr/local/sbin/unbound_backup.sh`, as in the kit; the kit's
   `ufw.sh` and `verify.sh` are installed as
   `/usr/local/sbin/neo1-ufw.sh` and `/usr/local/sbin/neo1-verify.sh`
   for parity, while the playbook itself applies the same UFW rules

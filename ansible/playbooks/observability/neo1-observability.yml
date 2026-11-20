@@ -1,7 +1,7 @@
 ---
 # NAME: neo1-observability.yml
 # WHAT: Ansible form of the neo1 observability node. Mirrors the native
-#       kit (scripts/provisioning/neo1-observability-native/) exactly:
+#       kit (scripts/provisioning/neo1-observability_native/) exactly:
 #       same component versions and checksums, same ports, paths,
 #       service users, systemd units, configs, UFW posture, and the
 #       same always-on set (grafana deliberately on-demand only).
@@ -252,8 +252,8 @@
         dest: "/usr/local/sbin/{{ item }}"
         mode: "0755"
       loop:
-        - pihole-backup.sh
-        - unbound-backup.sh
+        - pihole_backup.sh
+        - unbound_backup.sh
 
     - name: Install the kit helper scripts for parity with the native kit
       ansible.builtin.copy:
@@ -300,7 +300,7 @@
         - {src: alert_rules.yml, dest: /etc/prometheus/alert_rules.yml, group: prometheus}
         - {src: alertmanager.yml, dest: /etc/alertmanager/alertmanager.yml, group: alertmanager}
         - {src: blackbox.yml, dest: /etc/blackbox/blackbox.yml, group: blackbox}
-        - {src: ntfy-server.yml, dest: /etc/ntfy/server.yml, group: ntfy}
+        - {src: ntfy_server.yml, dest: /etc/ntfy/server.yml, group: ntfy}
         - {src: grafana.ini, dest: /etc/grafana/grafana.ini, group: grafana}
       loop_control:
         label: "{{ item.dest }}"
@@ -317,10 +317,10 @@
         - node_exporter.service
         - ntfy.service
         - grafana.service
-        - pihole-backup.service
-        - pihole-backup.timer
-        - unbound-backup.service
-        - unbound-backup.timer
+        - pihole_backup.service
+        - pihole_backup.timer
+        - unbound_backup.service
+        - unbound_backup.timer
 
     - name: Check for the Grafana admin password file
       ansible.builtin.stat:
@@ -359,8 +359,8 @@
         - prometheus
         - alertmanager
         - ntfy
-        - pihole-backup.timer
-        - unbound-backup.timer
+        - pihole_backup.timer
+        - unbound_backup.timer
       when: neo1_obs_manage_services | bool
 
     - name: Keep grafana disabled (on-demand only, as in the native kit)

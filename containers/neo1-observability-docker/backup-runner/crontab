@@ -1,3 +1,0 @@
-# min hour dom mon dow command
-15 3 * * * /scripts/pihole-backup.sh  >> /proc/1/fd/1 2>&1
-30 3 * * * /scripts/unbound-backup.sh >> /proc/1/fd/1 2>&1

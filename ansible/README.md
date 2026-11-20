@@ -13,8 +13,8 @@ ansible-galaxy collection install -r ansible/requirements.yml
 Playbooks are grouped by job under `playbooks/`. Most groups have a README that is the usage guide for its playbooks (motd and workstation are the exceptions — see their entries below):
 
 - [accounts](playbooks/accounts/README.md): credential cycling and
-  account removal. The fleet password-cycle kit has its own guide at
-  [password-cycle](playbooks/accounts/password-cycle/README.md).
+  account removal. The fleet password_cycle kit has its own guide at
+  [password_cycle](playbooks/accounts/password_cycle/README.md).
 - [audits](playbooks/audits/README.md): read-only fleet audits
   (the cron audit; the firewall audit lives under firewall/),
   assembled into timestamped reports on the controller.
@@ -29,7 +29,7 @@ Playbooks are grouped by job under `playbooks/`. Most groups have a README that 
 - [firewall](playbooks/firewall/README.md): the firewalld playbooks
   and which hosts each one targets.
 - [gitea](playbooks/gitea/README.md): the primary-host Gitea install
-  and tighten playbook, mirroring `scripts/provisioning/install-gitea.sh`
+  and tighten playbook, mirroring `scripts/provisioning/install_gitea.sh`
   and its tighten script (not the mirror container).
 - [healthchecks](playbooks/healthchecks/README.md): the fleet health
   checks and the SMART harvest.
@@ -37,11 +37,11 @@ Playbooks are grouped by job under `playbooks/`. Most groups have a README that 
   MariaDB) on the Debian and RHEL families — the Ansible form of the
   two `scripts/provisioning/lamp-install-*.sh` installers.
 - [jenkins](playbooks/jenkins/README.md): the Jenkins LTS install
-  playbook, mirroring `scripts/provisioning/install-jenkins-rocky.sh`.
+  playbook, mirroring `scripts/provisioning/install_jenkins_rocky.sh`.
 - [llm](playbooks/llm/README.md): the NanoPi inference fleet (server
   and load balancer), plus the two full deployment guides,
-  [gpu-box-llm-setup-v2.3.md](playbooks/llm/gpu-box-llm-setup-v2.3.md)
-  and [optiplex-llm-v2.4.md](playbooks/llm/optiplex-llm-v2.4.md).
+  [gpu_box_llm_setup-v2.3.md](playbooks/llm/gpu_box_llm_setup-v2.3.md)
+  and [optiplex_llm-v2.4.md](playbooks/llm/optiplex_llm-v2.4.md).
 - [maintenance](playbooks/maintenance/README.md): fleet upkeep
   playbooks: installs, rollouts, and recurring maintenance that do
   not belong to a single service (today: the node_exporter fleet
@@ -52,8 +52,8 @@ Playbooks are grouped by job under `playbooks/`. Most groups have a README that 
 - [observability](playbooks/observability/README.md): the neo1
   observability stack (Prometheus, Alertmanager, blackbox_exporter,
   node_exporter, ntfy, on-demand Grafana) — the Ansible form of the
-  native kit in `scripts/provisioning/neo1-observability-native/`.
-- [ops-toolkit](playbooks/ops-toolkit/README.md): installs the Ops
+  native kit in `scripts/provisioning/neo1-observability_native/`.
+- [ops-toolkit](playbooks/ops_toolkit/README.md): installs the Ops
   Toolkit's six job scripts, its configuration, and its systemd
   timer/service pairs onto a target host.
 - [maintenance](playbooks/maintenance/README.md): maintenance patching for the

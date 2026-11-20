@@ -111,7 +111,7 @@ automatically; if one still has containers attached it refuses and
 names the network, so stop the old pair first and re-run.
 
 Blocklist seeding uses the companion script
-`scripts/pihole/pihole-init-blocklists.sh`. The compose file does
+`scripts/pihole/pihole_init_blocklists.sh`. The compose file does
 not invoke it, so run it manually once after the first start,
 against the
 running container's `/etc/pihole/gravity.db`. It waits for the
@@ -137,7 +137,7 @@ the shipped config, noting that it validates the config only, not
 resolution.
 
 For a full check, run the DNS test suite in `scripts/pihole/` on the
-host: `dns-test-pihole-unbound-linted.sh` runs eight dig checks from
+host: `dns_test_pihole_unbound_linted.sh` runs eight dig checks from
 inside the containers (Pi-hole local resolution, Unbound direct,
 Pi-hole to Unbound routing in both port syntaxes, DNSSEC pass and
 fail cases, and an ad-block check on doubleclick.net), writes
