@@ -122,9 +122,31 @@ build_rows() {
   done
 }
 
+# Resolve a tool's script by existence, not by one fixed layout.
+# The toolkit's folders and script names exist in hyphenated form
+# (01-user-add/user-add-local.sh) and, after the repo rename, in
+# underscored form (01-user_add/user_add_local.sh), with a mixed
+# state in between (underscored folder, hyphenated script). Try
+# each shape in that order and return the first that exists; when
+# none exists, return the fully underscored shape so the caller's
+# missing-tool report names the current form.
 tool_path() {
   local ti=$1
-  printf '%s/%s-%s/%s-local.sh' "$SCRIPT_DIR" "${TOOL_NUM[$ti]}" "${TOOL_NAME[$ti]}" "${TOOL_NAME[$ti]}"
+  local name_us="${TOOL_NAME[$ti]//-/_}"
+  local candidate
+  local -a candidates=(
+    "$SCRIPT_DIR/${TOOL_NUM[$ti]}-${name_us}/${name_us}_local.sh"
+    "$SCRIPT_DIR/${TOOL_NUM[$ti]}-${name_us}/${TOOL_NAME[$ti]}-local.sh"
+    "$SCRIPT_DIR/${TOOL_NUM[$ti]}-${TOOL_NAME[$ti]}/${TOOL_NAME[$ti]}-local.sh"
+    "$SCRIPT_DIR/${TOOL_NUM[$ti]}-${TOOL_NAME[$ti]}/${name_us}_local.sh"
+  )
+  for candidate in "${candidates[@]}"; do
+    if [[ -e $candidate ]]; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+  printf '%s' "${candidates[0]}"
 }
 
 # --- Dispatch --------------------------------------------------------
@@ -150,7 +172,7 @@ dispatch() {
       read -r -a args <<< "$line"
     fi
   fi
-  printf 'launcher: running %s-%s/%s-local.sh' "${TOOL_NUM[$ti]}" "${TOOL_NAME[$ti]}" "${TOOL_NAME[$ti]}" >&2
+  printf 'launcher: running %s' "$path" >&2
   if [[ ${#args[@]} -gt 0 ]]; then
     printf ' %s' "${args[@]}" >&2
   fi
